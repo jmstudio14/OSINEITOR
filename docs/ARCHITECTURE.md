@@ -44,14 +44,14 @@ información de una fuente sobre otra entidad (p. ej. `dns:example.com`).
 
 ```python
 class Module(ABC):
-    name: ClassVar[str]                      # único; se usa en --module
+    name: ClassVar[str]  # único; se usa en --module
     description: ClassVar[str]
     consumes: ClassVar[frozenset[EntityType]]
     produces: ClassVar[frozenset[EntityType]]
     requires_key: ClassVar[str | None] = None
     passive: ClassVar[bool] = True
 
-    def accepts(self, entity) -> bool: ...   # filtro extra sobre consumes
+    def accepts(self, entity) -> bool: ...  # filtro extra sobre consumes
     async def run(self, entity) -> list[Entity]: ...
 ```
 
