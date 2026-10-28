@@ -9,6 +9,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from osineitor import __version__, registry
@@ -82,7 +83,7 @@ async def _scan(
 
 
 def _print_entity(entity: Entity) -> None:
-    console.print(f"  [cyan]{entity.type:<13}[/] {entity.value}  [dim]({entity.source})[/]")
+    console.print(f"  [cyan]{entity.type:<13}[/] {escape(entity.value)}  [dim]({entity.source})[/]")
 
 
 def _summarize(entity: Entity) -> str:
@@ -115,8 +116,8 @@ def render(result: ScanResult) -> None:
         console.print("[dim]Sin resultados.[/]")
     for ev in result.events:
         color = "red" if ev.kind == "error" else "dim"
-        where = f" [{ev.entity}]" if ev.entity else ""
-        console.print(f"[{color}]{ev.kind}: {ev.module}{where}: {ev.message}[/]")
+        where = f" ({ev.entity})" if ev.entity else ""
+        console.print(f"[{color}]{ev.kind}: {ev.module}{where}: {escape(ev.message)}[/]")
 
 
 def _run_target(
@@ -205,7 +206,8 @@ def list_modules() -> None:
     """Lista los módulos disponibles y su estado."""
     config = Config.load()
     table = Table()
-    for col in ("Módulo", "Consume", "Produce", "Tipo", "API key", "Descripción"):
+    table.add_column("Módulo", no_wrap=True)
+    for col in ("Consume", "Produce", "Tipo", "API key", "Descripción"):
         table.add_column(col, overflow="fold")
     for m in registry.discover():
         if m.requires_key:

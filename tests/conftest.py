@@ -25,3 +25,28 @@ async def ctx(config):
     http = HttpClient(config, backoff=0)
     yield Context(config=config, http=http)
     await http.aclose()
+
+
+class FakeRdata:
+    def __init__(self, text: str):
+        self._text = text
+        self.strings = [text.encode()]
+        self.exchange = self
+
+    def to_text(self) -> str:
+        return self._text
+
+
+class FakeResolver:
+    """Resolver DNS en memoria: {(nombre, tipo): [valores]}."""
+
+    def __init__(self, records: dict[tuple[str, str], list[str]]):
+        self.records = records
+
+    async def resolve(self, name, rtype, lifetime=None):
+        import dns.resolver
+
+        values = self.records.get((name, rtype))
+        if not values:
+            raise dns.resolver.NoAnswer()
+        return [FakeRdata(v) for v in values]
