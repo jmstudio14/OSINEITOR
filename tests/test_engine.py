@@ -110,3 +110,28 @@ async def test_on_entity_callback(ctx):
     seen = []
     await Engine(ctx, [DomainToIp], on_entity=seen.append).run(SEED)
     assert [e.value for e in seen] == ["1.2.3.4"]
+
+
+class ServiceA(Module):
+    name = "svc_a"
+    description = "test"
+    consumes = frozenset({EntityType.IP})
+
+    async def run(self, entity):
+        return [self.emit(entity, EntityType.SERVICE, "1.2.3.4:80", port=80, product=None)]
+
+
+class ServiceB(Module):
+    name = "svc_b"
+    description = "test"
+    consumes = frozenset({EntityType.IP})
+
+    async def run(self, entity):
+        return [self.emit(entity, EntityType.SERVICE, "1.2.3.4:80", port=8080, product="nginx")]
+
+
+async def test_duplicate_entities_merge_missing_data(ctx):
+    seed = Entity(type=EntityType.IP, value="1.2.3.4")
+    result = await Engine(ctx, [ServiceA, ServiceB]).run(seed)
+    assert len(result.entities) == 1
+    assert result.entities[0].data == {"port": 80, "product": "nginx"}

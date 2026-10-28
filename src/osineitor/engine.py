@@ -46,7 +46,7 @@ class Engine:
 
     async def run(self, seed: Entity) -> ScanResult:
         result = ScanResult(target=seed, depth=self.depth, events=list(self.skipped))
-        seen = {seed.key}
+        index: dict[str, Entity] = {seed.key: seed}
         layer = [seed]
         for _ in range(self.depth):
             jobs = [(m, e) for e in layer for m in self.modules if m.accepts(e)]
@@ -54,9 +54,14 @@ class Engine:
             layer = []
             for produced in outputs:
                 for entity in produced:
-                    if entity.key in seen:
+                    existing = index.get(entity.key)
+                    if existing is not None:
+                        # Misma entidad desde otra fuente: completa los datos que falten.
+                        for k, v in entity.data.items():
+                            if existing.data.get(k) in (None, "", [], {}):
+                                existing.data[k] = v
                         continue
-                    seen.add(entity.key)
+                    index[entity.key] = entity
                     result.entities.append(entity)
                     layer.append(entity)
                     if self.on_entity:

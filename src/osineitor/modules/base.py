@@ -45,7 +45,7 @@ class Module(ABC):
         """Filtro adicional sobre `consumes` (p. ej. no repetir sobre subdominios)."""
         return entity.type in self.consumes
 
-    def emit(self, parent: Entity, type: EntityType, value: str, **data: object) -> Entity:
+    def emit(self, parent: Entity, type: EntityType, value: str, /, **data: object) -> Entity:
         return Entity(type=type, value=value, data=dict(data), source=self.name, parent=parent.key)
 
     @abstractmethod
