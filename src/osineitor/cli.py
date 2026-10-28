@@ -12,7 +12,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from osineitor import __version__, registry
+from osineitor import __version__, registry, report
 from osineitor.config import Config, config_dir, config_path
 from osineitor.engine import Engine
 from osineitor.http import HttpClient
@@ -249,6 +249,30 @@ def show(scan_id: int, db: DbPath = None) -> None:
     if result is None:
         raise typer.BadParameter(f"no existe el scan {scan_id}")
     render(result)
+
+
+@app.command()
+def export(
+    scan_id: int,
+    fmt: Annotated[str, typer.Option("--format", "-f", help="json, md o html.")] = "html",
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Fichero de salida.")
+    ] = None,
+    db: DbPath = None,
+) -> None:
+    """Exporta un scan guardado a JSON, Markdown o HTML."""
+    if fmt not in report.FORMATS:
+        raise typer.BadParameter(f"formato no soportado: {fmt}")
+    storage = Storage(db)
+    result = storage.load(scan_id)
+    storage.close()
+    if result is None:
+        raise typer.BadParameter(f"no existe el scan {scan_id}")
+    ext = report.FORMATS[fmt][0]
+    output = output or Path("reports") / f"osineitor-{scan_id}-{result.target.value}.{ext}"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(report.render(result, fmt), encoding="utf-8")
+    console.print(f"Informe guardado en {output}")
 
 
 @config_app.command("set")
