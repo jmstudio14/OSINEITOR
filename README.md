@@ -8,6 +8,7 @@ informe JSON, Markdown o HTML.
 > **Aviso legal.** OSINEITOR solo consulta fuentes abiertas y APIs públicas. Úsalo sobre
 > objetivos propios o con autorización expresa. Investigar a personas físicas está sujeto al
 > RGPD y a la legislación local; tú eres responsable del uso que hagas de la herramienta.
+> Lee el [uso responsable](docs/USO_RESPONSABLE.md).
 
 ## Instalación
 
@@ -123,6 +124,14 @@ python -m pytest
 
 Los tests no hacen peticiones reales: las respuestas HTTP se simulan con `respx` y el DNS con un
 resolver en memoria.
+
+## Documentación
+
+- [Arquitectura](docs/ARCHITECTURE.md): engine, pivoteo, modelo de datos y persistencia.
+- [Referencia de módulos](docs/MODULES.md): fuentes, datos que aportan y limitaciones.
+- [Uso responsable](docs/USO_RESPONSABLE.md): autorización, RGPD y usos no aceptables.
+- [Contribuir](CONTRIBUTING.md) · [Seguridad](SECURITY.md) · [Changelog](CHANGELOG.md) ·
+  [Código de conducta](CODE_OF_CONDUCT.md)
 
 ## Créditos
 
