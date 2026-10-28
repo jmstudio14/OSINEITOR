@@ -63,3 +63,15 @@ async def test_http_retries_on_429():
         response = await http.get("https://api.test/x")
     assert response.json() == {"ok": True}
     assert route.call_count == 2
+
+
+def test_detect_type():
+    from osineitor.models import detect_type
+
+    assert detect_type("8.8.8.8") == EntityType.IP
+    assert detect_type("2001:4860:4860::8888") == EntityType.IP
+    assert detect_type("Jane@Example.com") == EntityType.EMAIL
+    assert detect_type("sub.example.co.uk") == EntityType.DOMAIN
+    assert detect_type("john_doe") == EntityType.USERNAME
+    # Ambiguo por diseño: parece un dominio. Para forzarlo, `osineitor username john.doe`.
+    assert detect_type("john.doe") == EntityType.DOMAIN

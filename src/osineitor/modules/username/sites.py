@@ -48,8 +48,10 @@ def profile_exists(site: dict[str, Any], response: httpx.Response) -> bool:
     if response.status_code in error_codes:
         return False
     if error_type == "message":
-        text = response.text
-        return response.status_code < 500 and not any(m in text for m in _as_list(site["errorMsg"]))
+        # 403/429 suelen ser un WAF o rate limit, no un perfil: resultado desconocido.
+        if response.status_code in (403, 429) or response.status_code >= 500:
+            return False
+        return not any(m in response.text for m in _as_list(site["errorMsg"]))
     # "status_code" y "response_url" (sin seguir redirecciones): 2xx = existe
     return 200 <= response.status_code < 300
 

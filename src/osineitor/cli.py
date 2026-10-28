@@ -16,7 +16,7 @@ from osineitor import __version__, registry, report
 from osineitor.config import Config, config_dir, config_path
 from osineitor.engine import Engine
 from osineitor.http import HttpClient
-from osineitor.models import Entity, EntityType, ScanResult
+from osineitor.models import Entity, EntityType, ScanResult, detect_type
 from osineitor.modules.base import Context
 from osineitor.storage import Storage
 
@@ -199,6 +199,24 @@ def username(
 ) -> None:
     """Busca un nombre de usuario en cientos de sitios."""
     _run_target(EntityType.USERNAME, target, depth, active, module, no_save, json_out, db)
+
+
+@app.command()
+def scan(
+    target: str,
+    depth: Depth = 2,
+    active: Active = False,
+    module: Only = None,
+    no_save: NoSave = False,
+    json_out: AsJson = False,
+    db: DbPath = None,
+) -> None:
+    """Detecta el tipo de objetivo y pivota entre frentes (profundidad 2 por defecto)."""
+    etype = detect_type(target)
+    value = target.strip()
+    if etype in (EntityType.DOMAIN, EntityType.EMAIL):
+        value = value.lower()
+    _run_target(etype, value, depth, active, module, no_save, json_out, db)
 
 
 @app.command("modules")
