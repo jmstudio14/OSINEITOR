@@ -1,0 +1,51 @@
+name: Health check
+
+# F1.3: comprueba cada semana que las fuentes siguen respondiendo y mantiene un único issue
+# abierto con las que fallan. No bloquea nada: un fallo de fuente no pone el job en rojo.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LABEL: salud-fuentes
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
+      - name: Ejecutar doctor
+        run: |
+          code=0
+          osineitor doctor --json > doctor.json || code=$?
+          # 3 = alguna fuente falla (lo gestiona el issue); cualquier otro código es un fallo real.
+          if [ "$code" -ne 0 ] && [ "$code" -ne 3 ]; then exit "$code"; fi
+          python scripts/doctor_issue.py doctor.json > cuerpo.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: doctor
+          path: doctor.json
+      - name: Abrir, actualizar o cerrar el issue
+        run: |
+          gh label create "$LABEL" --force --color D93F0B \
+            --description "Health check semanal: fuentes que no responden"
+          open=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')
+          if [ -s cuerpo.md ]; then
+            if [ -n "$open" ]; then
+              gh issue comment "$open" --body-file cuerpo.md
+            else
+              gh issue create --label "$LABEL" \
+                --title "Health check: fuentes con fallo" --body-file cuerpo.md
+            fi
+          elif [ -n "$open" ]; then
+            gh issue close "$open" --comment "Todas las fuentes vuelven a responder."
+          fi

@@ -33,6 +33,11 @@ Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI 
 - ROADMAP: **Hito G · Aplicación de escritorio para Windows** (G1–G9), con la excepción al
   principio 8; F11.1 «interfaz web local» queda obsoleto.
 
+- **Health check semanal (F1.3):** el workflow `.github/workflows/doctor.yml` ejecuta
+  `osineitor doctor` cada lunes (y a demanda) y mantiene un único issue con la etiqueta
+  `salud-fuentes` con las fuentes que fallan; lo actualiza mientras sigan fallando y lo cierra
+  cuando se recuperan. Un fallo de fuente no pone el job en rojo.
+
 - **Estado por módulo (F1.1):** cada ejecución deja un `ModuleRun` (`ok`, `empty`, `error`,
   `quota`, `skipped`) con entidades, peticiones, aciertos de caché y duración; se muestra en una
   tabla tras el scan y se guarda en la nueva tabla `module_runs`. Nueva excepción `ModuleQuota`

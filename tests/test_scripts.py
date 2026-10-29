@@ -20,6 +20,7 @@ def load_script(name: str):
 
 rdap = load_script("rdap_coverage")
 baseline = load_script("fp_baseline")
+doctor_issue = load_script("doctor_issue")
 
 BOOTSTRAP = {
     "publication": "2026-10-28T22:00:04Z",
@@ -91,3 +92,29 @@ def test_baseline_report():
     assert "error sistemático" in text
     clean = baseline.render(baseline.summarize({"u1": []}, {"u1": 10}))
     assert "Ninguno." in clean
+
+
+def test_doctor_issue_lists_only_failures_and_escapes_pipes():
+    checks = [
+        {"module": "dns", "verdict": "ok", "detail": "1 entidad"},
+        {"module": "crtsh", "verdict": "fail", "detail": "HTTP 502 | timeout\nreintento"},
+        {"module": "shodan", "verdict": "skipped", "detail": "falta la API key"},
+        {"module": "rdap", "verdict": "empty", "detail": ""},
+    ]
+    text = doctor_issue.render(checks)
+    assert "1 fuente(s) con fallo" in text
+    assert "| `crtsh` | HTTP 502 \\| timeout reintento |" in text
+    for module in ("dns", "shodan", "rdap"):
+        assert f"`{module}`" not in text
+
+
+def test_doctor_issue_is_empty_when_nothing_fails():
+    assert doctor_issue.render([{"module": "dns", "verdict": "ok", "detail": ""}]) == ""
+
+
+def test_doctor_issue_main_reads_file_and_validates_usage(tmp_path, capsys):
+    source = tmp_path / "doctor.json"
+    source.write_text('[{"module": "crtsh", "verdict": "fail", "detail": "x"}]', encoding="utf-8")
+    assert doctor_issue.main([str(source)]) == 0
+    assert "| `crtsh` | x |" in capsys.readouterr().out
+    assert doctor_issue.main([]) == 2
