@@ -11,7 +11,12 @@ Para cada módulo: qué consume, qué produce, de dónde saca los datos y sus li
 - **Datos:** registrador, fechas de creación, caducidad y última modificación, estado,
   nameservers, DNSSEC y contactos (registrante, administrativo, técnico) si son públicos.
 - **Límites:** con el RGPD la mayoría de registros ocultan los contactos; es normal que no salgan
-  emails. Algunos ccTLD (p. ej. `.es`) no publican RDAP.
+  emails.
+  **Muchos TLD no tienen servidor RDAP.** Según el bootstrap de IANA del 28-10-2026 no lo tienen
+  `.es`, `.io`, `.de`, `.mx`, `.it`, `.co`, `.me`, `.cl`, `.pt`, `.ru` ni `.cn`; sí `.com`, `.fr`,
+  `.uk`, `.ar` y `.br`. En esos dominios el módulo no devuelve datos y hoy **lo hace sin
+  avisar** (se corrige en F1.18 del [roadmap](../ROADMAP.md), y el WHOIS de respaldo llega con
+  F4.11).
 
 ### `dns`
 - **Consume:** dominio y subdominios. **Produce:** `record` `dns:<dominio>`, `ip`.
