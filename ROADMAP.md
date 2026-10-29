@@ -276,7 +276,7 @@ Estado a 29-10-2026 (v0.2.0), contrastado con el código. Leyenda: **✅ Hecho**
 | Fase | Versión | Hechos | Parciales | Pendientes | *M* hechos |
 |---|---|---|---|---|---|
 | 0 | 0.1.1 | 2 | 1 | 3 | 2 / 6 |
-| 1 | 0.2.0 | 11 | 3 | 4 | 11 / 12 |
+| 1 | 0.2.0 | 12 | 3 | 3 | 11 / 12 |
 | 2 | 0.3.0 | 0 | 0 | 7 | 0 / 4 |
 | 3 | 0.4.0 | 0 | 0 | 7 | 0 / 3 |
 | 4 | 0.5.0–0.5.1 | 0 | 0 | 24 | 0 / 5 |
@@ -288,7 +288,7 @@ Estado a 29-10-2026 (v0.2.0), contrastado con el código. Leyenda: **✅ Hecho**
 | 10 | 0.11.0 | 0 | 0 | 7 | 0 / 3 |
 | 11 | 1.0.0 | 0 | 0 | 5 | 0 / 3 |
 | G | 0.2.0–0.2.2 | 1 | 6 | 2 | 1 / 8 |
-| **Total (fases 0–11)** | | **14** | **4** | **115** | **14 / 50** |
+| **Total (fases 0–11)** | | **15** | **4** | **114** | **14 / 50** |
 
 Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **13 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
 
@@ -354,7 +354,7 @@ está vacío, y que la herramienta no pueda dañar al propio analista ni explota
 |---|---|---|---|---|
 | F1.1 | M | ✅ Hecho | Estado por módulo en cada scan | Cada ejecución registra `ok`, `vacío`, `error`, `omitido` o `cuota agotada`, con duración y número de peticiones |
 | F1.2 | M | ✅ Hecho | `osineitor doctor` | Comprueba cada módulo contra un **canario** de resultado conocido y muestra una tabla de salud. Para usernames se usa el campo `username_claimed` que ya incluyen las 481 firmas de Sherlock |
-| F1.3 | S | ⬜ Pendiente | Health check programado en CI | Workflow semanal (no bloqueante) que ejecuta `doctor` y abre un issue si una fuente falla |
+| F1.3 | S | ✅ Hecho | Health check programado en CI | Workflow semanal (no bloqueante) que ejecuta `doctor` y abre un issue si una fuente falla |
 | F1.4 | M | ✅ Hecho | Migraciones de esquema | Versionado con `PRAGMA user_version` y migraciones incrementales con tests; requisito previo para la fase 2 |
 | F1.5 | M | ✅ Hecho | Caché HTTP | Caché en disco con TTL por fuente (`--no-cache`, `--refresh`) para no repetir consultas ni gastar cuota |
 | F1.6 | M | 🟡 Parcial | Límites declarativos por fuente | Cada módulo declara su límite (p. ej. Shodan 1 petición/s) y el cliente HTTP lo respeta |
@@ -371,11 +371,14 @@ está vacío, y que la herramienta no pueda dañar al propio analista ni explota
 | F1.17 | S | 🟡 Parcial | Experiencia de uso | Barra de progreso en `stderr`, `--quiet`, `stdout` limpio con `--json`, y *exit codes* documentados (éxito, error de uso, fuentes con errores, sin resultados). **Hecho en v0.2.0 salvo la barra de progreso** (los eventos `progress` del contrato la sustituyen para la GUI); los códigos están en [`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md) |
 | F1.18 | M | ✅ Hecho | `rdap` distingue "TLD sin RDAP" de "no registrado" | Consulta el bootstrap de IANA [R15]; para un TLD sin servidor emite `omitido: TLD sin RDAP` en lugar de un resultado vacío. Resuelve D14 junto con F4.11 |
 
-**Estado (29-10-2026):** 11 de 18 hechos, 3 parciales y 4 pendientes (F1.3, F1.8, F1.9 y F1.15,
+**Estado (29-10-2026):** 12 de 18 hechos, 3 parciales y 3 pendientes (F1.8, F1.9 y F1.15,
 todos *S*): los 12 *M* están hechos salvo F1.6.
 
 - **F1.2** usa valores de prueba fijos (`example.com`, `1.1.1.1`) y no `username_claimed` de Sherlock,
   que haría ~460 peticiones.
+- **F1.3** (`.github/workflows/doctor.yml`) corre en un runner de GitHub: solo prueba módulos
+  pasivos y sin API key, y una fuente que bloquee IP de centros de datos aparecería como fallo.
+  Aún no se ha ejecutado en GitHub (hacerlo con *Run workflow*).
 - **F1.6** (parcial): el mecanismo funciona, pero ningún módulo declara aún un `min_interval`
   porque no se han verificado los límites reales de sus fuentes.
 - **F1.12**: las filas guardadas antiguas se canonicalizan al cargarlas, sin migración de esquema.
