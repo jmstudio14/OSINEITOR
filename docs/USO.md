@@ -27,14 +27,16 @@ osineitor ip 1.1.1.1
 osineitor email alguien@example.com --depth 2
 osineitor username johndoe
 
-osineitor history                     # scans guardados
+osineitor history --limit 50          # scans guardados (20 por defecto)
 osineitor show 3                      # volver a ver el scan 3
 osineitor export 3 -f html            # informe en reports/ (json | md | html)
+osineitor export 3 -f md -o informe.md  # en el fichero indicado
 
 osineitor modules                     # módulos disponibles y estado de sus API keys
 osineitor doctor                      # prueba cada módulo contra su fuente real
+osineitor doctor -m dns --json        # solo esos módulos (-m, repetible); --active y --allow-private como en los scans
 osineitor cache info                  # respuestas cacheadas (cache clear las borra)
-osineitor config show                 # keys configuradas (enmascaradas)
+osineitor config show                 # keys configuradas (se ven solo los 4 primeros caracteres)
 osineitor version
 ```
 
@@ -163,7 +165,7 @@ El fichero de keys **no se cifra**: en Windows hereda los permisos de tu carpeta
 
 `--ndjson` emite un evento JSON por línea (inicio, cada módulo, cada entidad, progreso, fin);
 `--json` un único documento (también en `modules`, `history`, `show`, `doctor`, `config show`,
-`version` y `export`); `--quiet` suprime la salida legible. `--control-stdin` permite cancelar
+`config set`, `config unset`, `version` y `export`); `--quiet` suprime la salida legible. `--control-stdin` permite cancelar
 escribiendo `{"cmd": "cancel"}` en stdin: se guarda lo ya obtenido.
 
 | Código de salida | Significado |

@@ -105,8 +105,8 @@ def render(data: dict, source: str) -> str:
         f"- **TLD con servidor RDAP:** {len(servers)}",
         "",
         "El módulo `rdap` consulta rdap.org, que redirige al servidor RDAP del TLD según este "
-        "bootstrap. **Si el TLD no aparece aquí, el módulo no puede obtener datos de registro** "
-        "y hoy devuelve un resultado vacío sin avisar. Se corrige en F1.18, y el WHOIS de "
+        "bootstrap. **Si el TLD no aparece aquí, el módulo no puede obtener datos de registro**: "
+        "queda omitido con un aviso en lugar de devolver un resultado vacío (F1.18). El WHOIS de "
         "respaldo para esos TLD llega con F4.11.",
         "",
         "## TLD frecuentes",

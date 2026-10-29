@@ -2,7 +2,8 @@
 
 Estado de lo que **no se ha podido comprobar en vivo** y que se verificará cuando el repositorio
 se clone en VS Code y se pruebe desde Windows. Corresponde a los entregables F0.1, F0.2, F0.3 y
-F0.5 del [roadmap](../ROADMAP.md).
+F0.5 del [roadmap](../ROADMAP.md). La lista de comprobación manual de la aplicación de escritorio
+está en [GUI.md](GUI.md).
 
 ## Por qué está pendiente
 

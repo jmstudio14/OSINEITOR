@@ -12,6 +12,8 @@ Todos los cambios relevantes del proyecto. Formato basado en
   consulta de <dominio> (REFUSED)») en vez de «tiempo agotado o sin servidores». Afecta también a
   `osineitor doctor`.
 
+## [0.2.0] - 2026-10-29
+
 Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI (v0.2.0).
 
 ### Añadido
@@ -36,7 +38,7 @@ Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI 
   tabla tras el scan y se guarda en la nueva tabla `module_runs`. Nueva excepción `ModuleQuota`
   (HTTP 429) y helper `status_error`.
 - **`osineitor doctor` (F1.2):** prueba cada módulo con un valor de prueba conocido (o comprueba
-  que la fuente responde) y sale con código 2 si alguno falla.
+  que la fuente responde) y sale con código 3 si alguno falla.
 - **Migraciones de esquema (F1.4):** `PRAGMA user_version` con migraciones transaccionales; una
   base de la v0.1.0 se actualiza sin perder datos y una de una versión más nueva se rechaza.
 - **Caché HTTP (F1.5):** respuestas GET de fuentes pasivas y sin key, 6 h, en `cache.db`, sin
@@ -149,5 +151,7 @@ Primera versión.
 - Informes exportables a JSON, Markdown y HTML.
 - CI con ruff y pytest en Python 3.11 y 3.13.
 
-[Sin publicar]: https://github.com/jmstudio14/OSINEITOR/compare/v0.1.0...HEAD
+[Sin publicar]: https://github.com/jmstudio14/OSINEITOR/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jmstudio14/OSINEITOR/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/jmstudio14/OSINEITOR/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jmstudio14/OSINEITOR/releases/tag/v0.1.0

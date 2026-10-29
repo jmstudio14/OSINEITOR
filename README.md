@@ -180,7 +180,7 @@ en la salida. Qué datos aporta cada uno y sus límites: [referencia de módulos
 
 ```bash
 osineitor config set shodan TU_KEY      # guarda la key en el directorio de configuración
-osineitor config show                   # solo muestra las keys enmascaradas
+osineitor config show                   # keys enmascaradas (se ven solo los 4 primeros caracteres)
 export OSINEITOR_SHODAN_KEY=TU_KEY      # alternativa: variable de entorno (tiene prioridad)
 ```
 

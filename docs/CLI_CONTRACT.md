@@ -13,8 +13,9 @@ la salida real de la CLI.
 - Ejecuta `osineitor` (o `python -m osineitor`) con estas variables en el entorno del hijo:
   `PYTHONUTF8=1` y `PYTHONIOENCODING=utf-8`. En Windows, crea el proceso sin ventana de consola
   (`CREATE_NO_WINDOW`) para evitar el parpadeo.
-- La salida estructurada es ASCII puro (los caracteres no ASCII van escapados como `\uXXXX`):
-  no depende de la codificación de la tubería. Las líneas pueden acabar en `\n` o `\r\n`; usa
+- La salida de `--ndjson` es ASCII puro (los caracteres no ASCII van escapados como `\uXXXX`):
+  no depende de la codificación de la tubería. `--json` sale en UTF-8 sin escapar, por eso hay que
+  fijar `PYTHONUTF8` y `PYTHONIOENCODING`. Las líneas pueden acabar en `\n` o `\r\n`; usa
   `splitlines()`.
 - stdout es solo para datos. Los errores y diagnósticos humanos van a stderr.
 
@@ -31,7 +32,7 @@ por evento, con `flush` inmediato. Todos llevan `v` (1), `ts` (ISO 8601 UTC) y `
 | `module.end` | Ese módulo termina | `module`, `entity`, `status`, `entities`, `requests`, `cache_hits`, `duration_ms`, `message` |
 | `entity` | Entidad nueva (ya deduplicada y normalizada) | `entity{type,value,data,source,parent}` |
 | `progress` | Tras cada `module.end` | `done`, `total` (ejecuciones conocidas hasta ahora; crece al pivotear), `entities`, `requests` |
-| `scan.end` | Siempre el último | `status`, `scan_id` (`null` con `--no-save`), `exit_code`, `entities`, `finished_at`; con `failed`, también `message` |
+| `scan.end` | Siempre el último | `status`, `scan_id` (`null` con `--no-save`), `exit_code`; salvo con `failed`, también `entities` y `finished_at`; con `failed`, en su lugar `message` |
 
 - `module.end.status`: `ok`, `empty` (respondió sin datos), `error`, `quota` (la fuente rechazó
   por límite de uso), `skipped` (no aplica, o cancelado).
