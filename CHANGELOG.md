@@ -6,8 +6,19 @@ Todos los cambios relevantes del proyecto. Formato basado en
 
 ## [Sin publicar]
 
+## [0.1.1] - 2026-10-29
+
+Fase 0 del roadmap, la parte que no necesita red.
+
 ### Añadido
 
+- `tests/test_cli.py`: tests de todas las órdenes de la CLI con módulos falsos (cobertura de
+  `cli.py` del 99 %) (F0.4).
+- `scripts/rdap_coverage.py` y `docs/RDAP_COBERTURA.md`: cobertura RDAP por TLD según el
+  bootstrap de IANA del 28-10-2026 (F0.6).
+- `scripts/fp_baseline.py`: medición de la línea base de falsos positivos de `username_sites`
+  (F0.5). El script está listo; la medición hay que hacerla desde una red con acceso a los sitios.
+- `tests/test_scripts.py` y la dependencia de desarrollo `pytest-cov`.
 - `ROADMAP.md` con las fases posteriores al MVP, basado en una investigación del estado del
   arte OSINT y en un análisis de carencias del código: 12 fases (0 a 11), 134 entregables con
   prioridad *M*/*S*/*C*, deuda técnica D8–D14 y un corte recomendado en v0.5.0.
