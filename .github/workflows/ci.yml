@@ -27,3 +27,18 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: python -m pytest -q
+
+  # Informativo: no bloquea la fusión aunque falle. Dice si el proyecto funciona en Python 3.14.
+  test-py314:
+    name: test (windows-latest, 3.14, informativo)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: pip install -e '.[dev]'
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: python -m pytest -q
