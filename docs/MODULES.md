@@ -28,6 +28,8 @@ prueba de salud). Todos los módulos pasivos y sin key cachean sus respuestas 6 
 - **Fuente:** resolver DNS del sistema (dnspython).
 - **Datos:** A, AAAA, CNAME, MX, NS, TXT, CAA, política SPF y DMARC (`_dmarc.<dominio>`).
 - **Pivote:** cada IP de A/AAAA pasa al siguiente nivel.
+- **Errores:** si ningún tipo de registro obtiene respuesta, falla en vez de devolver un vacío.
+  El mensaje distingue `REFUSED` (el servidor rechaza el nombre) de un tiempo agotado.
 
 ### `crtsh`
 - **Consume:** dominio raíz. **Produce:** `domain` (subdominios, máx. 500).

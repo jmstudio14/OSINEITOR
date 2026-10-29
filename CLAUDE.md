@@ -25,7 +25,8 @@ python -m pytest -q      # usa python -m: el pytest global puede ser otro intér
 - Crea entidades con `self.emit(parent, tipo, valor, **datos)`; los datos con valor vacío se
   ignoran en la salida.
 - Las excepciones viven en `osineitor/errors.py`. Fallos esperados → `ModuleError`; «no aplica» →
-  `ModuleSkipped`. El engine captura cualquier excepción; no la silencies dentro
+  `ModuleSkipped`; la fuente que rechaza por límite de uso (HTTP 429) → `ModuleQuota`. El engine
+  captura cualquier excepción; no la silencies dentro
   del módulo salvo que el resultado sea realmente "desconocido" (como en `username_sites`).
 - Módulos que contactan al objetivo: `passive = False`.
 - Datos de terceros: emítelos con `try_emit` (un valor raro no debe perder el resto), valida los
@@ -43,7 +44,7 @@ python -m pytest -q      # usa python -m: el pytest global puede ser otro intér
 Diseño y traspaso en [docs/GUI.md](docs/GUI.md). Reglas: la GUI solo habla con la CLI (del motor
 importa únicamente `detect_type` y `__version__`); Qt solo en `osineitor_gui/ui/` y `app.py`; las
 reglas de seguridad (confirmar `--active`) viven en `ScanRequest`, no en las vistas; las API keys
-viajan por stdin; textos en español con `tr()`.
+viajan por stdin; textos en español con `tr()` en `ui/` (la capa sin Qt pasa textos ya hechos).
 
 ## Límites
 

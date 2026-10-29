@@ -18,13 +18,25 @@ class Dns(Module):
     produces = frozenset({EntityType.IP, EntityType.RECORD})
     canary = "example.com"
 
-    async def _query(self, name: str, rtype: str) -> list[str] | None:
-        """Valores del registro; `None` si el resolvedor no pudo responder (≠ «no existe»)."""
+    async def _query(
+        self, name: str, rtype: str, refused: set[str] | None = None
+    ) -> list[str] | None:
+        """Valores del registro; `None` si el resolvedor no pudo responder (≠ «no existe»).
+
+        Si algún servidor contestó REFUSED, añade `rtype` a `refused` para poder distinguirlo de
+        un tiempo agotado.
+        """
         try:
             answer = await self.ctx.resolver.resolve(name, rtype, lifetime=10)
         except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
             return []
-        except (dns.resolver.NoNameservers, dns.exception.Timeout):
+        except dns.resolver.NoNameservers as exc:
+            if refused is not None and any(
+                err[3] == "REFUSED" for err in exc.kwargs.get("errors", [])
+            ):
+                refused.add(rtype)
+            return None
+        except dns.exception.Timeout:
             return None
         values = []
         for rdata in answer:
@@ -35,9 +47,15 @@ class Dns(Module):
         return values
 
     async def run(self, entity: Entity) -> list[Entity]:
-        answers = {rtype: await self._query(entity.value, rtype) for rtype in RECORD_TYPES}
+        refused: set[str] = set()
+        answers = {rtype: await self._query(entity.value, rtype, refused) for rtype in RECORD_TYPES}
         if all(v is None for v in answers.values()):
             # Sin esto, un resolvedor caído se confundiría con «el dominio no tiene registros».
+            if refused:
+                raise ModuleError(
+                    f"el resolvedor DNS rechazó la consulta de {entity.value} (REFUSED); "
+                    "algo en la red puede estar filtrando ese nombre"
+                )
             raise ModuleError("el resolvedor DNS no respondió (tiempo agotado o sin servidores)")
         records = {k: v for k, v in answers.items() if v}
         dmarc = [

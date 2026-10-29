@@ -15,20 +15,28 @@ Storage (storage.py, SQLite) ──► Informes (report/: JSON, Markdown, HTML)
 
 | Fichero | Responsabilidad |
 |---|---|
-| `models.py` | `EntityType`, `Entity`, `ScanEvent`, `ScanResult` y `detect_type()` |
+| `models.py` | `EntityType`, `Entity`, `ScanEvent`, `ModuleRun`, `ScanResult` y `detect_type()` |
 | `config.py` | API keys y ajustes desde TOML o variables de entorno; rutas por sistema (`platformdirs`) |
-| `errors.py` | Excepciones: `ModuleError`, `ModuleSkipped`, `NetworkGuardError`, `BudgetExceeded`, `InvalidEntityValue` |
+| `errors.py` | Excepciones: `ModuleError`, `ModuleSkipped`, `ModuleQuota`, `NetworkGuardError`, `BudgetExceeded`, `InvalidEntityValue` |
 | `sanitize.py` | Saneado de usernames y codificación de valores que viajan a URLs |
 | `normalize.py` | Forma canónica de dominios (IDNA), IPs, emails y URLs |
 | `netguard.py` | Guardia de red: rechaza IPs privadas, loopback y metadatos cloud |
 | `budget.py` | Presupuesto del scan: entidades, peticiones y tiempo |
 | `http.py` | Cliente `httpx` asíncrono: guardia, redirecciones comprobadas, reintentos, límite por host y presupuesto |
 | `modules/base.py` | Contrato `Module` (`emit` y `try_emit`) y `Context` |
+| `modules/_manifest.py` | Lista explícita de ficheros de módulos (un test la contrasta con el descubrimiento) |
 | `registry.py` | Descubre las subclases de `Module` en `osineitor.modules` |
 | `engine.py` | Ejecuta los módulos, pivota por niveles, deduplica y registra incidencias |
+| `events.py` | Eventos del contrato CLI y `NdjsonSink` (salida NDJSON) |
+| `control.py` | Lectura de órdenes por stdin (`--control-stdin`) para cancelar un scan |
+| `cache.py` | Caché HTTP en SQLite (`cache.db`) |
+| `doctor.py` | Comprobaciones de `osineitor doctor` sobre cada módulo |
 | `storage.py` | Guarda y recupera scans en SQLite |
 | `report/` | Exportadores a JSON, Markdown y HTML |
 | `cli.py` | Comandos de Typer y salida con Rich |
+
+La aplicación de escritorio vive aparte, en `src/osineitor_gui/`, y solo habla con la CLI
+mediante el contrato; su diseño está en [GUI.md](GUI.md).
 
 ## Modelo de datos
 
@@ -82,7 +90,8 @@ class Module(ABC):
 3. Las entidades nuevas forman el siguiente nivel. Se repite hasta `depth` niveles o hasta que no
    aparezca nada nuevo.
 4. **Deduplicación:** si una entidad ya existe, no se vuelve a investigar; sus datos se fusionan
-   rellenando solo los campos vacíos de la existente.
+   rellenando los campos vacíos de la existente. Si dos fuentes discrepan en un campo, gana la de
+   menor `rank` (el orden de los módulos), llegue cuando llegue.
 5. **Errores:** cualquier excepción de un módulo se captura y se guarda como evento `error`; el scan
    continúa. `ModuleSkipped` se registra como `skipped` (no aplica), no como error.
 6. **Estado por módulo:** cada ejecución (módulo × entidad) deja un `ModuleRun` con su estado
@@ -131,7 +140,8 @@ SQLite en `osineitor.db` dentro del directorio de datos (`%LOCALAPPDATA%\osineit
 
 - `scans`: objetivo, profundidad y fechas.
 - `entities`: entidades del scan; `data` en JSON.
-- `events`: errores, módulos omitidos y, si el scan se truncó, un evento `budget`.
+- `events`: errores, módulos omitidos y, según cómo termine el scan, un evento `budget`
+  (truncado) o `cancelled`.
 - `module_runs`: el `ModuleRun` de cada ejecución (estado, entidades, peticiones, caché, ms).
 
 **Migraciones.** El esquema se versiona con `PRAGMA user_version`: `storage.MIGRATIONS` es una
@@ -146,8 +156,11 @@ viajara en la consulta no queda en disco.
 ## Configuración
 
 Orden de prioridad para cada key: variable `OSINEITOR_<NOMBRE>_KEY` → sección `[keys]` de
-`config.toml` del directorio de configuración (`%APPDATA%\osineitor` en Windows). La sección `[settings]` admite `timeout` (segundos) y
-`user_agent`.
+`config.toml` del directorio de configuración (`%APPDATA%\osineitor` en Windows). La sección
+`[settings]` admite `timeout` (segundos) y `user_agent`.
+
+Las variables `OSINEITOR_CONFIG_DIR` y `OSINEITOR_DATA_DIR` sustituyen los directorios de
+configuración y de datos (base de datos y caché) por la ruta indicada.
 
 ## Decisiones de diseño
 

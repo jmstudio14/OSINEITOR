@@ -21,7 +21,9 @@ Stack: Python 3.13, **PySide6** (Qt 6, widgets), PyInstaller en modo carpeta e I
    pantalla vive en la capa no visual, que se prueba en la CI. Otro test lo impone.
 3. **Las vistas no deciden reglas de seguridad.** Que `--active` y `--allow-private` exijan
    confirmación lo impone `ScanRequest`; la vista solo pregunta al usuario y marca `confirm_*`.
-4. **Textos en español** y con `self.tr(...)`; sin internacionalización por ahora.
+4. **Textos en español** y, en `ui/`, con `self.tr(...)`; sin internacionalización por ahora. La
+   capa no visual (sin Qt) no usa `tr()`: `legal` y los mensajes de `ScanRequest` son cadenas ya
+   hechas que la vista muestra tal cual.
 5. **Las API keys nunca pasan por la línea de comandos** (la ven otros procesos): se guardan con
    `CliApi.config_set`, que las envía por stdin.
 6. **Nada de trabajo largo en el hilo de la interfaz.** Las llamadas de `CliApi` son síncronas:
@@ -53,7 +55,7 @@ OSINEITOR.exe (GUI, sin consola)      osineitor.exe (CLI, misma carpeta)
 
 ### Hilos: el único punto delicado
 
-`CliProcess` llama a `on_event`, `on_stderr` y `on_exit` **desde hilos lectores**, no desde el de la
+`CliProcess` llama a `on_event`, `on_stderr` y `on_exit` **desde hilos de fondo**, no desde el de la
 interfaz. Con Qt, el callback solo debe emitir una señal (la conexión entre hilos es en cola, y la
 señal llega ya al hilo de la interfaz):
 
@@ -80,6 +82,10 @@ class ScanRunner(QObject):
 
     def cancel(self) -> None:
         self._proc.cancel()
+
+    @property
+    def stderr_tail(self) -> list[str]:
+        return self._proc.stderr_tail
 ```
 
 Flujo de un scan: `ScanRequest(...).to_args()` → `ScanRunner` → cada evento a
