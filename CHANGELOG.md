@@ -74,6 +74,11 @@ Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI 
 
 ### Cambiado
 
+- **Documentación:** el README se reorganiza como portada (estado del proyecto, instalación,
+  inicio rápido, módulos y limitaciones) y el detalle de uso pasa a [`docs/USO.md`](docs/USO.md).
+  La guía para añadir un módulo pasa a `CONTRIBUTING.md`, actualizada (manifiesto, `canary`,
+  `ModuleQuota`). Un test comprueba que los enlaces y las órdenes de la documentación existen.
+
 - **Códigos de salida:** un scan que termina con módulos fallidos devuelve ahora `3` (antes `0`) y
   uno truncado `4`; `doctor` con fallos devuelve `3` (antes `2`). Los scripts que comprobaban el
   código de salida deben tolerarlo.
