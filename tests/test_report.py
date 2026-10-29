@@ -61,4 +61,6 @@ def test_export_command(tmp_path):
         app, ["export", str(scan_id), "-f", "md", "-o", str(out), "--db", str(db)]
     )
     assert res.exit_code == 0, res.output
-    assert out.read_text().startswith(f"# OSINEITOR — domain: example.com (scan #{scan_id})")
+    assert out.read_text(encoding="utf-8").startswith(
+        f"# OSINEITOR — domain: example.com (scan #{scan_id})"
+    )

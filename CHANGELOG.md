@@ -39,6 +39,9 @@ Fase 1a del roadmap (seguridad y datos).
 
 ### Corregido
 
+- **Windows:** la CLI forzaba la codificación local (cp1252) cuando su salida iba a una tubería,
+  de modo que un `✓` o una letra cirílica provocaban un `UnicodeEncodeError`. Ahora escribe
+  siempre en UTF-8. Añadido `python -m osineitor`.
 - Un username derivado de un email con caracteres como `/`, `?` o `#` ya no puede alterar la
   ruta de las URLs consultadas.
 

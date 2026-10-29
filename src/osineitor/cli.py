@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
@@ -82,6 +83,25 @@ class ScanOptions:
     max_requests: int
     max_time: float
     allow_private: bool
+
+
+def _force_utf8() -> None:
+    """Salida siempre en UTF-8.
+
+    En Windows, si la salida va a una tubería (otro programa que lanza la CLI) Python usa la
+    codificación local (cp1252) y un solo carácter como `✓` o una letra cirílica en un perfil
+    provoca un `UnicodeEncodeError`. Los caracteres no representables se sustituyen.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
+@app.callback()
+def main() -> None:
+    # Se ejecuta antes de cada orden. Sin docstring: el texto de ayuda está en `typer.Typer`.
+    _force_utf8()
 
 
 def _show_notice_once() -> None:

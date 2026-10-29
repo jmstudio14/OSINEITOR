@@ -47,7 +47,9 @@ def test_rdap_report_marks_missing_tlds():
 
 def test_rdap_main_writes_file(tmp_path, capsys):
     source = tmp_path / "dns.json"
-    source.write_text('{"publication": "x", "services": [[["es"], ["https://r.example/"]]]}')
+    source.write_text(
+        '{"publication": "x", "services": [[["es"], ["https://r.example/"]]]}', encoding="utf-8"
+    )
     out = tmp_path / "salida.md"
     assert rdap.main(["--input", str(source), "--output", str(out)]) == 0
     assert "| `.es` | sí | https://r.example/ |" in out.read_text(encoding="utf-8")

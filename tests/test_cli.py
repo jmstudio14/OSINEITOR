@@ -406,3 +406,29 @@ def test_budget_and_guard_options_reach_the_scan(monkeypatch):
 def test_negative_budget_is_rejected(modules):
     result = runner.invoke(app, ["domain", "example.com", "--max-entities", "-1"])
     assert result.exit_code == 2
+
+
+def test_force_utf8_survives_a_legacy_windows_codepage(monkeypatch):
+    import io
+
+    raw = io.BytesIO()
+    legacy = io.TextIOWrapper(raw, encoding="cp1252")
+    monkeypatch.setattr(cli.sys, "stdout", legacy)
+    cli._force_utf8()
+    print("Москва ✓", file=legacy)
+    legacy.flush()
+    assert raw.getvalue().decode("utf-8") == "Москва ✓\n"
+
+
+def test_cli_does_not_crash_with_a_cp1252_pipe():
+    """Reproduce lo que hará la GUI en Windows: la CLI escribiendo a una tubería cp1252."""
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"}
+    done = subprocess.run(
+        [sys.executable, "-m", "osineitor", "modules"], env=env, capture_output=True, timeout=120
+    )
+    assert done.returncode == 0, done.stderr.decode("utf-8", "replace")
+    assert "✗".encode() in done.stdout  # los símbolos salen como UTF-8, no como error
