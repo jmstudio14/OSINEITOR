@@ -24,6 +24,11 @@ Se intentará responder en un plazo de 7 días y publicar la corrección antes d
   externa o de la entrada del usuario.
 - Inyección (HTML/JS) en los informes exportados.
 - Módulos marcados como pasivos que en realidad contactan al objetivo.
+- Una forma de saltarse la guardia de red (conexiones a IPs privadas, loopback o metadatos cloud,
+  también por redirecciones) o de alterar la ruta de una URL con una entrada manipulada.
+
+**Límite conocido:** entre la comprobación de la guardia y la conexión el DNS podría cambiar
+(*DNS rebinding*). Fijar la IP resuelta en la conexión está pendiente.
 
 ## Qué no lo es
 
@@ -32,7 +37,9 @@ Se intentará responder en un plazo de 7 días y publicar la corrección antes d
 
 ## Datos sensibles que gestiona la herramienta
 
-- **API keys:** `~/.config/osineitor/config.toml`, creado con permisos `0600`, o variables de
-  entorno `OSINEITOR_<NOMBRE>_KEY`. `osineitor config show` las muestra enmascaradas.
-- **Resultados:** `~/.local/share/osineitor/osineitor.db` (SQLite, sin cifrar) y los informes en
+- **API keys:** `config.toml` en el directorio de configuración (`%APPDATA%\osineitor` en Windows,
+  `~/.config/osineitor` en Linux). En Linux se crea con permisos `0600`; en Windows hereda los de tu
+  carpeta de usuario y no se cifra. También se pueden pasar con variables de entorno
+  `OSINEITOR_<NOMBRE>_KEY`. `osineitor config show` las muestra enmascaradas.
+- **Resultados:** `osineitor.db` en el directorio de datos (SQLite, sin cifrar) y los informes en
   `reports/`. Pueden contener datos personales: protégelos y bórralos cuando ya no los necesites.

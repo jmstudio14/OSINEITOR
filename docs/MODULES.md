@@ -14,9 +14,10 @@ Para cada módulo: qué consume, qué produce, de dónde saca los datos y sus li
   emails.
   **Muchos TLD no tienen servidor RDAP.** Según el bootstrap de IANA del 28-10-2026 no lo tienen
   `.es`, `.io`, `.de`, `.mx`, `.it`, `.co`, `.me`, `.cl`, `.pt`, `.ru` ni `.cn`; sí `.com`, `.fr`,
-  `.uk`, `.ar` y `.br`. En esos dominios el módulo no devuelve datos y hoy **lo hace sin
-  avisar** (se corrige en F1.18 del [roadmap](../ROADMAP.md), y el WHOIS de respaldo llega con
-  F4.11).
+  `.uk`, `.ar` y `.br`. Para esos dominios el módulo queda **omitido** (`skipped: el TLD .es no
+  tiene servidor RDAP…`) en lugar de devolver un vacío silencioso. El bootstrap se descarga de
+  IANA y se guarda 7 días en el directorio de datos; si no se puede obtener, se intenta la
+  consulta igualmente. El WHOIS de respaldo llegará con F4.11 del [roadmap](../ROADMAP.md).
 
 ### `dns`
 - **Consume:** dominio y subdominios. **Produce:** `record` `dns:<dominio>`, `ip`.

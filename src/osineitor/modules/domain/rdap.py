@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError
+from osineitor.modules.base import Module, ModuleError, ModuleSkipped
+from osineitor.modules.domain._bootstrap import rdap_tlds
 from osineitor.modules.domain._util import is_root_domain
 
 CONTACT_ROLES = {"registrant", "administrative", "technical"}
@@ -31,6 +32,13 @@ class Rdap(Module):
         return is_root_domain(entity)
 
     async def run(self, entity: Entity) -> list[Entity]:
+        tld = entity.value.rsplit(".", 1)[-1]
+        tlds = await rdap_tlds(self.ctx.http)
+        if tlds is not None and tld not in tlds:
+            raise ModuleSkipped(
+                f"el TLD .{tld} no tiene servidor RDAP según IANA "
+                "(ver docs/RDAP_COBERTURA.md; el WHOIS de respaldo llegará con F4.11)"
+            )
         response = await self.ctx.http.get(f"https://rdap.org/domain/{entity.value}")
         if response.status_code == 404:
             return []
@@ -68,9 +76,9 @@ class Rdap(Module):
         ]
         for contact in contacts:
             if "@" in contact.get("email", ""):
-                out.append(
-                    self.emit(
-                        entity, EntityType.EMAIL, contact["email"].lower(), roles=contact["roles"]
-                    )
+                email = self.try_emit(
+                    entity, EntityType.EMAIL, contact["email"], roles=contact["roles"]
                 )
+                if email:
+                    out.append(email)
         return out

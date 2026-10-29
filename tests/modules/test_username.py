@@ -72,3 +72,59 @@ def test_bundled_sites_are_valid():
         probe = json.dumps([site["url"], site.get("urlProbe"), site.get("request_payload")])
         assert "{}" in probe
         assert site.get("errorType", "status_code") in {"status_code", "message", "response_url"}
+
+
+HOSTILE = ["a/../b", "x?y#z", "a b", "%2e%2e", "../../etc/passwd", "ñ\\u00e9"]
+
+
+def shape(url: str) -> tuple:
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url)
+    return (
+        parts.scheme,
+        parts.path.count("/"),
+        ".." in parts.path.split("/"),
+        parts.query.count("&"),
+        bool(parts.query),
+        bool(parts.fragment),
+    )
+
+
+def test_hostile_usernames_cannot_alter_the_url_structure_of_any_site():
+    from osineitor.modules.username.sites import build_urls
+
+    checked = 0
+    for name, site in load_sites().items():
+        base_profile, base_probe = build_urls(site, "benign")
+        for hostile in HOSTILE:
+            profile, probe = build_urls(site, hostile)
+            assert shape(profile) == shape(base_profile), (name, hostile, profile)
+            assert shape(probe) == shape(base_probe), (name, hostile, probe)
+            assert " " not in profile and " " not in probe, (name, hostile)
+            checked += 1
+    assert checked > 2000
+
+
+@respx.mock
+async def test_a_budget_hit_keeps_the_profiles_already_found(ctx):
+    from osineitor.budget import Budget
+    from osineitor.http import HttpClient
+
+    budget = Budget(max_requests=3)
+    http = HttpClient(ctx.config, backoff=0, budget=budget)
+    ctx.http = http
+    only_status = {
+        f"S{i}": {"errorType": "status_code", "url": f"https://s{i}.test/{{}}"} for i in range(6)
+    }
+
+    class Capped(UsernameSites):
+        def sites(self):
+            return only_status
+
+    for i in range(6):
+        respx.get(f"https://s{i}.test/juan").mock(return_value=httpx.Response(200))
+    out = await Capped(ctx).run(Entity(type=EntityType.USERNAME, value="juan"))
+    await http.aclose()
+    assert len(out) == 3
+    assert budget.blocked_reason

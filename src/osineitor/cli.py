@@ -4,15 +4,24 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
 import typer
+from pydantic import ValidationError
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
 from osineitor import __version__, registry, report
+from osineitor.budget import (
+    DEFAULT_MAX_ENTITIES,
+    DEFAULT_MAX_REQUESTS,
+    DEFAULT_MAX_SECONDS,
+    Budget,
+)
 from osineitor.config import Config, config_dir, config_path
 from osineitor.engine import Engine
 from osineitor.http import HttpClient
@@ -44,6 +53,55 @@ Only = Annotated[
 NoSave = Annotated[bool, typer.Option("--no-save", help="No guarda el scan en la base de datos.")]
 AsJson = Annotated[bool, typer.Option("--json", help="Imprime el resultado en JSON.")]
 DbPath = Annotated[Path | None, typer.Option("--db", help="Ruta de la base de datos SQLite.")]
+MaxEntities = Annotated[
+    int,
+    typer.Option("--max-entities", min=0, help="Tope de entidades (0 = sin límite)."),
+]
+MaxRequests = Annotated[
+    int,
+    typer.Option("--max-requests", min=0, help="Tope de peticiones HTTP (0 = sin límite)."),
+]
+MaxTime = Annotated[
+    float,
+    typer.Option("--max-time", min=0, help="Tope de segundos del scan (0 = sin límite)."),
+]
+AllowPrivate = Annotated[
+    bool,
+    typer.Option(
+        "--allow-private",
+        help="Permite conectar con IPs privadas, loopback y metadatos cloud (bloqueadas).",
+    ),
+]
+
+
+@dataclass
+class ScanOptions:
+    depth: int
+    active: bool
+    only: list[str] | None
+    max_entities: int
+    max_requests: int
+    max_time: float
+    allow_private: bool
+
+
+def _force_utf8() -> None:
+    """Salida siempre en UTF-8.
+
+    En Windows, si la salida va a una tubería (otro programa que lanza la CLI) Python usa la
+    codificación local (cp1252) y un solo carácter como `✓` o una letra cirílica en un perfil
+    provoca un `UnicodeEncodeError`. Los caracteres no representables se sustituyen.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
+@app.callback()
+def main() -> None:
+    # Se ejecuta antes de cada orden. Sin docstring: el texto de ayuda está en `typer.Typer`.
+    _force_utf8()
 
 
 def _show_notice_once() -> None:
@@ -66,18 +124,18 @@ def _select_modules(only: list[str] | None) -> list[type]:
     return [m for m in classes if m.name in only]
 
 
-async def _scan(
-    seed: Entity, depth: int, active: bool, only: list[str] | None, live: bool
-) -> ScanResult:
+async def _scan(seed: Entity, opts: ScanOptions, live: bool) -> ScanResult:
     config = Config.load()
-    async with HttpClient(config) as http:
+    budget = Budget.from_limits(opts.max_entities, opts.max_requests, opts.max_time)
+    async with HttpClient(config, allow_private=opts.allow_private, budget=budget) as http:
         ctx = Context(config=config, http=http)
         engine = Engine(
             ctx,
-            _select_modules(only),
-            depth=depth,
-            active=active,
+            _select_modules(opts.only),
+            depth=opts.depth,
+            active=opts.active,
             on_entity=_print_entity if live else None,
+            budget=budget,
         )
         return await engine.run(seed)
 
@@ -115,30 +173,40 @@ def render(result: ScanResult) -> None:
     if not result.entities:
         console.print("[dim]Sin resultados.[/]")
     for ev in result.events:
-        color = "red" if ev.kind == "error" else "dim"
+        color = {"error": "red", "budget": "yellow"}.get(ev.kind, "dim")
         where = f" ({ev.entity})" if ev.entity else ""
         console.print(f"[{color}]{ev.kind}: {ev.module}{where}: {escape(ev.message)}[/]")
+    if result.truncated:
+        console.print(
+            "[yellow]Resultado incompleto: el scan se detuvo al agotar su presupuesto.[/]"
+        )
+
+
+def _make_seed(etype: EntityType, value: str) -> Entity:
+    """Crea la entidad semilla; un valor no válido es un error de uso, no un traceback."""
+    try:
+        return Entity(type=etype, value=value.strip())
+    except ValidationError as exc:
+        reason = exc.errors()[0]["msg"].removeprefix("Value error, ")
+        raise typer.BadParameter(reason) from exc
 
 
 def _run_target(
     etype: EntityType,
     value: str,
-    depth: int,
-    active: bool,
-    only: list[str] | None,
+    opts: ScanOptions,
     no_save: bool,
     as_json: bool,
     db: Path | None,
 ) -> None:
+    seed = _make_seed(etype, value)
     if not as_json:
         _show_notice_once()
-        console.print(f"[bold]Escaneando {etype} {value}[/] (profundidad {depth})")
-    seed = Entity(type=etype, value=value.strip())
-    result = asyncio.run(_scan(seed, depth, active, only, live=not as_json))
+        console.print(f"[bold]Escaneando {etype} {seed.value}[/] (profundidad {opts.depth})")
+    result = asyncio.run(_scan(seed, opts, live=not as_json))
     if not no_save:
-        storage = Storage(db)
-        storage.save(result)
-        storage.close()
+        with Storage(db) as storage:
+            storage.save(result)
     if as_json:
         print(result.model_dump_json(indent=2))
     else:
@@ -154,9 +222,14 @@ def domain(
     no_save: NoSave = False,
     json_out: AsJson = False,
     db: DbPath = None,
+    max_entities: MaxEntities = DEFAULT_MAX_ENTITIES,
+    max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
+    max_time: MaxTime = DEFAULT_MAX_SECONDS,
+    allow_private: AllowPrivate = False,
 ) -> None:
     """Investiga un dominio: RDAP/WHOIS, DNS, subdominios, histórico web."""
-    _run_target(EntityType.DOMAIN, target.lower(), depth, active, module, no_save, json_out, db)
+    opts = ScanOptions(depth, active, module, max_entities, max_requests, max_time, allow_private)
+    _run_target(EntityType.DOMAIN, target, opts, no_save, json_out, db)
 
 
 @app.command()
@@ -168,9 +241,14 @@ def ip(
     no_save: NoSave = False,
     json_out: AsJson = False,
     db: DbPath = None,
+    max_entities: MaxEntities = DEFAULT_MAX_ENTITIES,
+    max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
+    max_time: MaxTime = DEFAULT_MAX_SECONDS,
+    allow_private: AllowPrivate = False,
 ) -> None:
     """Investiga una IP: geolocalización, puertos/servicios, reputación."""
-    _run_target(EntityType.IP, target, depth, active, module, no_save, json_out, db)
+    opts = ScanOptions(depth, active, module, max_entities, max_requests, max_time, allow_private)
+    _run_target(EntityType.IP, target, opts, no_save, json_out, db)
 
 
 @app.command()
@@ -182,9 +260,14 @@ def email(
     no_save: NoSave = False,
     json_out: AsJson = False,
     db: DbPath = None,
+    max_entities: MaxEntities = DEFAULT_MAX_ENTITIES,
+    max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
+    max_time: MaxTime = DEFAULT_MAX_SECONDS,
+    allow_private: AllowPrivate = False,
 ) -> None:
     """Investiga un email: validez, perfiles asociados, filtraciones."""
-    _run_target(EntityType.EMAIL, target.lower(), depth, active, module, no_save, json_out, db)
+    opts = ScanOptions(depth, active, module, max_entities, max_requests, max_time, allow_private)
+    _run_target(EntityType.EMAIL, target, opts, no_save, json_out, db)
 
 
 @app.command()
@@ -196,9 +279,14 @@ def username(
     no_save: NoSave = False,
     json_out: AsJson = False,
     db: DbPath = None,
+    max_entities: MaxEntities = DEFAULT_MAX_ENTITIES,
+    max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
+    max_time: MaxTime = DEFAULT_MAX_SECONDS,
+    allow_private: AllowPrivate = False,
 ) -> None:
     """Busca un nombre de usuario en cientos de sitios."""
-    _run_target(EntityType.USERNAME, target, depth, active, module, no_save, json_out, db)
+    opts = ScanOptions(depth, active, module, max_entities, max_requests, max_time, allow_private)
+    _run_target(EntityType.USERNAME, target, opts, no_save, json_out, db)
 
 
 @app.command()
@@ -210,13 +298,14 @@ def scan(
     no_save: NoSave = False,
     json_out: AsJson = False,
     db: DbPath = None,
+    max_entities: MaxEntities = DEFAULT_MAX_ENTITIES,
+    max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
+    max_time: MaxTime = DEFAULT_MAX_SECONDS,
+    allow_private: AllowPrivate = False,
 ) -> None:
     """Detecta el tipo de objetivo y pivota entre frentes (profundidad 2 por defecto)."""
-    etype = detect_type(target)
-    value = target.strip()
-    if etype in (EntityType.DOMAIN, EntityType.EMAIL):
-        value = value.lower()
-    _run_target(etype, value, depth, active, module, no_save, json_out, db)
+    opts = ScanOptions(depth, active, module, max_entities, max_requests, max_time, allow_private)
+    _run_target(detect_type(target), target, opts, no_save, json_out, db)
 
 
 @app.command("modules")
@@ -250,20 +339,18 @@ def list_modules() -> None:
 @app.command()
 def history(limit: int = 20, db: DbPath = None) -> None:
     """Muestra los últimos scans guardados."""
-    storage = Storage(db)
     table = Table("ID", "Tipo", "Objetivo", "Entidades", "Fecha")
-    for scan_id, ttype, target, count, started in storage.list_scans(limit):
-        table.add_row(str(scan_id), ttype, target, str(count), started[:19])
-    storage.close()
+    with Storage(db) as storage:
+        for scan_id, ttype, target, count, started in storage.list_scans(limit):
+            table.add_row(str(scan_id), ttype, target, str(count), started[:19])
     console.print(table)
 
 
 @app.command()
 def show(scan_id: int, db: DbPath = None) -> None:
     """Muestra un scan guardado."""
-    storage = Storage(db)
-    result = storage.load(scan_id)
-    storage.close()
+    with Storage(db) as storage:
+        result = storage.load(scan_id)
     if result is None:
         raise typer.BadParameter(f"no existe el scan {scan_id}")
     render(result)
@@ -281,9 +368,8 @@ def export(
     """Exporta un scan guardado a JSON, Markdown o HTML."""
     if fmt not in report.FORMATS:
         raise typer.BadParameter(f"formato no soportado: {fmt}")
-    storage = Storage(db)
-    result = storage.load(scan_id)
-    storage.close()
+    with Storage(db) as storage:
+        result = storage.load(scan_id)
     if result is None:
         raise typer.BadParameter(f"no existe el scan {scan_id}")
     ext = report.FORMATS[fmt][0]

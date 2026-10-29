@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import json
+import os
+import time
+
 import httpx
+import pytest
 import respx
 
+from osineitor.errors import ModuleSkipped
 from osineitor.models import Entity, EntityType
+from osineitor.modules.domain import _bootstrap as bootstrap
 from osineitor.modules.domain.crtsh import CrtSh
 from osineitor.modules.domain.dns import Dns
 from osineitor.modules.domain.http_fingerprint import HttpFingerprint
@@ -41,8 +48,16 @@ RDAP = {
 }
 
 
+IANA = "https://data.iana.org/rdap/dns.json"
+BOOTSTRAP = {
+    "publication": "2026-10-28T22:00:04Z",
+    "services": [[["com", "NET"], ["https://rdap.verisign.com/com/v1/"]]],
+}
+
+
 @respx.mock
 async def test_rdap(ctx):
+    respx.get(IANA).mock(return_value=httpx.Response(200, json=BOOTSTRAP))
     respx.get("https://rdap.org/domain/example.com").mock(
         return_value=httpx.Response(200, json=RDAP)
     )
@@ -53,6 +68,65 @@ async def test_rdap(ctx):
     assert record["nameservers"] == ["ns1.example.net"]
     assert out[1].type == EntityType.EMAIL and out[1].value == "admin@acme.io"
     assert not Rdap(ctx).accepts(SUB)
+
+
+@respx.mock
+async def test_rdap_skips_tld_without_rdap(ctx):
+    respx.get(IANA).mock(return_value=httpx.Response(200, json=BOOTSTRAP))
+    rdap_org = respx.get(url__startswith="https://rdap.org/")
+    with pytest.raises(ModuleSkipped, match=r"\.es no tiene servidor RDAP"):
+        await Rdap(ctx).run(Entity(type=EntityType.DOMAIN, value="ejemplo.es"))
+    assert not rdap_org.called
+
+
+@respx.mock
+async def test_rdap_bootstrap_is_cached_on_disk(ctx):
+    iana = respx.get(IANA).mock(return_value=httpx.Response(200, json=BOOTSTRAP))
+    respx.get("https://rdap.org/domain/example.com").mock(
+        return_value=httpx.Response(200, json=RDAP)
+    )
+    await Rdap(ctx).run(DOMAIN)
+    await Rdap(ctx).run(DOMAIN)
+    assert iana.call_count == 1
+    assert bootstrap.cache_path().exists()
+
+
+@respx.mock
+async def test_rdap_without_bootstrap_still_tries_the_query(ctx):
+    respx.get(IANA).mock(side_effect=httpx.ConnectError("sin red"))
+    respx.get("https://rdap.org/domain/example.com").mock(
+        return_value=httpx.Response(200, json=RDAP)
+    )
+    out = await Rdap(ctx).run(DOMAIN)
+    assert out[0].data["registrar"] == "MarkMonitor"
+
+
+@respx.mock
+async def test_rdap_uses_stale_cache_when_iana_is_down(ctx):
+    path = bootstrap.cache_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(BOOTSTRAP), encoding="utf-8")
+    old = time.time() - 30 * 24 * 3600
+    os.utime(path, (old, old))
+    respx.get(IANA).mock(return_value=httpx.Response(503))
+    with pytest.raises(ModuleSkipped):
+        await Rdap(ctx).run(Entity(type=EntityType.DOMAIN, value="ejemplo.es"))
+
+
+def test_bootstrap_parse_lowercases():
+    assert bootstrap.parse(BOOTSTRAP) == {"com", "net"}
+
+
+@respx.mock
+async def test_rdap_ignores_invalid_contact_email(ctx):
+    data = json.loads(json.dumps(RDAP))
+    data["entities"][1]["vcardArray"][1][1][3] = "@@"
+    respx.get(IANA).mock(return_value=httpx.Response(200, json=BOOTSTRAP))
+    respx.get("https://rdap.org/domain/example.com").mock(
+        return_value=httpx.Response(200, json=data)
+    )
+    out = await Rdap(ctx).run(DOMAIN)
+    assert [e.type for e in out] == [EntityType.RECORD]
 
 
 async def test_dns(ctx):

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import httpx
 
+from osineitor.errors import InvalidEntityValue
 from osineitor.models import Entity, EntityType
 from osineitor.modules.base import Module, ModuleError
 from osineitor.modules.domain._util import is_root_domain
+from osineitor.normalize import canonical_hostname
 
 MAX_SUBDOMAINS = 500
 
@@ -35,8 +37,12 @@ class CrtSh(Module):
         for cert in response.json():
             for name in str(cert.get("name_value", "")).splitlines():
                 name = name.strip().lower().removeprefix("*.")
-                if name.endswith(f".{domain}") and " " not in name:
-                    names.add(name)
+                if not name.endswith(f".{domain}"):
+                    continue
+                try:
+                    names.add(canonical_hostname(name))  # los nombres de CT son datos no fiables
+                except InvalidEntityValue:
+                    continue
         return [
             self.emit(entity, EntityType.DOMAIN, name, subdomain=True)
             for name in sorted(names)[:MAX_SUBDOMAINS]

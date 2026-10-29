@@ -108,6 +108,7 @@ class Storage:
             finished_at=datetime.fromisoformat(finished_at) if finished_at else None,
             entities=entities,
             events=events,
+            truncated=any(ev.kind == "budget" for ev in events),
         )
 
     def list_scans(self, limit: int = 20) -> list[tuple[int, str, str, int, str]]:
@@ -119,3 +120,9 @@ class Storage:
 
     def close(self) -> None:
         self._conn.close()
+
+    def __enter__(self) -> Storage:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()

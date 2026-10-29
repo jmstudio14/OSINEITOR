@@ -31,6 +31,7 @@ osineitor username johndoe
 osineitor domain ejemplo.com --active          # incluye módulos que contactan al objetivo
 osineitor domain ejemplo.com -m dns -m crtsh   # solo ciertos módulos
 osineitor ip 1.1.1.1 --json                    # salida JSON por stdout
+osineitor scan ejemplo.com --max-entities 200 --max-requests 500 --max-time 120
 
 osineitor history                   # scans guardados
 osineitor show 3                    # volver a ver el scan 3
@@ -41,6 +42,20 @@ osineitor modules                   # módulos disponibles y estado de sus API k
 `--depth` controla cuántos niveles se pivota. Con `1` solo se analiza el objetivo; con `2`
 también se analizan las entidades descubiertas (p. ej. las IPs a las que resuelve un dominio).
 Cada nivel multiplica las peticiones: úsalo con criterio.
+
+**Presupuesto.** Cada scan tiene topes para no dispararse: 2000 entidades, 3000 peticiones y 900
+segundos (`--max-entities`, `--max-requests`, `--max-time`; `0` = sin límite). Al agotarlos el
+scan se detiene de forma ordenada, conserva lo ya encontrado y marca el resultado como
+incompleto.
+
+**Red.** Por seguridad, ninguna petición se envía a IPs privadas, loopback ni al servicio de
+metadatos de una nube (`169.254.169.254`), tampoco a través de redirecciones: un subdominio
+publicado por un tercero podría apuntar ahí. `--allow-private` lo permite si investigas tu
+propia red.
+
+**Entradas.** Los dominios se guardan en minúsculas y en punycode (`münchen.de` →
+`xn--mnchen-3ya.de`). Un username admite letras, números, `.`, `_` y `-` (hasta 64); un valor no
+válido se rechaza antes de lanzar nada.
 
 `scan` deduce el tipo de la entrada. Una cadena como `john.doe` es ambigua (parece un dominio);
 en ese caso usa el comando explícito: `osineitor username john.doe`.
@@ -72,12 +87,21 @@ solo se ejecutan con `--active`. Un módulo sin su API key se omite y se indica 
 ### API keys
 
 ```bash
-osineitor config set shodan TU_KEY      # se guarda en ~/.config/osineitor/config.toml (0600)
+osineitor config set shodan TU_KEY      # se guarda en el directorio de configuración (abajo)
 osineitor config show
 export OSINEITOR_SHODAN_KEY=TU_KEY      # alternativa: variable de entorno (tiene prioridad)
 ```
 
 Nombres: `shodan`, `abuseipdb`, `greynoise`, `hibp`, `hunter`, `ipinfo`.
+
+**Dónde se guarda todo** (`OSINEITOR_CONFIG_DIR` y `OSINEITOR_DATA_DIR` lo sobrescriben):
+
+| | Windows | Linux |
+|---|---|---|
+| Configuración y keys | `%APPDATA%\osineitor\config.toml` | `~/.config/osineitor/config.toml` |
+| Historial (SQLite) y cachés | `%LOCALAPPDATA%\osineitor\` | `~/.local/share/osineitor/` |
+
+En Windows el fichero de keys hereda los permisos de tu carpeta de usuario; no se cifra.
 
 ## Limitaciones conocidas
 
@@ -129,6 +153,8 @@ resolver en memoria.
 
 - [Arquitectura](docs/ARCHITECTURE.md): engine, pivoteo, modelo de datos y persistencia.
 - [Referencia de módulos](docs/MODULES.md): fuentes, datos que aportan y limitaciones.
+- [Pruebas en Windows pendientes](docs/PRUEBAS_WINDOWS.md): qué módulos no se han comprobado en vivo
+  y cómo probarlos tras clonar el repositorio.
 - [Uso responsable](docs/USO_RESPONSABLE.md): autorización, RGPD y usos no aceptables.
 - [Roadmap](ROADMAP.md): fases siguientes, criterios de aceptación y fuera de alcance.
 - [Contribuir](CONTRIBUTING.md) · [Seguridad](SECURITY.md) · [Changelog](CHANGELOG.md) ·

@@ -6,8 +6,10 @@ import asyncio
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 
+from osineitor.budget import Budget
+from osineitor.errors import BudgetExceeded, ModuleError, ModuleSkipped
 from osineitor.models import Entity, ScanEvent, ScanResult
-from osineitor.modules.base import Context, Module, ModuleError
+from osineitor.modules.base import Context, Module
 
 
 class Engine:
@@ -20,9 +22,11 @@ class Engine:
         active: bool = False,
         concurrency: int = 10,
         on_entity: Callable[[Entity], None] | None = None,
+        budget: Budget | None = None,
     ) -> None:
         self.depth = max(depth, 1)
         self.on_entity = on_entity
+        self.budget = budget or Budget()
         self._sem = asyncio.Semaphore(concurrency)
         self.modules: list[Module] = []
         self.skipped: list[ScanEvent] = []
@@ -44,16 +48,36 @@ class Engine:
             else:
                 self.modules.append(cls(ctx))
 
+    @staticmethod
+    def _truncate(result: ScanResult, reason: str) -> None:
+        if not result.truncated:
+            result.truncated = True
+            result.events.append(ScanEvent(kind="budget", module="engine", message=reason))
+
     async def run(self, seed: Entity) -> ScanResult:
         result = ScanResult(target=seed, depth=self.depth, events=list(self.skipped))
+        self.budget.start()
         index: dict[str, Entity] = {seed.key: seed}
         layer = [seed]
         for _ in range(self.depth):
+            if reason := self.budget.exhausted(len(result.entities)):
+                self._truncate(result, reason)
+                break
             jobs = [(m, e) for e in layer for m in self.modules if m.accepts(e)]
-            outputs = await asyncio.gather(*(self._run_one(m, e, result) for m, e in jobs))
+            if not jobs:
+                break
+            tasks = [asyncio.create_task(self._run_one(m, e, result)) for m, e in jobs]
+            done, pending = await asyncio.wait(tasks, timeout=self.budget.remaining_seconds())
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+                self._truncate(result, self.budget.exhausted() or "tiempo máximo agotado")
             layer = []
-            for produced in outputs:
-                for entity in produced:
+            for task in tasks:
+                if task not in done:
+                    continue
+                for entity in task.result():
                     existing = index.get(entity.key)
                     if existing is not None:
                         # Misma entidad desde otra fuente: completa los datos que falten.
@@ -61,25 +85,40 @@ class Engine:
                             if existing.data.get(k) in (None, "", [], {}):
                                 existing.data[k] = v
                         continue
+                    # Solo el tope de entidades impide guardar: lo que un módulo terminó a
+                    # tiempo se conserva aunque se haya agotado el tiempo o las peticiones.
+                    if reason := self.budget.entities_full(len(result.entities)):
+                        self._truncate(result, reason)
+                        continue
                     index[entity.key] = entity
                     result.entities.append(entity)
                     layer.append(entity)
                     if self.on_entity:
                         self.on_entity(entity)
-            if not layer:
+            if self.budget.blocked_reason:
+                self._truncate(result, self.budget.blocked_reason)
+            if not layer or result.truncated:
                 break
         result.finished_at = datetime.now(UTC)
         return result
 
     async def _run_one(self, module: Module, entity: Entity, result: ScanResult) -> list[Entity]:
         async with self._sem:
+            if reason := self.budget.exhausted(len(result.entities)):
+                self._truncate(result, reason)
+                return []
             try:
                 return await module.run(entity)
+            except BudgetExceeded as exc:
+                self._truncate(result, exc.reason)
+                return []
+            except ModuleSkipped as exc:
+                kind, message = "skipped", str(exc)
             except ModuleError as exc:
-                message = str(exc)
+                kind, message = "error", str(exc)
             except Exception as exc:  # un módulo roto no debe tumbar el scan
-                message = f"{type(exc).__name__}: {exc}"
+                kind, message = "error", f"{type(exc).__name__}: {exc}"
         result.events.append(
-            ScanEvent(kind="error", module=module.name, message=message, entity=entity.key)
+            ScanEvent(kind=kind, module=module.name, message=message, entity=entity.key)
         )
         return []
