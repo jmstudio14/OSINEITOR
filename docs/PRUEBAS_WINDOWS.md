@@ -246,6 +246,29 @@ osineitor doctor: crtsh FALLO (crt.sh respondió 502, 1.0 s), dns FALLO (el reso
   la red doméstica (router o proveedor). Cuál de los dos, **sin confirmar**.
 - **No descartan ni explican** que el resolvedor del móvil (el del sistema en esta red) también
   rechace `example.com`, ni por qué `doctor` sigue fallando `dns` aquí.
-- **Limitación del mensaje de `doctor`:** `dnspython` toma los servidores de todos los adaptadores,
-  también del Ethernet desconectado (192.168.0.1). Con servidores que fallan de formas distintas
-  (timeout y `REFUSED`) no sale el mensaje «rechazó la consulta», sino «no respondió».
+- **`doctor` en esta red:** `dnspython` usó dos servidores, `['192.168.0.1', '10.83.171.171']`,
+  y con ambos obtuvo tiempo agotado (no `REFUSED`), de ahí el mensaje «no respondió» tras
+  79,8 s. Que el resolvedor del móvil conteste `REFUSED` a Windows y no responda a `dnspython`
+  queda sin explicar. No se ha reproducido que `dnspython` mezcle timeouts y `REFUSED`, así que no
+  hay ningún defecto demostrado en el mensaje de `doctor`.
+
+### Causa del filtrado en la red doméstica (2026-10-29, de vuelta en casa)
+
+Consultas con `dnspython` a servidores DNS que **no existen**:
+
+```text
+10.255.255.1 example.com  NoNameservers ... answered REFUSED
+10.255.255.1 github.com   ['20.250.119.67']
+192.0.2.1    example.com  NoNameservers ... answered REFUSED
+192.0.2.1    github.com   ['20.250.119.67']
+```
+
+- **Confirma** que algo en la red doméstica intercepta todo el tráfico al puerto 53 (aunque el
+  destino no exista), reenvía las consultas y contesta `REFUSED` solo para `example.com`. Por eso
+  1.1.1.1, 8.8.8.8 y 9.9.9.9 «rechazaban» ese nombre: nunca contestaron ellos. Con la red del
+  móvil esos resolvedores sí responden.
+- **Sin confirmar:** si lo hace el router (192.168.0.1) o el proveedor. Las IP de prueba son
+  privadas o de documentación, lo que apunta más al router, pero no está demostrado. Tampoco se
+  sabe por qué se rechaza ese nombre. Hace falta revisar el panel del router.
+- **Efecto en OSINEITOR:** ninguno en el código. `dns` y `doctor` usan `example.com` como canary,
+  por eso fallan en esta red; con otros dominios (`github.com`) el módulo funciona.
