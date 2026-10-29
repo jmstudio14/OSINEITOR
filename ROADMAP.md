@@ -1,10 +1,13 @@
 # Roadmap de OSINEITOR
 
-> **Estado:** vigente · **Versión actual:** 0.1.1 · **Última revisión:** 29 de octubre de 2026
+> **Estado:** vigente · **Versión actual:** 0.2.0 · **Última revisión:** 29 de octubre de 2026
 >
 > Este documento define la dirección del proyecto después del MVP: qué se construirá, en qué
 > orden, por qué y cómo se sabrá que cada fase está terminada. No compromete fechas: el orden,
 > las prioridades y los criterios de aceptación sí son vinculantes.
+>
+> **Qué está hecho y qué no:** [progreso por fase](#progreso-de-implementación) y columna
+> *Estado* en cada tabla de entregables (✅ hecho · 🟡 parcial · ⬜ pendiente · ➖ obsoleto).
 
 ## Índice
 
@@ -160,6 +163,13 @@ navegable y exportable.
 Núcleo con pivoteo por niveles, 16 módulos (10 sin key, 6 con key), SQLite, informes
 JSON/Markdown/HTML, 41 tests sin red y CI en Python 3.11 y 3.13.
 
+**Añadido en v0.2.0.** Estado por módulo y `osineitor doctor`, migraciones de esquema, caché HTTP,
+timeouts y presupuestos de escaneo, guardia de red, normalización y saneado de entradas, RDAP que
+distingue «TLD sin RDAP», rutas de Windows (`platformdirs`), contrato CLI↔GUI (`--ndjson`,
+`--json`, cancelación y códigos de salida) y la capa sin Qt de la aplicación de escritorio
+(`osineitor_gui`). 346 tests sin red; CI en Windows y Linux (Python 3.11 y 3.13).
+El detalle está en el [progreso por fase](#progreso-de-implementación).
+
 ### 3.2 Deuda técnica conocida
 
 | ID | Deuda | Impacto | Se resuelve en |
@@ -259,6 +269,29 @@ entre sí y pueden reordenarse.
                          2 ────┘        └──► 10
 ```
 
+### Progreso de implementación
+
+Estado a 29-10-2026 (v0.2.0), contrastado con el código. Leyenda: **✅ Hecho** · **🟡 Parcial** (falta parte del entregable o de su criterio de aceptación) · **⬜ Pendiente** · **➖ Obsoleto**. La columna *Estado* de cada tabla de la sección 6 es la fuente.
+
+| Fase | Versión | Hechos | Parciales | Pendientes | *M* hechos |
+|---|---|---|---|---|---|
+| 0 | 0.1.1 | 2 | 1 | 3 | 2 / 6 |
+| 1 | 0.2.0 | 11 | 3 | 4 | 11 / 12 |
+| 2 | 0.3.0 | 0 | 0 | 7 | 0 / 4 |
+| 3 | 0.4.0 | 0 | 0 | 7 | 0 / 3 |
+| 4 | 0.5.0–0.5.1 | 0 | 0 | 24 | 0 / 5 |
+| 5 | 0.6.0 | 0 | 0 | 15 | 0 / 1 |
+| 6 | 0.7.0 | 0 | 0 | 18 | 0 / 3 |
+| 7 | 0.8.0 | 0 | 0 | 12 | 0 / 4 |
+| 8 | 0.9.0 | 1 | 0 | 6 | 1 / 3 |
+| 9 | 0.10.0 | 0 | 0 | 7 | 0 / 3 |
+| 10 | 0.11.0 | 0 | 0 | 7 | 0 / 3 |
+| 11 | 1.0.0 | 0 | 0 | 5 | 0 / 3 |
+| G | 0.2.0–0.2.2 | 1 | 6 | 2 | 1 / 8 |
+| **Total (fases 0–11)** | | **14** | **4** | **115** | **14 / 50** |
+
+Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **13 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
+
 ### Corte recomendado
 
 **v0.5.0 = fases 0 a 4 con solo los entregables *M*** (30 de los 134 entregables
@@ -271,7 +304,8 @@ El roadmap pasó de 80 a 134 entregables tras el análisis de carencias. Para un
 una persona eso es un riesgo de abandono, y por eso existen las prioridades *M*, *S* y *C*, el
 principio 8 y este corte: **se puede parar en cualquier versión y lo hecho sigue siendo útil**.
 
-Recuento por prioridad: 50 *M*, 61 *S* y 23 *C*.
+Recuento por prioridad: 50 *M*, 60 *S* y 23 *C* (133 con prioridad, más F11.1, obsoleto y sin
+prioridad: 134 identificadores).
 
 ---
 
@@ -285,22 +319,23 @@ prioridad (**P**: M, S o C). Los *spikes* están marcados con *(spike)*.
 **Objetivo:** confirmar que lo que ya existe funciona contra los servicios reales y medir el
 punto de partida con el que se comparará la fase 1.
 
-| ID | P | Entregable | Detalle |
-|---|---|---|---|
-| F0.1 | M | Prueba real de cada módulo | Ejecutar cada módulo contra objetivos propios o públicos de prueba (p. ej. `example.com`, `8.8.8.8`) y documentar el resultado |
-| F0.2 | M | Fixtures grabadas | Guardar respuestas reales anonimizadas en `tests/fixtures/` y usarlas en los tests en lugar de respuestas inventadas |
-| F0.3 | M | Corrección de discrepancias | Ajustar el parseo donde el formato real difiera del documentado |
-| F0.4 | M | Tests de la CLI | Cubrir todos los comandos con `typer.testing.CliRunner` |
-| F0.5 | M | Línea base de falsos positivos de usernames | Script reproducible que ejecuta `username_sites` con usernames aleatorios inexistentes y publica la tasa en `docs/`; es la referencia del criterio de la fase 1 |
-| F0.6 | M | Cobertura RDAP por TLD | Documentar qué TLD tienen RDAP según el bootstrap de IANA [R15] y cuáles quedan ciegos; alimenta F1.18 y F4.11 |
+| ID | P | Estado | Entregable | Detalle |
+|---|---|---|---|---|
+| F0.1 | M | ⬜ Pendiente | Prueba real de cada módulo | Ejecutar cada módulo contra objetivos propios o públicos de prueba (p. ej. `example.com`, `8.8.8.8`) y documentar el resultado |
+| F0.2 | M | ⬜ Pendiente | Fixtures grabadas | Guardar respuestas reales anonimizadas en `tests/fixtures/` y usarlas en los tests en lugar de respuestas inventadas |
+| F0.3 | M | ⬜ Pendiente | Corrección de discrepancias | Ajustar el parseo donde el formato real difiera del documentado |
+| F0.4 | M | ✅ Hecho | Tests de la CLI | Cubrir todos los comandos con `typer.testing.CliRunner` |
+| F0.5 | M | 🟡 Parcial | Línea base de falsos positivos de usernames | Script reproducible que ejecuta `username_sites` con usernames aleatorios inexistentes y publica la tasa en `docs/`; es la referencia del criterio de la fase 1 |
+| F0.6 | M | ✅ Hecho | Cobertura RDAP por TLD | Documentar qué TLD tienen RDAP según el bootstrap de IANA [R15] y cuáles quedan ciegos; alimenta F1.18 y F4.11 |
 
-**Estado (29-10-2026, v0.1.1):** F0.4 y F0.6 completados ([`docs/RDAP_COBERTURA.md`](docs/RDAP_COBERTURA.md)).
-F0.5 tiene el script listo (`scripts/fp_baseline.py`); la medición está **pendiente** de una red con
-acceso a los sitios. F0.1, F0.2 y F0.3 siguen **pendientes**: muchos módulos no se han podido
-ejecutar en vivo desde el entorno de desarrollo (su proxy bloquea las fuentes) y se comprobarán al
-clonar el repositorio en VS Code y probar desde Windows. El estado de cada módulo y los pasos están
-en [`docs/PRUEBAS_WINDOWS.md`](docs/PRUEBAS_WINDOWS.md); además los cubrirán `osineitor doctor`
-(F1.2) y el panel de salud de la aplicación de escritorio.
+**Estado (29-10-2026):** F0.4 (cobertura de `cli.py` medida: 99 %) y F0.6
+([`docs/RDAP_COBERTURA.md`](docs/RDAP_COBERTURA.md)) están hechos. F0.5 tiene el script listo
+(`scripts/fp_baseline.py`), pero falta la medición desde una red con acceso a los sitios y publicar
+la tasa en `docs/`. F0.1, F0.2 y F0.3 siguen **pendientes**: `tests/fixtures/` no existe y solo `dns`
+y `crtsh` se han ejecutado en vivo desde Windows (ambos con fallos aún sin diagnosticar). La fase 1
+se entregó sin cerrarlos, así que dos criterios de la fase 1 (falsos positivos −50 %, `doctor` en
+menos de 2 minutos) no son comprobables todavía. Estado de cada módulo y pasos en
+[`docs/PRUEBAS_WINDOWS.md`](docs/PRUEBAS_WINDOWS.md).
 
 **Criterios de aceptación**
 - Los 16 módulos tienen al menos una ejecución real documentada en el PR.
@@ -315,34 +350,41 @@ en [`docs/PRUEBAS_WINDOWS.md`](docs/PRUEBAS_WINDOWS.md); además los cubrirán `
 **Objetivo:** que el usuario sepa en todo momento qué fuentes funcionan y por qué un resultado
 está vacío, y que la herramienta no pueda dañar al propio analista ni explotar en peticiones.
 
-| ID | P | Entregable | Detalle |
-|---|---|---|---|
-| F1.1 | M | Estado por módulo en cada scan | Cada ejecución registra `ok`, `vacío`, `error`, `omitido` o `cuota agotada`, con duración y número de peticiones |
-| F1.2 | M | `osineitor doctor` | Comprueba cada módulo contra un **canario** de resultado conocido y muestra una tabla de salud. Para usernames se usa el campo `username_claimed` que ya incluyen las 481 firmas de Sherlock |
-| F1.3 | S | Health check programado en CI | Workflow semanal (no bloqueante) que ejecuta `doctor` y abre un issue si una fuente falla |
-| F1.4 | M | Migraciones de esquema | Versionado con `PRAGMA user_version` y migraciones incrementales con tests; requisito previo para la fase 2 |
-| F1.5 | M | Caché HTTP | Caché en disco con TTL por fuente (`--no-cache`, `--refresh`) para no repetir consultas ni gastar cuota |
-| F1.6 | M | Límites declarativos por fuente | Cada módulo declara su límite (p. ej. Shodan 1 petición/s) y el cliente HTTP lo respeta |
-| F1.7 | M | Timeout por módulo y cancelación | Ningún módulo puede bloquear el scan más de su tiempo máximo |
-| F1.8 | S | Proxy y Tor | `--proxy socks5://…` aplicado a todas las peticiones salientes |
-| F1.9 | S | Registro estructurado | `--verbose` y `--log-file` en JSON, sin incluir nunca API keys |
-| F1.10 | M | Reducción de falsos positivos en usernames | Comprobación doble con un username inexistente aleatorio: si el sitio también "lo encuentra", el resultado se descarta |
-| F1.11 | M | Codificación y validación de entradas | Todo valor que se inserta en una URL se codifica (`quote(…, safe="")`); cada tipo de entidad valida su juego de caracteres; el username derivado de un email se sanea. Resuelve D8 |
-| F1.12 | M | Normalización canónica de entidades | Dominios en minúsculas, punycode (IDNA) y sin punto final; IPv6 comprimida; URLs normalizadas; la clave de identidad usa la forma canónica; migración de los datos existentes. Resuelve D10 |
-| F1.13 | M | Guardia de red | Los módulos activos y las redirecciones rechazan loopback, redes privadas, *link-local* y metadatos cloud (`169.254.169.254`) salvo `--allow-private`; los hostnames devueltos por fuentes externas se validan antes de emitirse. Resuelve D9 |
-| F1.14 | M | Presupuestos de escaneo | `--max-entities`, `--max-requests`, `--max-time` y límite por módulo; al agotarse, el scan termina de forma ordenada e informa de lo omitido. Resuelve D11 |
-| F1.15 | S | Detección de DNS wildcard | Sondeo con etiquetas aleatorias; los subdominios que solo resuelven por wildcard se marcan y no se pivotan |
-| F1.16 | S | Multiplataforma | Rutas con `platformdirs`, permisos equivalentes en Windows y CI en Linux, macOS y Windows. Resuelve D12 |
-| F1.17 | S | Experiencia de uso | Barra de progreso en `stderr`, `--quiet`, `stdout` limpio con `--json`, y *exit codes* documentados (éxito, error de uso, fuentes con errores, sin resultados). **Hecho en v0.2.0 salvo la barra de progreso** (los eventos `progress` del contrato la sustituyen para la GUI); los códigos están en [`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md) |
-| F1.18 | M | `rdap` distingue "TLD sin RDAP" de "no registrado" | Consulta el bootstrap de IANA [R15]; para un TLD sin servidor emite `omitido: TLD sin RDAP` en lugar de un resultado vacío. Resuelve D14 junto con F4.11 |
+| ID | P | Estado | Entregable | Detalle |
+|---|---|---|---|---|
+| F1.1 | M | ✅ Hecho | Estado por módulo en cada scan | Cada ejecución registra `ok`, `vacío`, `error`, `omitido` o `cuota agotada`, con duración y número de peticiones |
+| F1.2 | M | ✅ Hecho | `osineitor doctor` | Comprueba cada módulo contra un **canario** de resultado conocido y muestra una tabla de salud. Para usernames se usa el campo `username_claimed` que ya incluyen las 481 firmas de Sherlock |
+| F1.3 | S | ⬜ Pendiente | Health check programado en CI | Workflow semanal (no bloqueante) que ejecuta `doctor` y abre un issue si una fuente falla |
+| F1.4 | M | ✅ Hecho | Migraciones de esquema | Versionado con `PRAGMA user_version` y migraciones incrementales con tests; requisito previo para la fase 2 |
+| F1.5 | M | ✅ Hecho | Caché HTTP | Caché en disco con TTL por fuente (`--no-cache`, `--refresh`) para no repetir consultas ni gastar cuota |
+| F1.6 | M | 🟡 Parcial | Límites declarativos por fuente | Cada módulo declara su límite (p. ej. Shodan 1 petición/s) y el cliente HTTP lo respeta |
+| F1.7 | M | ✅ Hecho | Timeout por módulo y cancelación | Ningún módulo puede bloquear el scan más de su tiempo máximo |
+| F1.8 | S | ⬜ Pendiente | Proxy y Tor | `--proxy socks5://…` aplicado a todas las peticiones salientes |
+| F1.9 | S | ⬜ Pendiente | Registro estructurado | `--verbose` y `--log-file` en JSON, sin incluir nunca API keys |
+| F1.10 | M | ✅ Hecho | Reducción de falsos positivos en usernames | Comprobación doble con un username inexistente aleatorio: si el sitio también "lo encuentra", el resultado se descarta |
+| F1.11 | M | ✅ Hecho | Codificación y validación de entradas | Todo valor que se inserta en una URL se codifica (`quote(…, safe="")`); cada tipo de entidad valida su juego de caracteres; el username derivado de un email se sanea. Resuelve D8 |
+| F1.12 | M | ✅ Hecho | Normalización canónica de entidades | Dominios en minúsculas, punycode (IDNA) y sin punto final; IPv6 comprimida; URLs normalizadas; la clave de identidad usa la forma canónica; migración de los datos existentes. Resuelve D10 |
+| F1.13 | M | ✅ Hecho | Guardia de red | Los módulos activos y las redirecciones rechazan loopback, redes privadas, *link-local* y metadatos cloud (`169.254.169.254`) salvo `--allow-private`; los hostnames devueltos por fuentes externas se validan antes de emitirse. Resuelve D9 |
+| F1.14 | M | ✅ Hecho | Presupuestos de escaneo | `--max-entities`, `--max-requests`, `--max-time` y límite por módulo; al agotarse, el scan termina de forma ordenada e informa de lo omitido. Resuelve D11 |
+| F1.15 | S | ⬜ Pendiente | Detección de DNS wildcard | Sondeo con etiquetas aleatorias; los subdominios que solo resuelven por wildcard se marcan y no se pivotan |
+| F1.16 | S | 🟡 Parcial | Multiplataforma | Rutas con `platformdirs`, permisos equivalentes en Windows y CI en Linux, macOS y Windows. Resuelve D12 |
+| F1.17 | S | 🟡 Parcial | Experiencia de uso | Barra de progreso en `stderr`, `--quiet`, `stdout` limpio con `--json`, y *exit codes* documentados (éxito, error de uso, fuentes con errores, sin resultados). **Hecho en v0.2.0 salvo la barra de progreso** (los eventos `progress` del contrato la sustituyen para la GUI); los códigos están en [`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md) |
+| F1.18 | M | ✅ Hecho | `rdap` distingue "TLD sin RDAP" de "no registrado" | Consulta el bootstrap de IANA [R15]; para un TLD sin servidor emite `omitido: TLD sin RDAP` en lugar de un resultado vacío. Resuelve D14 junto con F4.11 |
 
-**Estado (29-10-2026):** completados F1.11, F1.12, F1.13, F1.14, F1.16 y F1.18 (fase 1a) y, en la
-fase 1b, F1.1, F1.2, F1.4, F1.5, F1.6, F1.7 y F1.10 (los *S* F1.3, F1.8, F1.9, F1.15 y F1.17 siguen
-sin empezar; F1.17 se completó en v0.2.0 con el contrato CLI↔GUI, salvo la barra de progreso). Matices: F1.2 usa valores de prueba fijos
-(`example.com`, `1.1.1.1`) y no `username_claimed` de Sherlock, que haría ~460 peticiones; las
-duraciones, TTL de caché (6 h) y timeouts por módulo son estimaciones sin medir; ningún módulo
-declara aún un `min_interval` porque no se han verificado los límites reales de sus fuentes. F1.16 sube a *M* y pasa a centrarse en
-Windows, la plataforma soportada.
+**Estado (29-10-2026):** 11 de 18 hechos, 3 parciales y 4 pendientes (F1.3, F1.8, F1.9 y F1.15,
+todos *S*): los 12 *M* están hechos salvo F1.6.
+
+- **F1.2** usa valores de prueba fijos (`example.com`, `1.1.1.1`) y no `username_claimed` de Sherlock,
+  que haría ~460 peticiones.
+- **F1.6** (parcial): el mecanismo funciona, pero ningún módulo declara aún un `min_interval`
+  porque no se han verificado los límites reales de sus fuentes.
+- **F1.12**: las filas guardadas antiguas se canonicalizan al cargarlas, sin migración de esquema.
+- **F1.16** (parcial) se centra en Windows, la plataforma soportada: usa `platformdirs`, pero el
+  `chmod 0600` no equivale a una ACL y la CI no incluye macOS.
+- **F1.17** (parcial): hechos `--quiet`, `stdout` limpio y los códigos de salida
+  ([`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md)); falta la barra de progreso, que en la GUI
+  sustituyen los eventos `progress`.
+- Las duraciones, el TTL de caché (6 h) y los timeouts por módulo son estimaciones sin medir.
 
 **Criterios de aceptación**
 - `osineitor doctor` informa del estado de los 16 módulos en menos de 2 minutos.
@@ -358,7 +400,7 @@ Windows, la plataforma soportada.
 - `münchen.de` y `xn--mnchen-3ya.de` resultan en una única entidad.
 - Para un dominio `.es` el scan muestra `omitido: TLD sin RDAP`, no "sin resultados".
 - Con `--max-entities 50` un scan de 500 subdominios se detiene y lo indica.
-- La CI es verde en Linux, macOS y Windows.
+- La CI es verde en Linux, macOS y Windows. *(Hoy la CI cubre Windows y Linux; macOS no está.)*
 
 ---
 
@@ -378,17 +420,24 @@ caché y la cancelación de la fase 1.
 Plataforma soportada: **solo Windows 10/11 x64**. Pila: Python 3.13, PySide6 (Qt 6), PyInstaller
 en modo carpeta e Inno Setup.
 
-| ID | P | Entregable | Versión | Detalle |
-|---|---|---|---|---|
-| G1 | M | Contrato CLI↔GUI | 0.2.0 | `--ndjson`, `--json`, `--quiet`, `--control-stdin`, códigos de salida y cancelación ordenada, con esquema JSON y tests. **Hecho** ([`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md)) |
-| G2 | M | Esqueleto de la aplicación | 0.2.1 | Ventana, menús, barra de herramientas, localizador de la CLI y tema claro/oscuro. **Localizador y preferencias hechos** (sin Qt); falta la ventana |
-| G3 | M | Scan en vivo | 0.2.1 | Lanza la CLI con `--ndjson`, muestra entidades y progreso y cancela por stdin. **Lanzador, cancelación y estado del scan hechos** (sin Qt); falta pintarlo |
-| G4 | M | Historial, detalle y exportación | 0.2.1 | Lista de scans, panel de detalle de cada entidad y exportación a JSON/Markdown/HTML. **API hecha**; faltan las vistas |
-| G5 | S | Panel de salud | 0.2.1 | Estado de cada módulo desde `doctor --json`. **API hecha**; falta la vista |
-| G6 | M | Ajustes y API keys | 0.2.1 | Gestión de keys vía `osineitor config`; opción de almacenarlas en el Administrador de credenciales. **`config set --stdin` / `unset` y API hechos**; falta la vista y queda pendiente lo del Administrador de credenciales |
-| G7 | M | Avisos legales y `--active` | 0.2.1 | Aviso en el primer arranque y confirmación explícita antes de módulos activos. **Textos y reglas de confirmación hechos** (`ScanRequest`); faltan los diálogos |
-| G8 | M | Instalador de Windows | 0.2.2 | PyInstaller + Inno Setup, ZIP portable y SHA-256, construidos en CI |
-| G9 | M | Pruebas manuales en Windows | 0.2.2 | Lista de comprobación (instalar, escanear, cancelar, exportar, modo oscuro, desinstalar); las ejecuta el autor, la CI no puede |
+| ID | P | Estado | Entregable | Versión | Detalle |
+|---|---|---|---|---|---|
+| G1 | M | ✅ Hecho | Contrato CLI↔GUI | 0.2.0 | `--ndjson`, `--json`, `--quiet`, `--control-stdin`, códigos de salida y cancelación ordenada, con esquema JSON y tests. **Hecho** ([`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md)) |
+| G2 | M | 🟡 Parcial | Esqueleto de la aplicación | 0.2.1 | Ventana, menús, barra de herramientas, localizador de la CLI y tema claro/oscuro. **Localizador y preferencias hechos** (sin Qt); falta la ventana |
+| G3 | M | 🟡 Parcial | Scan en vivo | 0.2.1 | Lanza la CLI con `--ndjson`, muestra entidades y progreso y cancela por stdin. **Lanzador, cancelación y estado del scan hechos** (sin Qt); falta pintarlo |
+| G4 | M | 🟡 Parcial | Historial, detalle y exportación | 0.2.1 | Lista de scans, panel de detalle de cada entidad y exportación a JSON/Markdown/HTML. **API hecha**; faltan las vistas |
+| G5 | S | 🟡 Parcial | Panel de salud | 0.2.1 | Estado de cada módulo desde `doctor --json`. **API hecha**; falta la vista |
+| G6 | M | 🟡 Parcial | Ajustes y API keys | 0.2.1 | Gestión de keys vía `osineitor config`; opción de almacenarlas en el Administrador de credenciales. **`config set --stdin` / `unset` y API hechos**; falta la vista y queda pendiente lo del Administrador de credenciales |
+| G7 | M | 🟡 Parcial | Avisos legales y `--active` | 0.2.1 | Aviso en el primer arranque y confirmación explícita antes de módulos activos. **Textos y reglas de confirmación hechos** (`ScanRequest`); faltan los diálogos |
+| G8 | M | ⬜ Pendiente | Instalador de Windows | 0.2.2 | PyInstaller + Inno Setup, ZIP portable y SHA-256, construidos en CI |
+| G9 | M | ⬜ Pendiente | Pruebas manuales en Windows | 0.2.2 | Lista de comprobación (instalar, escanear, cancelar, exportar, modo oscuro, desinstalar); las ejecuta el autor, la CI no puede |
+
+**Estado (29-10-2026):** el contrato G1 está hecho. De G2 a G7 existe la **capa sin Qt**
+(`src/osineitor_gui/`: localizador de la CLI, preferencias, lanzador con cancelación, estado del scan,
+`CliApi`, textos legales y reglas de confirmación de `ScanRequest`, con tests y una regla que impide
+importar el motor o Qt fuera de `ui/`). Faltan la ventana y todas las vistas (PR-E2), el instalador
+(G8, PR-F) y las pruebas manuales (G9). `PySide6` es solo un extra opcional. Diseño y traspaso en
+[`docs/GUI.md`](docs/GUI.md).
 
 **Fuera de este hito:** grafo, hallazgos, procedencia en la interfaz, internacionalización y
 actualizaciones automáticas. El instalador sin firmar mostrará el aviso de SmartScreen; la firma
@@ -399,15 +448,19 @@ actualizaciones automáticas. El instalador sin firmar mostrará el aviso de Sma
 **Objetivo:** que cada dato sea rastreable y defendible, siguiendo los principios de
 preservación del Protocolo de Berkeley.
 
-| ID | P | Entregable | Detalle |
-|---|---|---|---|
-| F2.1 | M | Observaciones múltiples | Una entidad guarda todas las fuentes que la vieron (`observations`: módulo, fecha, consulta realizada) en lugar de solo la primera |
-| F2.2 | M | Evidencia con hash | Opción `--evidence` que guarda la respuesta original de cada fuente con su SHA-256, URL consultada y fecha UTC |
-| F2.3 | M | Puntuación de confianza | Nivel `bajo/medio/alto` según número de fuentes independientes, tipo de fuente (autoritativa como DNS o RDAP frente a agregada) y antigüedad del dato |
-| F2.4 | S | Frescura | Campos `first_seen` y `last_seen` por entidad; los datos de terceros conservan su propia fecha (p. ej. último escaneo de Shodan) |
-| F2.5 | M | Alcance declarado | Fichero de alcance (`--scope scope.yml`) con dominios, rangos y exclusiones; el engine no pivota fuera de él (modelo inspirado en BBOT [R2]) |
-| F2.6 | S | Propósito del scan | Campo `--purpose` registrado en los metadatos; obligatorio en scans sobre emails o usernames si así se configura |
-| F2.7 | S | Informe con anexo de evidencias | El informe HTML incluye una tabla de evidencias con hashes verificables |
+| ID | P | Estado | Entregable | Detalle |
+|---|---|---|---|---|
+| F2.1 | M | ⬜ Pendiente | Observaciones múltiples | Una entidad guarda todas las fuentes que la vieron (`observations`: módulo, fecha, consulta realizada) en lugar de solo la primera |
+| F2.2 | M | ⬜ Pendiente | Evidencia con hash | Opción `--evidence` que guarda la respuesta original de cada fuente con su SHA-256, URL consultada y fecha UTC |
+| F2.3 | M | ⬜ Pendiente | Puntuación de confianza | Nivel `bajo/medio/alto` según número de fuentes independientes, tipo de fuente (autoritativa como DNS o RDAP frente a agregada) y antigüedad del dato |
+| F2.4 | S | ⬜ Pendiente | Frescura | Campos `first_seen` y `last_seen` por entidad; los datos de terceros conservan su propia fecha (p. ej. último escaneo de Shodan) |
+| F2.5 | M | ⬜ Pendiente | Alcance declarado | Fichero de alcance (`--scope scope.yml`) con dominios, rangos y exclusiones; el engine no pivota fuera de él (modelo inspirado en BBOT [R2]) |
+| F2.6 | S | ⬜ Pendiente | Propósito del scan | Campo `--purpose` registrado en los metadatos; obligatorio en scans sobre emails o usernames si así se configura |
+| F2.7 | S | ⬜ Pendiente | Informe con anexo de evidencias | El informe HTML incluye una tabla de evidencias con hashes verificables |
+
+**Estado (29-10-2026):** ninguno hecho. Precursores: `Engine._merge` ya fusiona datos de varias
+fuentes (F2.1) pero conserva una sola fuente por entidad, y algunos módulos guardan fechas de
+terceros dentro de `data` (F2.4).
 
 **Criterios de aceptación**
 - Cualquier entidad de un informe se puede rastrear hasta la consulta exacta que la produjo.
@@ -422,15 +475,18 @@ preservación del Protocolo de Berkeley.
 escaneo reutilizables, módulos de análisis sin red y una vía segura para usar herramientas
 externas.
 
-| ID | P | Entregable | Detalle |
-|---|---|---|---|
-| F3.1 | M | Nuevos tipos de entidad | `asn`, `netblock`, `certificate`, `technology`, `organization`, `person`, `phone`, `crypto_address`, `file`, `location` y `finding` (este último reservado a F7.8), con su normalización (F1.12) y migración (F1.4). Resuelve D13 |
-| F3.2 | M | Presets de escaneo | `--preset` y `osineitor presets`. Definidos en YAML y editables en el directorio de configuración: fijan módulos, profundidad, presupuesto y si admiten módulos activos. Incluidos: `passive`, `quick`, `domain-recon`, `attack-surface`, `person`, `email-audit` y `full` [R2] |
-| F3.3 | M | Analizadores offline | Módulos de tipo *analyzer* que consumen entidades ya recogidas (p. ej. el `record` de DNS) sin hacer peticiones; se ejecutan en un pase final y no consumen presupuesto de red |
-| F3.4 | S | Adaptadores de herramientas externas | Clase base `ExternalToolModule`: detección con `shutil.which`, ejecución **sin shell**, timeout, versión mínima y parseo de JSON. No se empaquetan binarios; `doctor` informa de cuáles están instalados |
-| F3.5 | S | `osineitor update-data` | Descarga y actualiza los datasets de terceros en el directorio de datos del usuario, registrando versión, hash y licencia; los de licencia incompatible con MIT nunca entran en el paquete |
-| F3.6 | S | Semillas ampliadas | `scan` reconoce URL (la descompone en dominio y URL), CIDR y ASN (`AS13335`). Teléfono, cripto y ficheros se añaden en la fase 6 junto a sus módulos |
-| F3.7 | C | Filtros de salida | `--only-types` y `--exclude` para recortar resultados e informes |
+| ID | P | Estado | Entregable | Detalle |
+|---|---|---|---|---|
+| F3.1 | M | ⬜ Pendiente | Nuevos tipos de entidad | `asn`, `netblock`, `certificate`, `technology`, `organization`, `person`, `phone`, `crypto_address`, `file`, `location` y `finding` (este último reservado a F7.8), con su normalización (F1.12) y migración (F1.4). Resuelve D13 |
+| F3.2 | M | ⬜ Pendiente | Presets de escaneo | `--preset` y `osineitor presets`. Definidos en YAML y editables en el directorio de configuración: fijan módulos, profundidad, presupuesto y si admiten módulos activos. Incluidos: `passive`, `quick`, `domain-recon`, `attack-surface`, `person`, `email-audit` y `full` [R2] |
+| F3.3 | M | ⬜ Pendiente | Analizadores offline | Módulos de tipo *analyzer* que consumen entidades ya recogidas (p. ej. el `record` de DNS) sin hacer peticiones; se ejecutan en un pase final y no consumen presupuesto de red |
+| F3.4 | S | ⬜ Pendiente | Adaptadores de herramientas externas | Clase base `ExternalToolModule`: detección con `shutil.which`, ejecución **sin shell**, timeout, versión mínima y parseo de JSON. No se empaquetan binarios; `doctor` informa de cuáles están instalados |
+| F3.5 | S | ⬜ Pendiente | `osineitor update-data` | Descarga y actualiza los datasets de terceros en el directorio de datos del usuario, registrando versión, hash y licencia; los de licencia incompatible con MIT nunca entran en el paquete |
+| F3.6 | S | ⬜ Pendiente | Semillas ampliadas | `scan` reconoce URL (la descompone en dominio y URL), CIDR y ASN (`AS13335`). Teléfono, cripto y ficheros se añaden en la fase 6 junto a sus módulos |
+| F3.7 | C | ⬜ Pendiente | Filtros de salida | `--only-types` y `--exclude` para recortar resultados e informes |
+
+**Estado (29-10-2026):** ninguno hecho; siguen los 10 tipos de entidad originales (D13) y
+`detect_type` solo reconoce IP, email, dominio y username.
 
 **Criterios de aceptación**
 - Los siete presets se listan, se ejecutan y se pueden sobrescribir desde el directorio del
@@ -450,47 +506,53 @@ priorizando fuentes gratuitas con API oficial. **v0.5.0** entrega los *M*; **v0.
 
 **Dominio y correo**
 
-| ID | P | Módulo | Fuente o función | Key | Tipo |
-|---|---|---|---|---|---|
-| F4.4 | M | `mail_security` | MTA-STS, TLS-RPT, BIMI y selectores DKIM comunes | No | Pasivo (DNS) |
-| F4.11 | M | `whois` | WHOIS por puerto 43 para los TLD sin RDAP (`.es`, `.io`, `.de`, `.mx`, `.it`, `.co`, `.me`… [R15]); parseo por TLD, límite de consultas y respeto de la privacidad de los datos | No | Pasivo |
-| F4.13 | M | `saas_footprint` | Analizador que deduce proveedores de correo, DNS, identidad y colaboración desde MX, NS, `include:` de SPF y TXT de verificación; tabla de firmas versionada | No | Pasivo (offline) |
-| F4.1 | S | `urlscan` | urlscan.io: escaneos históricos, tecnologías, IPs | Opcional | Pasivo |
-| F4.2 | S | `otx` | AlienVault OTX: pulses, DNS pasivo, malware asociado | Sí (gratis) | Pasivo |
-| F4.3 | S | `virustotal` | VirusTotal: reputación, subdominios, resoluciones | Sí (gratis, cuota baja) | Pasivo |
-| F4.5 | S | `web_meta` | `robots.txt`, `sitemap.xml`, `security.txt` | No | **Activo** |
-| F4.6 | S | `takeover` | Detección de subdominios con CNAME a servicios no reclamados | No | **Activo** |
-| F4.18 | S | `tech_detect` | Detección de tecnologías con un dataset descargable (F3.5). **El de `webappanalyzer` es GPL-3.0 [R20] y no se incluye en el paquete**; alternativa: firmas propias. Sustituye las 17 firmas de `http_fingerprint` | No | **Activo** |
+| ID | P | Estado | Módulo | Fuente o función | Key | Tipo |
+|---|---|---|---|---|---|---|
+| F4.4 | M | ⬜ Pendiente | `mail_security` | MTA-STS, TLS-RPT, BIMI y selectores DKIM comunes | No | Pasivo (DNS) |
+| F4.11 | M | ⬜ Pendiente | `whois` | WHOIS por puerto 43 para los TLD sin RDAP (`.es`, `.io`, `.de`, `.mx`, `.it`, `.co`, `.me`… [R15]); parseo por TLD, límite de consultas y respeto de la privacidad de los datos | No | Pasivo |
+| F4.13 | M | ⬜ Pendiente | `saas_footprint` | Analizador que deduce proveedores de correo, DNS, identidad y colaboración desde MX, NS, `include:` de SPF y TXT de verificación; tabla de firmas versionada | No | Pasivo (offline) |
+| F4.1 | S | ⬜ Pendiente | `urlscan` | urlscan.io: escaneos históricos, tecnologías, IPs | Opcional | Pasivo |
+| F4.2 | S | ⬜ Pendiente | `otx` | AlienVault OTX: pulses, DNS pasivo, malware asociado | Sí (gratis) | Pasivo |
+| F4.3 | S | ⬜ Pendiente | `virustotal` | VirusTotal: reputación, subdominios, resoluciones | Sí (gratis, cuota baja) | Pasivo |
+| F4.5 | S | ⬜ Pendiente | `web_meta` | `robots.txt`, `sitemap.xml`, `security.txt` | No | **Activo** |
+| F4.6 | S | ⬜ Pendiente | `takeover` | Detección de subdominios con CNAME a servicios no reclamados | No | **Activo** |
+| F4.18 | S | ⬜ Pendiente | `tech_detect` | Detección de tecnologías con un dataset descargable (F3.5). **El de `webappanalyzer` es GPL-3.0 [R20] y no se incluye en el paquete**; alternativa: firmas propias. Sustituye las 17 firmas de `http_fingerprint` | No | **Activo** |
 
 **Certificados y vulnerabilidades**
 
-| ID | P | Módulo | Fuente o función | Key | Tipo |
-|---|---|---|---|---|---|
-| F4.12 | M | `cert_details` | crt.sh (y Censys si hay key): emisor, validez, SAN y huella SHA-256 como entidad `certificate`; pivote por SAN y huella a otros dominios; aviso de caducidad | No | Pasivo |
-| F4.14 | M | `cve_enrich` | Analizador sobre entidades `vulnerability`: CVSS (NVD), probabilidad EPSS y marca KEV [R17]. Límites de NVD *(spike)* | Opcional (NVD) | Pasivo |
-| F4.15 | S | `censys` | Censys Platform: hosts y certificados; segunda base de escaneo que complementa a Shodan [R1] | Sí (gratis con créditos) | Pasivo |
+| ID | P | Estado | Módulo | Fuente o función | Key | Tipo |
+|---|---|---|---|---|---|---|
+| F4.12 | M | ⬜ Pendiente | `cert_details` | crt.sh (y Censys si hay key): emisor, validez, SAN y huella SHA-256 como entidad `certificate`; pivote por SAN y huella a otros dominios; aviso de caducidad | No | Pasivo |
+| F4.14 | M | ⬜ Pendiente | `cve_enrich` | Analizador sobre entidades `vulnerability`: CVSS (NVD), probabilidad EPSS y marca KEV [R17]. Límites de NVD *(spike)* | Opcional (NVD) | Pasivo |
+| F4.15 | S | ⬜ Pendiente | `censys` | Censys Platform: hosts y certificados; segunda base de escaneo que complementa a Shodan [R1] | Sí (gratis con créditos) | Pasivo |
 
 **IP y red**
 
-| ID | P | Módulo | Fuente o función | Key | Tipo |
-|---|---|---|---|---|---|
-| F4.7 | S | `ptr` | DNS inverso | No | Pasivo |
-| F4.8 | S | `ripestat` | RIPEstat: ASN, prefijo, país de registro, historial de enrutamiento | No | Pasivo |
-| F4.9 | S | `dnsbl` | Listas negras DNS (Spamhaus ZEN y otras de uso gratuito) | No | Pasivo |
-| F4.16 | S | `asn_netblock` | De IP a ASN y a los prefijos del AS (con tope); entidades `asn` y `netblock` | No | Pasivo |
-| F4.17 | S | `cloud_attribution` | Analizador que etiqueta IPs como AWS, GCP, Azure, Cloudflare… con los rangos que publican esos proveedores (dataset de F3.5; feeds *(spike)*) y detecta CDN por CNAME y cabeceras | No | Pasivo (offline) |
-| F4.10 | C | `abusech` | ThreatFox y URLhaus: IOCs asociados [R8] | Sí (gratis) | Pasivo |
-| F4.22 | C | `reverse_ip` | Hostnames alojados en la misma IP según fuentes pasivas *(spike)* | Según fuente | Pasivo |
-| F4.23 | C | `geoip_offline` | GeoIP con GeoLite2 en local para no enviar IPs a terceros; la licencia exige que cada usuario descargue la base *(spike)* | Cuenta gratuita | Pasivo (offline) |
+| ID | P | Estado | Módulo | Fuente o función | Key | Tipo |
+|---|---|---|---|---|---|---|
+| F4.7 | S | ⬜ Pendiente | `ptr` | DNS inverso | No | Pasivo |
+| F4.8 | S | ⬜ Pendiente | `ripestat` | RIPEstat: ASN, prefijo, país de registro, historial de enrutamiento | No | Pasivo |
+| F4.9 | S | ⬜ Pendiente | `dnsbl` | Listas negras DNS (Spamhaus ZEN y otras de uso gratuito) | No | Pasivo |
+| F4.16 | S | ⬜ Pendiente | `asn_netblock` | De IP a ASN y a los prefijos del AS (con tope); entidades `asn` y `netblock` | No | Pasivo |
+| F4.17 | S | ⬜ Pendiente | `cloud_attribution` | Analizador que etiqueta IPs como AWS, GCP, Azure, Cloudflare… con los rangos que publican esos proveedores (dataset de F3.5; feeds *(spike)*) y detecta CDN por CNAME y cabeceras | No | Pasivo (offline) |
+| F4.10 | C | ⬜ Pendiente | `abusech` | ThreatFox y URLhaus: IOCs asociados [R8] | Sí (gratis) | Pasivo |
+| F4.22 | C | ⬜ Pendiente | `reverse_ip` | Hostnames alojados en la misma IP según fuentes pasivas *(spike)* | Según fuente | Pasivo |
+| F4.23 | C | ⬜ Pendiente | `geoip_offline` | GeoIP con GeoLite2 en local para no enviar IPs a terceros; la licencia exige que cada usuario descargue la base *(spike)* | Cuenta gratuita | Pasivo (offline) |
 
 **Pivotes de infraestructura y defensa**
 
-| ID | P | Módulo | Fuente o función | Key | Tipo |
-|---|---|---|---|---|---|
-| F4.19 | S | `favicon_pivot` | Hash MurmurHash3 del favicon y búsqueda de otros hosts con el mismo icono en Shodan (`http.favicon.hash`) o Censys [R16] | Sí (Shodan o Censys) | **Activo** (descarga el favicon del objetivo) |
-| F4.20 | S | `lookalike_domains` | Permutaciones y homógrafos del dominio **propio** y comprobación DNS (A, MX, NS) de los registrados; se evalúa dnstwist como dependencia opcional [R21] *(spike: licencia y mantenimiento)* | No | Pasivo (DNS) |
-| F4.21 | C | `analytics_ids` | IDs de Google Analytics, GTM y AdSense de la página y dominios relacionados donde una fuente lo permita *(spike)* | Según fuente | **Activo** |
-| F4.24 | C | `ext_subfinder`, `ext_amass` | Adaptadores (F3.4) de Subfinder y de Amass **solo en modo pasivo**; el binario lo instala el usuario | No | Pasivo |
+| ID | P | Estado | Módulo | Fuente o función | Key | Tipo |
+|---|---|---|---|---|---|---|
+| F4.19 | S | ⬜ Pendiente | `favicon_pivot` | Hash MurmurHash3 del favicon y búsqueda de otros hosts con el mismo icono en Shodan (`http.favicon.hash`) o Censys [R16] | Sí (Shodan o Censys) | **Activo** (descarga el favicon del objetivo) |
+| F4.20 | S | ⬜ Pendiente | `lookalike_domains` | Permutaciones y homógrafos del dominio **propio** y comprobación DNS (A, MX, NS) de los registrados; se evalúa dnstwist como dependencia opcional [R21] *(spike: licencia y mantenimiento)* | No | Pasivo (DNS) |
+| F4.21 | C | ⬜ Pendiente | `analytics_ids` | IDs de Google Analytics, GTM y AdSense de la página y dominios relacionados donde una fuente lo permita *(spike)* | Según fuente | **Activo** |
+| F4.24 | C | ⬜ Pendiente | `ext_subfinder`, `ext_amass` | Adaptadores (F3.4) de Subfinder y de Amass **solo en modo pasivo**; el binario lo instala el usuario | No | Pasivo |
+
+**Estado (29-10-2026):** ninguno hecho. Precursores sin el entregable: `dns` ya consulta SPF y
+`_dmarc` (F4.4); `rdap` omite con aviso los TLD sin RDAP (F4.11); `dns` deja MX, NS y TXT en el
+`record` que leería `saas_footprint` (F4.13); `crtsh` solo extrae nombres (F4.12); `internetdb`
+emite CVE sin CVSS, EPSS ni KEV (F4.14); `ipinfo` y Shodan traen el ASN como dato suelto, sin
+entidad `asn` (F4.8, F4.16); `http_fingerprint` tiene las 17 firmas que sustituiría F4.18.
 
 **Criterios de aceptación**
 - Un dominio `.es` obtiene datos de registro por WHOIS, o un aviso explícito de que no están
@@ -514,28 +576,28 @@ línea, sin recurrir a scraping de redes sociales.
 
 **Email**
 
-| ID | P | Módulo | Fuente o función | Key | Tipo |
-|---|---|---|---|---|---|
-| F5.2 | S | `github_email` | Búsqueda de commits públicos por email en la API de GitHub | Opcional | Pasivo |
-| F5.8 | S | `hudsonrock` | Exposición del email, username o dominio por infostealers [R18]. **Solo metadatos** (existencia, fecha, equipo comprometido sí o no); nunca credenciales. Términos de uso *(spike)* | Sí (gratis) | Pasivo |
-| F5.1 | C | `leakcheck` | LeakCheck API pública: nombres de filtraciones *(spike)* | No | Pasivo |
-| F5.12 | C | `pgp_keyserver` | Clave pública asociada al email en keys.openpgp.org (solo identidades verificadas) *(spike)* | No | Pasivo |
-| F5.13 | C | `hibp_pastes` | Apariciones del email en *pastes* (mismo endpoint de HIBP y misma key) | Sí (HIBP) | Pasivo |
+| ID | P | Estado | Módulo | Fuente o función | Key | Tipo |
+|---|---|---|---|---|---|---|
+| F5.2 | S | ⬜ Pendiente | `github_email` | Búsqueda de commits públicos por email en la API de GitHub | Opcional | Pasivo |
+| F5.8 | S | ⬜ Pendiente | `hudsonrock` | Exposición del email, username o dominio por infostealers [R18]. **Solo metadatos** (existencia, fecha, equipo comprometido sí o no); nunca credenciales. Términos de uso *(spike)* | Sí (gratis) | Pasivo |
+| F5.1 | C | ⬜ Pendiente | `leakcheck` | LeakCheck API pública: nombres de filtraciones *(spike)* | No | Pasivo |
+| F5.12 | C | ⬜ Pendiente | `pgp_keyserver` | Clave pública asociada al email en keys.openpgp.org (solo identidades verificadas) *(spike)* | No | Pasivo |
+| F5.13 | C | ⬜ Pendiente | `hibp_pastes` | Apariciones del email en *pastes* (mismo endpoint de HIBP y misma key) | Sí (HIBP) | Pasivo |
 
 **Usernames y personas**
 
-| ID | P | Entregable | Detalle |
-|---|---|---|---|
-| F5.9 | M | Generadores | `username_variants` (permutaciones a partir de nombre o alias) y `email_candidates` (patrones como `{first}.{last}` sobre un dominio). **Solo generan candidatos: nunca se verifican por SMTP.** Introducen la entidad `person` |
-| F5.3 | S | Segunda fuente de firmas | Integrar WhatsMyName (CC BY-SA 4.0, fichero de datos separado con atribución [R7]) y marcar como "confirmado" lo que detecten ambas fuentes |
-| F5.4 | S | Extracción de perfil | Para los sitios principales, extraer nombre visible, biografía, enlaces y otros usernames de la página pública |
-| F5.5 | S | Pivote recursivo de identificadores | Los usernames y enlaces extraídos en F5.4 alimentan el siguiente nivel de pivoteo |
-| F5.7 | S | `github_user` | Perfil público de GitHub: nombre, empresa, blog, organizaciones, emails de commits públicos |
-| F5.10 | S | `fediverse` | Mastodon `GET /api/v1/accounts/lookup` [R22] y WebFinger en las instancias derivadas de `usuario@instancia`; perfil público de Bluesky *(spike)* |
-| F5.11 | S | `dev_registries` | Perfiles y mantenedores en npm, PyPI, crates.io, Docker Hub y Stack Exchange, y metadatos públicos de los paquetes publicados |
-| F5.6 | C | Filtros por categoría | `--tags dev,social,gaming` y `--top N` por popularidad |
-| F5.14 | C | `discord_snowflake` | Fecha de creación de una cuenta a partir de su ID, en local |
-| F5.15 | C | `ext_maigret` | Adaptador (F3.4) de Maigret para extracción de perfil recursiva; el binario lo instala el usuario |
+| ID | P | Estado | Entregable | Detalle |
+|---|---|---|---|---|
+| F5.9 | M | ⬜ Pendiente | Generadores | `username_variants` (permutaciones a partir de nombre o alias) y `email_candidates` (patrones como `{first}.{last}` sobre un dominio). **Solo generan candidatos: nunca se verifican por SMTP.** Introducen la entidad `person` |
+| F5.3 | S | ⬜ Pendiente | Segunda fuente de firmas | Integrar WhatsMyName (CC BY-SA 4.0, fichero de datos separado con atribución [R7]) y marcar como "confirmado" lo que detecten ambas fuentes |
+| F5.4 | S | ⬜ Pendiente | Extracción de perfil | Para los sitios principales, extraer nombre visible, biografía, enlaces y otros usernames de la página pública |
+| F5.5 | S | ⬜ Pendiente | Pivote recursivo de identificadores | Los usernames y enlaces extraídos en F5.4 alimentan el siguiente nivel de pivoteo |
+| F5.7 | S | ⬜ Pendiente | `github_user` | Perfil público de GitHub: nombre, empresa, blog, organizaciones, emails de commits públicos |
+| F5.10 | S | ⬜ Pendiente | `fediverse` | Mastodon `GET /api/v1/accounts/lookup` [R22] y WebFinger en las instancias derivadas de `usuario@instancia`; perfil público de Bluesky *(spike)* |
+| F5.11 | S | ⬜ Pendiente | `dev_registries` | Perfiles y mantenedores en npm, PyPI, crates.io, Docker Hub y Stack Exchange, y metadatos públicos de los paquetes publicados |
+| F5.6 | C | ⬜ Pendiente | Filtros por categoría | `--tags dev,social,gaming` y `--top N` por popularidad |
+| F5.14 | C | ⬜ Pendiente | `discord_snowflake` | Fecha de creación de una cuenta a partir de su ID, en local |
+| F5.15 | C | ⬜ Pendiente | `ext_maigret` | Adaptador (F3.4) de Maigret para extracción de perfil recursiva; el binario lo instala el usuario |
 
 **Criterios de aceptación**
 - Los generadores no hacen ninguna petición de red ni de SMTP (test).
@@ -553,36 +615,36 @@ fuentes legales y documentadas.
 
 **Organizaciones** (entidad `organization`)
 
-| ID | P | Módulo | Fuente | Notas |
-|---|---|---|---|---|
-| F6.1 | S | `opensanctions` | Listas de sanciones y personas políticamente expuestas [R10] | Gratis para uso no comercial con key |
-| F6.2 | S | `gleif` | Identificadores LEI y relaciones matriz–filial | API pública gratuita |
-| F6.3 | C | `librebor` | Actos del BORME en España: constituciones, cargos, ceses [R11] | API de pago; módulo opcional |
-| F6.4 | C | `opencorporates` | Registros mercantiles de más de 140 jurisdicciones [R12] | API de pago; acceso gratuito para periodismo e investigación previa solicitud |
+| ID | P | Estado | Módulo | Fuente | Notas |
+|---|---|---|---|---|---|
+| F6.1 | S | ⬜ Pendiente | `opensanctions` | Listas de sanciones y personas políticamente expuestas [R10] | Gratis para uso no comercial con key |
+| F6.2 | S | ⬜ Pendiente | `gleif` | Identificadores LEI y relaciones matriz–filial | API pública gratuita |
+| F6.3 | C | ⬜ Pendiente | `librebor` | Actos del BORME en España: constituciones, cargos, ceses [R11] | API de pago; módulo opcional |
+| F6.4 | C | ⬜ Pendiente | `opencorporates` | Registros mercantiles de más de 140 jurisdicciones [R12] | API de pago; acceso gratuito para periodismo e investigación previa solicitud |
 
 **Teléfono, criptomonedas y ficheros**
 
-| ID | P | Módulo | Fuente | Notas |
-|---|---|---|---|---|
-| F6.5 | M | `phone_parse` | Librería `phonenumbers`, sin red | País, región, tipo de línea, operador de origen y formatos E.164 |
-| F6.6 | M | `crypto_detect` | Validación local de formato (BTC, ETH, LTC, XMR…) | Sin red |
-| F6.7 | S | `btc_explorer` | mempool.space: saldo, número de transacciones, primera y última actividad | Gratis |
-| F6.8 | C | `eth_explorer` | Etherscan: saldo, transacciones, etiquetas públicas | Key gratuita |
-| F6.9 | M | `file_meta` | EXIF, XMP, IPTC y metadatos de documentos (PDF, Office) **en local** | Nunca se suben ficheros a terceros |
-| F6.10 | S | `file_hash` | MD5, SHA-1, SHA-256 y pivote a reputación (VirusTotal, abuse.ch) | Solo el hash sale del equipo |
-| F6.11 | S | `geo_point` | Coordenadas GPS como entidad `location`, con enlace a mapas | Sin red |
+| ID | P | Estado | Módulo | Fuente | Notas |
+|---|---|---|---|---|---|
+| F6.5 | M | ⬜ Pendiente | `phone_parse` | Librería `phonenumbers`, sin red | País, región, tipo de línea, operador de origen y formatos E.164 |
+| F6.6 | M | ⬜ Pendiente | `crypto_detect` | Validación local de formato (BTC, ETH, LTC, XMR…) | Sin red |
+| F6.7 | S | ⬜ Pendiente | `btc_explorer` | mempool.space: saldo, número de transacciones, primera y última actividad | Gratis |
+| F6.8 | C | ⬜ Pendiente | `eth_explorer` | Etherscan: saldo, transacciones, etiquetas públicas | Key gratuita |
+| F6.9 | M | ⬜ Pendiente | `file_meta` | EXIF, XMP, IPTC y metadatos de documentos (PDF, Office) **en local** | Nunca se suben ficheros a terceros |
+| F6.10 | S | ⬜ Pendiente | `file_hash` | MD5, SHA-1, SHA-256 y pivote a reputación (VirusTotal, abuse.ch) | Solo el hash sale del equipo |
+| F6.11 | S | ⬜ Pendiente | `geo_point` | Coordenadas GPS como entidad `location`, con enlace a mapas | Sin red |
 
 **Evidencia, fugas y búsqueda**
 
-| ID | P | Módulo | Función | Notas |
-|---|---|---|---|---|
-| F6.12 | S | `capture` | Captura de una URL: HTML, cabeceras, WARC, pantallazo con navegador *headless* y SHA-256; opción de Save Page Now de Wayback. Sigue los principios de preservación [R3] | **Activo**; extra opcional `osineitor[capture]` |
-| F6.15 | S | `github_code` | Menciones del dominio en código público de GitHub para detectar fugas (credenciales, endpoints internos). **Solo se guarda repositorio, ruta, tipo de regla y huella; nunca el valor del secreto.** Incluye guía de divulgación responsable | Key de GitHub |
-| F6.13 | C | `search_dorks` | Plantillas (`site:`, `filetype:`, `intext:`) lanzadas por una **API oficial de búsqueda** (candidata: Brave Search); sin scraping de buscadores [R19]. Evaluación con puerta de decisión *(spike)* | Cuota gratuita limitada |
-| F6.14 | C | `doc_harvest` | Descarga documentos públicos del dominio (de dorks o Wayback) y extrae sus metadatos con `file_meta` (autor, software, rutas internas) | **Activo** |
-| F6.16 | C | `cloud_storage_refs` | Detecta referencias a buckets (S3, GCS, Azure) en URLs ya recogidas y comprueba el acceso público de **ese** bucket; **no se adivinan nombres** | Activo |
-| F6.17 | C | `image_links` | Genera enlaces de búsqueda inversa de imágenes (Yandex, TinEye, Google) para una URL; no sube ficheros | Sin red |
-| F6.18 | C | `ext_exiftool` | Adaptador (F3.4) de ExifTool para formatos que `file_meta` no cubra | Binario del usuario |
+| ID | P | Estado | Módulo | Función | Notas |
+|---|---|---|---|---|---|
+| F6.12 | S | ⬜ Pendiente | `capture` | Captura de una URL: HTML, cabeceras, WARC, pantallazo con navegador *headless* y SHA-256; opción de Save Page Now de Wayback. Sigue los principios de preservación [R3] | **Activo**; extra opcional `osineitor[capture]` |
+| F6.15 | S | ⬜ Pendiente | `github_code` | Menciones del dominio en código público de GitHub para detectar fugas (credenciales, endpoints internos). **Solo se guarda repositorio, ruta, tipo de regla y huella; nunca el valor del secreto.** Incluye guía de divulgación responsable | Key de GitHub |
+| F6.13 | C | ⬜ Pendiente | `search_dorks` | Plantillas (`site:`, `filetype:`, `intext:`) lanzadas por una **API oficial de búsqueda** (candidata: Brave Search); sin scraping de buscadores [R19]. Evaluación con puerta de decisión *(spike)* | Cuota gratuita limitada |
+| F6.14 | C | ⬜ Pendiente | `doc_harvest` | Descarga documentos públicos del dominio (de dorks o Wayback) y extrae sus metadatos con `file_meta` (autor, software, rutas internas) | **Activo** |
+| F6.16 | C | ⬜ Pendiente | `cloud_storage_refs` | Detecta referencias a buckets (S3, GCS, Azure) en URLs ya recogidas y comprueba el acceso público de **ese** bucket; **no se adivinan nombres** | Activo |
+| F6.17 | C | ⬜ Pendiente | `image_links` | Genera enlaces de búsqueda inversa de imágenes (Yandex, TinEye, Google) para una URL; no sube ficheros | Sin red |
+| F6.18 | C | ⬜ Pendiente | `ext_exiftool` | Adaptador (F3.4) de ExifTool para formatos que `file_meta` no cubra | Binario del usuario |
 
 **Criterios de aceptación**
 - `osineitor scan` detecta automáticamente teléfonos, direcciones cripto y rutas de fichero.
@@ -600,20 +662,20 @@ fuentes legales y documentadas.
 
 **Objetivo:** pasar de una lista de resultados a una investigación navegable y priorizada.
 
-| ID | P | Entregable | Detalle |
-|---|---|---|---|
-| F7.8 | M | Motor de hallazgos | Modelo `Finding` (regla, severidad, entidades afectadas, evidencia, recomendación) y reglas declarativas en YAML. Reglas iniciales (≥ 12): DMARC ausente o `p=none`; SPF con `+all` o `?all`; sin MTA-STS; certificado caducado o a ≤ 30 días; dominio que expira en ≤ 60 días; CVE en KEV; EPSS alto; CNAME colgante; URLs sensibles archivadas (`.env`, `.sql`); IP en lista negra; cabeceras de seguridad ausentes; servicios de administración expuestos |
-| F7.1 | M | Grafo interactivo en el informe HTML | Nodos por entidad y aristas por relación de pivoteo, con filtros por tipo y fuente (librería JS local, sin CDN en el informe) |
-| F7.3 | M | Comparación de scans | `osineitor diff A B`: entidades y hallazgos nuevos, desaparecidos y modificados |
-| F7.11 | M | Exportación CSV | Entidades, relaciones y hallazgos en CSV |
-| F7.2 | S | Casos | `osineitor case new/add/show`: agrupa varios scans de una misma investigación con notas y etiquetas |
-| F7.4 | S | Línea temporal | Ordena las fechas conocidas (registro de dominio, certificados, capturas de Wayback, filtraciones, primera actividad cripto) |
-| F7.5 | S | Búsqueda global | `osineitor search <valor>`: en qué scans y casos aparece un dato |
-| F7.6 | S | Correlación entre scans | Avisa cuando una entidad nueva ya apareció en otro caso (p. ej. misma IP o mismo email) |
-| F7.7 | S | Informe ejecutivo | Plantilla de informe con resumen, hallazgos clave, nivel de confianza y anexos |
-| F7.9 | S | Puntuación de riesgo por activo | Combina severidad de hallazgos, exposición y confianza |
-| F7.10 | S | Resolución de entidades | Agrupa cuentas que comparten username, email o avatar con una puntuación. **Siempre se presenta como hipótesis con su evidencia**, nunca como identidad confirmada |
-| F7.12 | S | Informe de superficie de ataque | Inventario de dominios, IPs, servicios, tecnologías y certificados con los hallazgos priorizados |
+| ID | P | Estado | Entregable | Detalle |
+|---|---|---|---|---|
+| F7.8 | M | ⬜ Pendiente | Motor de hallazgos | Modelo `Finding` (regla, severidad, entidades afectadas, evidencia, recomendación) y reglas declarativas en YAML. Reglas iniciales (≥ 12): DMARC ausente o `p=none`; SPF con `+all` o `?all`; sin MTA-STS; certificado caducado o a ≤ 30 días; dominio que expira en ≤ 60 días; CVE en KEV; EPSS alto; CNAME colgante; URLs sensibles archivadas (`.env`, `.sql`); IP en lista negra; cabeceras de seguridad ausentes; servicios de administración expuestos |
+| F7.1 | M | ⬜ Pendiente | Grafo interactivo en el informe HTML | Nodos por entidad y aristas por relación de pivoteo, con filtros por tipo y fuente (librería JS local, sin CDN en el informe) |
+| F7.3 | M | ⬜ Pendiente | Comparación de scans | `osineitor diff A B`: entidades y hallazgos nuevos, desaparecidos y modificados |
+| F7.11 | M | ⬜ Pendiente | Exportación CSV | Entidades, relaciones y hallazgos en CSV |
+| F7.2 | S | ⬜ Pendiente | Casos | `osineitor case new/add/show`: agrupa varios scans de una misma investigación con notas y etiquetas |
+| F7.4 | S | ⬜ Pendiente | Línea temporal | Ordena las fechas conocidas (registro de dominio, certificados, capturas de Wayback, filtraciones, primera actividad cripto) |
+| F7.5 | S | ⬜ Pendiente | Búsqueda global | `osineitor search <valor>`: en qué scans y casos aparece un dato |
+| F7.6 | S | ⬜ Pendiente | Correlación entre scans | Avisa cuando una entidad nueva ya apareció en otro caso (p. ej. misma IP o mismo email) |
+| F7.7 | S | ⬜ Pendiente | Informe ejecutivo | Plantilla de informe con resumen, hallazgos clave, nivel de confianza y anexos |
+| F7.9 | S | ⬜ Pendiente | Puntuación de riesgo por activo | Combina severidad de hallazgos, exposición y confianza |
+| F7.10 | S | ⬜ Pendiente | Resolución de entidades | Agrupa cuentas que comparten username, email o avatar con una puntuación. **Siempre se presenta como hipótesis con su evidencia**, nunca como identidad confirmada |
+| F7.12 | S | ⬜ Pendiente | Informe de superficie de ataque | Inventario de dominios, IPs, servicios, tecnologías y certificados con los hallazgos priorizados |
 
 **Criterios de aceptación**
 - Al menos 12 reglas con tests positivos y negativos; cada hallazgo enlaza las entidades y
@@ -629,15 +691,19 @@ fuentes legales y documentadas.
 **Objetivo:** que OSINEITOR encaje en flujos de trabajo existentes y que terceros puedan
 ampliarlo sin modificar el código.
 
-| ID | P | Entregable | Detalle |
-|---|---|---|---|
-| F8.4 | M | Streaming NDJSON | `--ndjson` emite entidades en tiempo real para encadenar con otras herramientas. **Adelantado y hecho en v0.2.0** como parte del contrato CLI↔GUI (Hito G) |
-| F8.5 | M | API de librería estable | `from osineitor import Scanner` con interfaz síncrona y asíncrona documentada |
-| F8.6 | M | Plugins externos | Descubrimiento de módulos por *entry points* (`osineitor.modules`), de modo que un paquete de PyPI pueda añadir fuentes |
-| F8.1 | S | Exportación STIX 2.1 | Observables de infraestructura (dominios, IPs, URLs, emails, vulnerabilidades) con la librería `stix2` |
-| F8.3 | S | Formatos de grafo | GraphML/GEXF (Gephi) y script Cypher (Neo4j) |
-| F8.7 | S | Importación | Cargar listas de objetivos (`--targets-file`) y resultados de otras herramientas (Subfinder, Amass, Maigret JSON) como semillas |
-| F8.2 | C | Exportación a MISP | Evento MISP con atributos y objetos (`pymisp`) |
+| ID | P | Estado | Entregable | Detalle |
+|---|---|---|---|---|
+| F8.4 | M | ✅ Hecho | Streaming NDJSON | `--ndjson` emite entidades en tiempo real para encadenar con otras herramientas. **Adelantado y hecho en v0.2.0** como parte del contrato CLI↔GUI (Hito G) |
+| F8.5 | M | ⬜ Pendiente | API de librería estable | `from osineitor import Scanner` con interfaz síncrona y asíncrona documentada |
+| F8.6 | M | ⬜ Pendiente | Plugins externos | Descubrimiento de módulos por *entry points* (`osineitor.modules`), de modo que un paquete de PyPI pueda añadir fuentes |
+| F8.1 | S | ⬜ Pendiente | Exportación STIX 2.1 | Observables de infraestructura (dominios, IPs, URLs, emails, vulnerabilidades) con la librería `stix2` |
+| F8.3 | S | ⬜ Pendiente | Formatos de grafo | GraphML/GEXF (Gephi) y script Cypher (Neo4j) |
+| F8.7 | S | ⬜ Pendiente | Importación | Cargar listas de objetivos (`--targets-file`) y resultados de otras herramientas (Subfinder, Amass, Maigret JSON) como semillas |
+| F8.2 | C | ⬜ Pendiente | Exportación a MISP | Evento MISP con atributos y objetos (`pymisp`) |
+
+**Estado (29-10-2026):** solo F8.4 está hecho (adelantado en v0.2.0). `Engine` existe pero no es
+una API pública (F8.5) y el descubrimiento de módulos usa `pkgutil`/manifiesto, sin *entry points*
+(F8.6).
 
 **Criterios de aceptación**
 - El STIX generado valida con el validador oficial de OASIS.
@@ -651,15 +717,15 @@ ampliarlo sin modificar el código.
 **Objetivo:** vigilar activos propios y detectar cambios relevantes, el núcleo de la gestión
 de la superficie de ataque externa.
 
-| ID | P | Entregable | Detalle |
-|---|---|---|---|
-| F9.1 | M | `osineitor watch` | Define objetivos vigilados con frecuencia y módulos; se ejecuta desde cron, systemd o GitHub Actions |
-| F9.2 | M | Reglas de alerta | Reutilizan el motor de hallazgos (F7.8): nuevo subdominio, nuevo puerto expuesto, nueva CVE, certificado próximo a caducar, dominio próximo a expirar, aparición en una filtración, IP en lista negra |
-| F9.3 | M | Notificaciones | Webhook genérico (compatible con Slack, Discord y Teams), email SMTP y salida para sistemas de monitorización |
-| F9.4 | S | Supresión de ruido | Umbrales, ventanas de silencio y confirmación en dos ejecuciones antes de alertar |
-| F9.5 | S | Retención | Política de conservación configurable (`osineitor purge --older-than 90d`) |
-| F9.6 | S | Vigilancia de dominios parecidos | Alerta cuando aparece un dominio nuevo detectado por `lookalike_domains` (F4.20) |
-| F9.7 | S | Vigilancia de nuevas filtraciones | Alerta cuando un email o dominio vigilado aparece en una filtración o en infostealers que no figuraba antes |
+| ID | P | Estado | Entregable | Detalle |
+|---|---|---|---|---|
+| F9.1 | M | ⬜ Pendiente | `osineitor watch` | Define objetivos vigilados con frecuencia y módulos; se ejecuta desde cron, systemd o GitHub Actions |
+| F9.2 | M | ⬜ Pendiente | Reglas de alerta | Reutilizan el motor de hallazgos (F7.8): nuevo subdominio, nuevo puerto expuesto, nueva CVE, certificado próximo a caducar, dominio próximo a expirar, aparición en una filtración, IP en lista negra |
+| F9.3 | M | ⬜ Pendiente | Notificaciones | Webhook genérico (compatible con Slack, Discord y Teams), email SMTP y salida para sistemas de monitorización |
+| F9.4 | S | ⬜ Pendiente | Supresión de ruido | Umbrales, ventanas de silencio y confirmación en dos ejecuciones antes de alertar |
+| F9.5 | S | ⬜ Pendiente | Retención | Política de conservación configurable (`osineitor purge --older-than 90d`) |
+| F9.6 | S | ⬜ Pendiente | Vigilancia de dominios parecidos | Alerta cuando aparece un dominio nuevo detectado por `lookalike_domains` (F4.20) |
+| F9.7 | S | ⬜ Pendiente | Vigilancia de nuevas filtraciones | Alerta cuando un email o dominio vigilado aparece en una filtración o en infostealers que no figuraba antes |
 
 **Criterios de aceptación**
 - Un cambio simulado en las fixtures genera exactamente una alerta, y no se repite en la
@@ -672,15 +738,15 @@ de la superficie de ataque externa.
 
 **Objetivo:** acelerar el análisis sin sacrificar la verificabilidad.
 
-| ID | P | Entregable | Detalle |
-|---|---|---|---|
-| F10.2 | M | Citas obligatorias y verificadas | Cada afirmación del resumen referencia identificadores de entidad; un validador rechaza las frases sin cita o con citas inexistentes |
-| F10.3 | M | Modelos locales y remotos | Soporte para modelos locales (Ollama) por privacidad, y APIs remotas como opción explícita; nunca se envían datos sin consentimiento en la configuración |
-| F10.6 | M | Evaluación | Conjunto de pruebas propio para medir la proporción de afirmaciones sin respaldo, publicada en la documentación |
-| F10.1 | S | `osineitor summarize <scan>` | Resumen en lenguaje natural generado **solo** a partir de las entidades guardadas |
-| F10.4 | S | Servidor MCP | Expone búsqueda, consulta de scans y lanzamiento de módulos pasivos a agentes de IA; los módulos activos quedan excluidos por defecto |
-| F10.7 | S | Resúmenes basados en hallazgos | El resumen parte de los hallazgos (F7.8) y sus evidencias, no de las entidades en bruto |
-| F10.5 | C | Sugerencia de pivotes | Propone siguientes pasos; nunca los ejecuta sin confirmación del usuario |
+| ID | P | Estado | Entregable | Detalle |
+|---|---|---|---|---|
+| F10.2 | M | ⬜ Pendiente | Citas obligatorias y verificadas | Cada afirmación del resumen referencia identificadores de entidad; un validador rechaza las frases sin cita o con citas inexistentes |
+| F10.3 | M | ⬜ Pendiente | Modelos locales y remotos | Soporte para modelos locales (Ollama) por privacidad, y APIs remotas como opción explícita; nunca se envían datos sin consentimiento en la configuración |
+| F10.6 | M | ⬜ Pendiente | Evaluación | Conjunto de pruebas propio para medir la proporción de afirmaciones sin respaldo, publicada en la documentación |
+| F10.1 | S | ⬜ Pendiente | `osineitor summarize <scan>` | Resumen en lenguaje natural generado **solo** a partir de las entidades guardadas |
+| F10.4 | S | ⬜ Pendiente | Servidor MCP | Expone búsqueda, consulta de scans y lanzamiento de módulos pasivos a agentes de IA; los módulos activos quedan excluidos por defecto |
+| F10.7 | S | ⬜ Pendiente | Resúmenes basados en hallazgos | El resumen parte de los hallazgos (F7.8) y sus evidencias, no de las entidades en bruto |
+| F10.5 | C | ⬜ Pendiente | Sugerencia de pivotes | Propone siguientes pasos; nunca los ejecuta sin confirmación del usuario |
 
 **Criterios de aceptación**
 - El 100 % de las afirmaciones del resumen tiene una cita válida, comprobado automáticamente.
@@ -694,14 +760,14 @@ de la superficie de ataque externa.
 
 **Objetivo:** estabilidad y distribución. La interfaz para quien no usa la terminal es el [Hito G](#hito-g--aplicación-de-escritorio-para-windows).
 
-| ID | P | Entregable | Detalle |
-|---|---|---|---|
-| F11.2 | M | Publicación en PyPI | Con *trusted publishing* y firma de artefactos (Sigstore) |
-| F11.4 | M | Sitio de documentación | MkDocs con guía de usuario, referencia de módulos generada desde el código y tutoriales |
-| F11.6 | M | Compromiso de estabilidad | SemVer estricto sobre CLI, formato de exportación y API de librería; política de obsolescencia de dos versiones menores |
-| F11.1 | — | ~~Interfaz web local~~ | **Obsoleto:** sustituido por la aplicación de escritorio nativa del [Hito G](#hito-g--aplicación-de-escritorio-para-windows). Si más adelante hiciera falta una vista de grafo o de casos, se añade a esa aplicación |
-| F11.3 | S | Imagen Docker | Imagen oficial mínima y sin privilegios |
-| F11.5 | C | Internacionalización | Interfaz y documentación en español e inglés |
+| ID | P | Estado | Entregable | Detalle |
+|---|---|---|---|---|
+| F11.2 | M | ⬜ Pendiente | Publicación en PyPI | Con *trusted publishing* y firma de artefactos (Sigstore) |
+| F11.4 | M | ⬜ Pendiente | Sitio de documentación | MkDocs con guía de usuario, referencia de módulos generada desde el código y tutoriales |
+| F11.6 | M | ⬜ Pendiente | Compromiso de estabilidad | SemVer estricto sobre CLI, formato de exportación y API de librería; política de obsolescencia de dos versiones menores |
+| F11.1 | — | ➖ Obsoleto | ~~Interfaz web local~~ | **Obsoleto:** sustituido por la aplicación de escritorio nativa del [Hito G](#hito-g--aplicación-de-escritorio-para-windows). Si más adelante hiciera falta una vista de grafo o de casos, se añade a esa aplicación |
+| F11.3 | S | ⬜ Pendiente | Imagen Docker | Imagen oficial mínima y sin privilegios |
+| F11.5 | C | ⬜ Pendiente | Internacionalización | Interfaz y documentación en español e inglés |
 
 **Criterios de aceptación**
 - Instalación con `pip install osineitor` y `docker run` documentadas y probadas en CI.
@@ -716,8 +782,9 @@ Se aplican en todas las fases, no se planifican aparte.
 ### Calidad
 
 - Cobertura de tests ≥ 85 % en el núcleo y ≥ 70 % global; ningún test depende de la red.
-- Tipado estático con `mypy` (estricto en el núcleo) desde la fase 1.
-- CI en Linux, macOS y Windows desde F1.16.
+- Tipado estático con `mypy` (estricto en el núcleo) desde la fase 1. *(Pendiente: no hay `mypy` en
+  `pyproject.toml` ni en la CI.)*
+- CI en Linux, macOS y Windows desde F1.16. *(Hoy: Windows y Linux; falta macOS.)*
 - Cada PR que añade un módulo incluye fixture real, canario de salud y documentación.
 
 ### Seguridad
@@ -833,6 +900,7 @@ justificación.
 |---|---|
 | 28-10-2026 | Versión inicial: fases 0 a 9 |
 | 29-10-2026 | Análisis de carencias: deuda D8–D14, fase 3 nueva, las antiguas fases 3 a 9 pasan a 4–11, prioridades M/S/C, corte recomendado y nuevos entregables |
+| 29-10-2026 | Estado de implementación: columna *Estado* en las tablas de entregables, tabla de progreso por fase y versión actual 0.2.0; recuento corregido a 50 *M*, 60 *S* y 23 *C* |
 
 ### Correspondencia con la numeración anterior
 
