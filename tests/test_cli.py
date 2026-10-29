@@ -417,7 +417,8 @@ def test_force_utf8_survives_a_legacy_windows_codepage(monkeypatch):
     cli._force_utf8()
     print("Москва ✓", file=legacy)
     legacy.flush()
-    assert raw.getvalue().decode("utf-8") == "Москва ✓\n"
+    # En Windows el modo texto traduce \n a \r\n: se compara sin depender del salto de línea.
+    assert raw.getvalue().decode("utf-8").splitlines() == ["Москва ✓"]
 
 
 def test_cli_does_not_crash_with_a_cp1252_pipe():
