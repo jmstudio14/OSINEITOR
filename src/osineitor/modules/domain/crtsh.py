@@ -6,7 +6,7 @@ import httpx
 
 from osineitor.errors import InvalidEntityValue
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError
+from osineitor.modules.base import Module, ModuleError, status_error
 from osineitor.modules.domain._util import is_root_domain
 from osineitor.normalize import canonical_hostname
 
@@ -18,6 +18,8 @@ class CrtSh(Module):
     description = "Subdominios desde Certificate Transparency (crt.sh)"
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.DOMAIN})
+    canary = "example.com"
+    timeout = 240.0  # su consulta admite 60 s × 3 intentos
 
     def accepts(self, entity: Entity) -> bool:
         return is_root_domain(entity)
@@ -31,7 +33,7 @@ class CrtSh(Module):
         except httpx.TimeoutException as exc:
             raise ModuleError("crt.sh no respondió a tiempo (suele estar saturado)") from exc
         if response.status_code != 200:
-            raise ModuleError(f"crt.sh respondió {response.status_code}")
+            raise status_error("crt.sh", response)
 
         names: set[str] = set()
         for cert in response.json():

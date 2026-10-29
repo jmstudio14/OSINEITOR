@@ -5,7 +5,7 @@ from __future__ import annotations
 from urllib.parse import quote
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError
+from osineitor.modules.base import Module, ModuleError, status_error
 
 
 class Hibp(Module):
@@ -14,6 +14,7 @@ class Hibp(Module):
     consumes = frozenset({EntityType.EMAIL})
     produces = frozenset({EntityType.BREACH})
     requires_key = "hibp"
+    canary = "test@example.com"
 
     async def run(self, entity: Entity) -> list[Entity]:
         response = await self.ctx.http.get(
@@ -26,7 +27,7 @@ class Hibp(Module):
         if response.status_code == 401:
             raise ModuleError("API key de HIBP inválida")
         if response.status_code != 200:
-            raise ModuleError(f"haveibeenpwned.com respondió {response.status_code}")
+            raise status_error("haveibeenpwned.com", response)
         return [
             self.emit(
                 entity,

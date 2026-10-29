@@ -58,6 +58,10 @@ osineitor version
 
 ## Pruebas en vivo
 
+Antes de nada, `osineitor doctor` prueba los 16 módulos de una vez (los de API key y los activos
+salen como «omitido» sin su key / sin `--active`). Es la forma más rápida de ver qué fuentes
+responden desde tu red; pega su salida en el issue si algo falla.
+
 Cada una usa objetivos públicos y **solo módulos pasivos**, es decir, no tocan el servidor del
 objetivo. Para probar con tus propios datos usa tu email y tu username.
 

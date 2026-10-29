@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError, ModuleSkipped
+from osineitor.modules.base import Module, ModuleSkipped, status_error
 from osineitor.modules.domain._bootstrap import rdap_tlds
 from osineitor.modules.domain._util import is_root_domain
 
@@ -27,6 +27,7 @@ class Rdap(Module):
     description = "Registrador, fechas, estado y nameservers vía RDAP (rdap.org)"
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.RECORD, EntityType.EMAIL})
+    canary = "example.com"
 
     def accepts(self, entity: Entity) -> bool:
         return is_root_domain(entity)
@@ -43,7 +44,7 @@ class Rdap(Module):
         if response.status_code == 404:
             return []
         if response.status_code != 200:
-            raise ModuleError(f"rdap.org respondió {response.status_code}")
+            raise status_error("rdap.org", response)
         data = response.json()
 
         events = {e.get("eventAction"): e.get("eventDate") for e in data.get("events", [])}

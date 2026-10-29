@@ -7,20 +7,28 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 import dns.asyncresolver
+import httpx
 from pydantic import ValidationError
 
 from osineitor.config import Config
-from osineitor.errors import ModuleError, ModuleSkipped
-from osineitor.http import HttpClient
+from osineitor.errors import ModuleError, ModuleQuota, ModuleSkipped
+from osineitor.http import HttpClient, SourceHttp
 from osineitor.models import Entity, EntityType
 
-__all__ = ["Context", "Module", "ModuleError", "ModuleSkipped"]
+__all__ = ["Context", "Module", "ModuleError", "ModuleQuota", "ModuleSkipped", "status_error"]
+
+
+def status_error(service: str, response: httpx.Response) -> ModuleError:
+    """Error de una respuesta inesperada; un 429 es una cuota agotada, no un fallo del módulo."""
+    if response.status_code == 429:
+        return ModuleQuota(f"{service} rechazó la petición por límite de uso (429)")
+    return ModuleError(f"{service} respondió {response.status_code}")
 
 
 @dataclass
 class Context:
     config: Config
-    http: HttpClient
+    http: HttpClient | SourceHttp
     resolver: dns.asyncresolver.Resolver = field(default_factory=dns.asyncresolver.Resolver)
 
 
@@ -33,6 +41,16 @@ class Module(ABC):
     requires_key: ClassVar[str | None] = None
     # Pasivo = no envía tráfico al objetivo, solo a terceros.
     passive: ClassVar[bool] = True
+    # Segundos máximos por ejecución (módulo × entidad); al agotarse se registra como error.
+    timeout: ClassVar[float] = 180.0
+    # Segundos de caché de las respuestas GET. Nunca se cachean los módulos activos ni los que
+    # usan API key. 0 desactiva la caché de este módulo.
+    cache_ttl: ClassVar[int] = 6 * 3600
+    # Segundos mínimos entre dos peticiones a esta fuente (límite de uso de la fuente).
+    min_interval: ClassVar[float] = 0.0
+    # Valor de prueba seguro para `osineitor doctor`; `probe_url` si no hay caso seguro.
+    canary: ClassVar[str | None] = None
+    probe_url: ClassVar[str | None] = None
 
     def __init__(self, ctx: Context) -> None:
         self.ctx = ctx

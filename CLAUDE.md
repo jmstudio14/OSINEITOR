@@ -19,7 +19,9 @@ python -m pytest -q      # usa python -m: el pytest global puede ser otro intér
 ## Convenciones
 
 - Código, comentarios, mensajes de CLI y commits en español. Longitud de línea: 100 (ruff).
-- Un módulo = una subclase de `Module` en `src/osineitor/modules/<frente>/`. Se descubre solo.
+- Un módulo = una subclase de `Module` en `src/osineitor/modules/<frente>/`. Se descubre solo,
+  pero añade también su fichero a `modules/_manifest.py` (un test lo exige) y declara `canary` o
+  `probe_url` para `osineitor doctor`.
 - Crea entidades con `self.emit(parent, tipo, valor, **datos)`; los datos con valor vacío se
   ignoran en la salida.
 - Las excepciones viven en `osineitor/errors.py`. Fallos esperados → `ModuleError`; «no aplica» →

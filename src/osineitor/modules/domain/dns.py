@@ -6,7 +6,7 @@ import dns.exception
 import dns.resolver
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module
+from osineitor.modules.base import Module, ModuleError
 
 RECORD_TYPES = ("A", "AAAA", "CNAME", "MX", "NS", "TXT", "CAA")
 
@@ -16,14 +16,16 @@ class Dns(Module):
     description = "Registros A/AAAA/CNAME/MX/NS/TXT/CAA, SPF y DMARC"
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.IP, EntityType.RECORD})
+    canary = "example.com"
 
-    async def _query(self, name: str, rtype: str) -> list[str]:
+    async def _query(self, name: str, rtype: str) -> list[str] | None:
+        """Valores del registro; `None` si el resolvedor no pudo responder (≠ «no existe»)."""
         try:
             answer = await self.ctx.resolver.resolve(name, rtype, lifetime=10)
-        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
             return []
-        except dns.exception.Timeout:
-            return []
+        except (dns.resolver.NoNameservers, dns.exception.Timeout):
+            return None
         values = []
         for rdata in answer:
             if rtype == "TXT":
@@ -33,11 +35,14 @@ class Dns(Module):
         return values
 
     async def run(self, entity: Entity) -> list[Entity]:
-        records = {rtype: await self._query(entity.value, rtype) for rtype in RECORD_TYPES}
-        records = {k: v for k, v in records.items() if v}
+        answers = {rtype: await self._query(entity.value, rtype) for rtype in RECORD_TYPES}
+        if all(v is None for v in answers.values()):
+            # Sin esto, un resolvedor caído se confundiría con «el dominio no tiene registros».
+            raise ModuleError("el resolvedor DNS no respondió (tiempo agotado o sin servidores)")
+        records = {k: v for k, v in answers.items() if v}
         dmarc = [
             t
-            for t in await self._query(f"_dmarc.{entity.value}", "TXT")
+            for t in await self._query(f"_dmarc.{entity.value}", "TXT") or []
             if t.lower().startswith("v=dmarc1")
         ]
         spf = [t for t in records.get("TXT", []) if t.lower().startswith("v=spf1")]

@@ -210,3 +210,28 @@ async def test_http_fingerprint(ctx):
     assert "strict-transport-security" not in data["missing_security_headers"]
     assert "content-security-policy" in data["missing_security_headers"]
     assert HttpFingerprint.passive is False
+
+
+class DeadResolver:
+    """Resolvedor que no responde a nada (red caída, DNS bloqueado)."""
+
+    async def resolve(self, name, rtype, lifetime=None):
+        import dns.exception
+
+        raise dns.exception.Timeout()
+
+
+async def test_dns_unreachable_resolver_is_an_error_not_an_empty_result(ctx):
+    from osineitor.modules.base import ModuleError
+    from osineitor.modules.domain.dns import Dns
+
+    ctx.resolver = DeadResolver()
+    with pytest.raises(ModuleError, match="resolvedor DNS"):
+        await Dns(ctx).run(Entity(type=EntityType.DOMAIN, value="example.com"))
+
+
+async def test_dns_domain_without_records_is_still_empty(ctx):
+    from osineitor.modules.domain.dns import Dns
+
+    ctx.resolver = FakeResolver({})  # NoAnswer en todo: el dominio existe pero no tiene registros
+    assert await Dns(ctx).run(Entity(type=EntityType.DOMAIN, value="example.com")) == []

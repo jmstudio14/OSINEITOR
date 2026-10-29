@@ -11,6 +11,10 @@ class ModuleSkipped(ModuleError):
     """El módulo no aplica a esta entidad: no es un fallo, se registra como omitido."""
 
 
+class ModuleQuota(ModuleError):
+    """La fuente rechazó la petición por cuota o límite de uso (HTTP 429)."""
+
+
 class NetworkGuardError(ModuleError):
     """Se bloqueó una conexión a una dirección privada, loopback o reservada."""
 

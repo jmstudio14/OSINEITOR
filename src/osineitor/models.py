@@ -56,6 +56,19 @@ class ScanEvent(BaseModel):
     entity: str | None = None
 
 
+class ModuleRun(BaseModel):
+    """Qué pasó con un módulo en un scan: permite distinguir «sin datos» de «falló»."""
+
+    module: str
+    status: str  # "ok" | "empty" | "error" | "skipped" | "quota"
+    entity: str | None = None  # clave de la entidad sobre la que corrió; None si ni arrancó
+    entities: int = 0
+    requests: int = 0
+    cache_hits: int = 0
+    duration_ms: int = 0
+    message: str = ""
+
+
 class ScanResult(BaseModel):
     target: Entity
     depth: int
@@ -63,6 +76,7 @@ class ScanResult(BaseModel):
     finished_at: datetime | None = None
     entities: list[Entity] = Field(default_factory=list)
     events: list[ScanEvent] = Field(default_factory=list)
+    runs: list[ModuleRun] = Field(default_factory=list)
     scan_id: int | None = None
     truncated: bool = False  # el scan se detuvo por agotar el presupuesto
 

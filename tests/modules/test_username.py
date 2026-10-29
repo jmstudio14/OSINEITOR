@@ -32,6 +32,20 @@ class FakeSites(UsernameSites):
         return SITES
 
 
+def mock_controls_absent():
+    """Respuestas para el username de control (inexistente) de cada sitio de prueba."""
+    respx.get(url__regex=r"https://status\.test/x[0-9a-f]+$").mock(return_value=httpx.Response(404))
+    respx.get(url__regex=r"https://message\.test/u/x[0-9a-f]+$").mock(
+        return_value=httpx.Response(200, text="No such user")
+    )
+    respx.get(url__regex=r"https://redirect\.test/x[0-9a-f]+$").mock(
+        return_value=httpx.Response(302, headers={"location": "https://redirect.test/"})
+    )
+    respx.get(url__regex=r"https://api\.probe\.test/users/x[0-9a-f]+$").mock(
+        return_value=httpx.Response(404)
+    )
+
+
 @respx.mock
 async def test_username_detection(ctx):
     respx.get("https://status.test/juan").mock(return_value=httpx.Response(200))
@@ -40,6 +54,7 @@ async def test_username_detection(ctx):
     respx.get("https://api.probe.test/users/juan").mock(return_value=httpx.Response(200))
     respx.get("https://down.test/juan").mock(side_effect=httpx.ConnectError("x"))
     respx.get("https://missing.test/juan").mock(return_value=httpx.Response(404))
+    mock_controls_absent()
     out = await FakeSites(ctx).run(Entity(type=EntityType.USERNAME, value="juan"))
     assert {e.data["site"]: e.value for e in out} == {
         "ByStatus": "https://status.test/juan",
@@ -47,6 +62,35 @@ async def test_username_detection(ctx):
         "ByRedirect": "https://redirect.test/juan",
         "Probe": "https://probe.test/juan",
     }
+    # El sitio distingue entre un username real y uno inexistente: hallazgo verificado.
+    assert all(e.data["verified"] is True for e in out)
+
+
+@respx.mock
+async def test_username_false_positive_is_dropped(ctx):
+    """Un sitio que «encuentra» también un username inexistente da falsos positivos."""
+    respx.get("https://status.test/juan").mock(return_value=httpx.Response(200))
+    respx.get("https://message.test/u/juan").mock(return_value=httpx.Response(200, text="hola"))
+    respx.get(url__regex=r"https://status\.test/x[0-9a-f]+$").mock(
+        return_value=httpx.Response(200)  # el control también «existe»: firma poco fiable
+    )
+    respx.get(url__regex=r"https://message\.test/u/x[0-9a-f]+$").mock(
+        side_effect=httpx.ConnectError("x")  # no se pudo comprobar: se conserva
+    )
+    respx.route().mock(return_value=httpx.Response(404))
+    out = await FakeSites(ctx).run(Entity(type=EntityType.USERNAME, value="juan"))
+    assert {e.data["site"]: e.data["verified"] for e in out} == {"ByMessage": None}
+
+
+@respx.mock
+async def test_username_only_positives_are_verified(ctx):
+    """El control solo se pide para los positivos: sin positivos no hay peticiones extra."""
+    respx.get(url__regex=r"https://message\.test/").mock(
+        return_value=httpx.Response(200, text="No such user")
+    )
+    respx.route().mock(return_value=httpx.Response(404))
+    assert await FakeSites(ctx).run(Entity(type=EntityType.USERNAME, value="juan")) == []
+    assert not any("/x" in str(c.request.url) for c in respx.calls)
 
 
 @respx.mock
