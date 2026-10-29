@@ -29,6 +29,8 @@ dev = [
     "ruff>=0.5",
 ]
 
+gui = ["PySide6-Essentials>=6.7"]
+
 [project.scripts]
 osineitor = "osineitor.cli:app"
 

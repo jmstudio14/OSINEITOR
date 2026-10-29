@@ -62,6 +62,16 @@ Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI 
   podido comprobar desde el entorno de desarrollo), pasos para clonar en VS Code y probar desde
   Windows, y tabla para registrar los resultados.
 
+- **Capa no visual de la aplicación de escritorio (G2–G7, parte sin pantalla)** en
+  `src/osineitor_gui/`, en Python puro y probada contra la CLI real: localizador de la CLI,
+  `CliProcess` (eventos, cancelación ordenada con escalada a `terminate`/`kill`), `CliApi` para las
+  órdenes `--json`, `ScanRequest` (valida y exige confirmar `--active` y `--allow-private`),
+  `ScanSession` (estado para las vistas, igual para scans en vivo y guardados), `GuiSettings` y
+  textos legales. [`docs/GUI.md`](docs/GUI.md) recoge el diseño de la ventana y el traspaso a las
+  vistas. Extra opcional `gui` (`PySide6-Essentials`), aún sin usar.
+- `config set NOMBRE --stdin` lee la API key de stdin para que no aparezca en la línea de
+  comandos, y `config unset NOMBRE` la elimina; ambas con `--json`.
+
 ### Cambiado
 
 - **Códigos de salida:** un scan que termina con módulos fallidos devuelve ahora `3` (antes `0`) y

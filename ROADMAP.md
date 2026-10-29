@@ -381,12 +381,12 @@ en modo carpeta e Inno Setup.
 | ID | P | Entregable | Versión | Detalle |
 |---|---|---|---|---|
 | G1 | M | Contrato CLI↔GUI | 0.2.0 | `--ndjson`, `--json`, `--quiet`, `--control-stdin`, códigos de salida y cancelación ordenada, con esquema JSON y tests. **Hecho** ([`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md)) |
-| G2 | M | Esqueleto de la aplicación | 0.2.1 | Ventana, menús, barra de herramientas, localizador de la CLI y tema claro/oscuro |
-| G3 | M | Scan en vivo | 0.2.1 | Lanza la CLI con `--ndjson`, muestra entidades y progreso y cancela por stdin |
-| G4 | M | Historial, detalle y exportación | 0.2.1 | Lista de scans, panel de detalle de cada entidad y exportación a JSON/Markdown/HTML |
-| G5 | S | Panel de salud | 0.2.1 | Estado de cada módulo desde `doctor --json` |
-| G6 | M | Ajustes y API keys | 0.2.1 | Gestión de keys vía `osineitor config`; opción de almacenarlas en el Administrador de credenciales |
-| G7 | M | Avisos legales y `--active` | 0.2.1 | Aviso en el primer arranque y confirmación explícita antes de módulos activos |
+| G2 | M | Esqueleto de la aplicación | 0.2.1 | Ventana, menús, barra de herramientas, localizador de la CLI y tema claro/oscuro. **Localizador y preferencias hechos** (sin Qt); falta la ventana |
+| G3 | M | Scan en vivo | 0.2.1 | Lanza la CLI con `--ndjson`, muestra entidades y progreso y cancela por stdin. **Lanzador, cancelación y estado del scan hechos** (sin Qt); falta pintarlo |
+| G4 | M | Historial, detalle y exportación | 0.2.1 | Lista de scans, panel de detalle de cada entidad y exportación a JSON/Markdown/HTML. **API hecha**; faltan las vistas |
+| G5 | S | Panel de salud | 0.2.1 | Estado de cada módulo desde `doctor --json`. **API hecha**; falta la vista |
+| G6 | M | Ajustes y API keys | 0.2.1 | Gestión de keys vía `osineitor config`; opción de almacenarlas en el Administrador de credenciales. **`config set --stdin` / `unset` y API hechos**; falta la vista y queda pendiente lo del Administrador de credenciales |
+| G7 | M | Avisos legales y `--active` | 0.2.1 | Aviso en el primer arranque y confirmación explícita antes de módulos activos. **Textos y reglas de confirmación hechos** (`ScanRequest`); faltan los diálogos |
 | G8 | M | Instalador de Windows | 0.2.2 | PyInstaller + Inno Setup, ZIP portable y SHA-256, construidos en CI |
 | G9 | M | Pruebas manuales en Windows | 0.2.2 | Lista de comprobación (instalar, escanear, cancelar, exportar, modo oscuro, desinstalar); las ejecuta el autor, la CI no puede |
 

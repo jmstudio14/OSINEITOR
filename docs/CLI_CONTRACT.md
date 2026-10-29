@@ -83,6 +83,7 @@ Un único documento JSON por stdout.
 | `history` | `history_output` | Scans guardados |
 | `doctor` | `doctor_output` | `module`, `verdict` (`ok`, `empty`, `fail`, `skipped`, `unchecked`), `detail`, `duration_ms`, `requests` |
 | `config show` | `config_show_output` | Ruta y **nombres** de las keys configuradas (nunca valores, ni enmascarados) |
+| `config set`, `config unset` | `config_key_output` | `name` y `configured`. `config set NOMBRE --stdin` lee el valor de stdin (así la key no aparece en la línea de comandos); también acepta el valor como argumento |
 | `version` | `version_output` | `{"version": "0.2.0"}` |
 | `export` | `export_output` | `scan_id`, `format`, `path` del informe generado |
 
