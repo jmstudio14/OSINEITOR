@@ -6,6 +6,12 @@ Todos los cambios relevantes del proyecto. Formato basado en
 
 ## [Sin publicar]
 
+### Corregido
+
+- **`dns`:** si el resolvedor contesta `REFUSED`, el error lo dice («el resolvedor DNS rechazó la
+  consulta de <dominio> (REFUSED)») en vez de «tiempo agotado o sin servidores». Afecta también a
+  `osineitor doctor`.
+
 Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI (v0.2.0).
 
 ### Añadido

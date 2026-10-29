@@ -230,6 +230,28 @@ async def test_dns_unreachable_resolver_is_an_error_not_an_empty_result(ctx):
         await Dns(ctx).run(Entity(type=EntityType.DOMAIN, value="example.com"))
 
 
+class RefusingResolver:
+    """Resolvedor que contesta REFUSED a todo, como un servidor que filtra el nombre."""
+
+    async def resolve(self, name, rtype, lifetime=None):
+        import dns.message
+        import dns.resolver
+
+        raise dns.resolver.NoNameservers(
+            request=dns.message.make_query(name, rtype),
+            errors=[("Do53:1.1.1.1@53", False, 53, "REFUSED", None)],
+        )
+
+
+async def test_dns_refused_is_reported_as_refused_not_as_timeout(ctx):
+    from osineitor.modules.base import ModuleError
+    from osineitor.modules.domain.dns import Dns
+
+    ctx.resolver = RefusingResolver()
+    with pytest.raises(ModuleError, match="rechazó la consulta.*REFUSED"):
+        await Dns(ctx).run(Entity(type=EntityType.DOMAIN, value="example.com"))
+
+
 async def test_dns_domain_without_records_is_still_empty(ctx):
     from osineitor.modules.domain.dns import Dns
 
