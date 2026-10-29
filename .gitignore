@@ -11,3 +11,7 @@ reports/
 .coverage
 htmlcov/
 coverage.xml
+
+# Skills de Claude Code instaladas en local (de terceros)
+.claude/
+skills-lock.json
