@@ -6,6 +6,42 @@ Todos los cambios relevantes del proyecto. Formato basado en
 
 ## [Sin publicar]
 
+Fase 1a del roadmap (seguridad y datos).
+
+### Añadido
+
+- **Saneado de entradas (F1.11):** el username se codifica como un único segmento en las URLs
+  de las ~460 firmas; un valor no válido se rechaza como error de uso antes de lanzar nada.
+- **Normalización de entidades (F1.12):** dominios en minúsculas y punycode (IDNA 2008), IPs,
+  emails y URLs en forma canónica. `münchen.de` y `xn--mnchen-3ya.de` son la misma entidad.
+- **Guardia de red (F1.13):** ninguna petición va a IPs privadas, loopback, link-local ni al
+  servicio de metadatos cloud, tampoco a través de redirecciones (que ahora se siguen y
+  comprueban salto a salto). `--allow-private` lo desactiva. Las redirecciones a otro origen no
+  reenvían cabeceras de la petición.
+- **Presupuesto de escaneo (F1.14):** `--max-entities` (2000), `--max-requests` (3000) y
+  `--max-time` (900 s), `0` = sin límite. Al agotarse, el scan se detiene de forma ordenada,
+  conserva lo ya terminado y queda marcado como incompleto (`truncated`).
+- `osineitor/errors.py` con las excepciones compartidas y `ModuleSkipped` para «no aplica».
+- `Module.try_emit` para datos de terceros que pueden no ser válidos.
+- CI en Windows (3.11 y 3.13) además de Linux, y `.gitattributes` con finales de línea LF.
+
+### Cambiado
+
+- **RDAP (F1.18):** el módulo consulta el bootstrap de IANA (con caché de 7 días) y para los TLD
+  sin servidor RDAP (`.es`, `.io`, `.de`…) queda **omitido con un aviso** en lugar de devolver
+  un vacío silencioso.
+- **Rutas multiplataforma (F1.16):** configuración en `%APPDATA%\osineitor` y datos en
+  `%LOCALAPPDATA%\osineitor` en Windows (con `platformdirs`); en Linux no cambia. Se pueden
+  fijar con `OSINEITOR_CONFIG_DIR` y `OSINEITOR_DATA_DIR`.
+- `crtsh` descarta los hostnames no válidos en lugar de emitirlos.
+- `username_sites` conserva los perfiles ya encontrados si se agota el presupuesto.
+- Dependencias nuevas: `platformdirs` e `idna`.
+
+### Corregido
+
+- Un username derivado de un email con caracteres como `/`, `?` o `#` ya no puede alterar la
+  ruta de las URLs consultadas.
+
 ## [0.1.1] - 2026-10-29
 
 Fase 0 del roadmap, la parte que no necesita red.

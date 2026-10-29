@@ -7,14 +7,14 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 import dns.asyncresolver
+from pydantic import ValidationError
 
 from osineitor.config import Config
+from osineitor.errors import ModuleError, ModuleSkipped
 from osineitor.http import HttpClient
 from osineitor.models import Entity, EntityType
 
-
-class ModuleError(Exception):
-    """Fallo esperado de un módulo (respuesta inesperada, cuota agotada...)."""
+__all__ = ["Context", "Module", "ModuleError", "ModuleSkipped"]
 
 
 @dataclass
@@ -47,6 +47,18 @@ class Module(ABC):
 
     def emit(self, parent: Entity, type: EntityType, value: str, /, **data: object) -> Entity:
         return Entity(type=type, value=value, data=dict(data), source=self.name, parent=parent.key)
+
+    def try_emit(
+        self, parent: Entity, type: EntityType, value: str, /, **data: object
+    ) -> Entity | None:
+        """Como `emit`, pero devuelve `None` si el valor no es válido para ese tipo.
+
+        Úsalo con datos de terceros: un valor raro no debe descartar el resto del resultado.
+        """
+        try:
+            return self.emit(parent, type, value, **data)
+        except ValidationError:
+            return None
 
     @abstractmethod
     async def run(self, entity: Entity) -> list[Entity]: ...

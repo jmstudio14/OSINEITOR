@@ -16,9 +16,14 @@ Storage (storage.py, SQLite) ──► Informes (report/: JSON, Markdown, HTML)
 | Fichero | Responsabilidad |
 |---|---|
 | `models.py` | `EntityType`, `Entity`, `ScanEvent`, `ScanResult` y `detect_type()` |
-| `config.py` | API keys y ajustes desde TOML o variables de entorno; rutas XDG |
-| `http.py` | Cliente `httpx` asíncrono con reintentos y límite de concurrencia por host |
-| `modules/base.py` | Contrato `Module`, `ModuleError` y `Context` |
+| `config.py` | API keys y ajustes desde TOML o variables de entorno; rutas por sistema (`platformdirs`) |
+| `errors.py` | Excepciones: `ModuleError`, `ModuleSkipped`, `NetworkGuardError`, `BudgetExceeded`, `InvalidEntityValue` |
+| `sanitize.py` | Saneado de usernames y codificación de valores que viajan a URLs |
+| `normalize.py` | Forma canónica de dominios (IDNA), IPs, emails y URLs |
+| `netguard.py` | Guardia de red: rechaza IPs privadas, loopback y metadatos cloud |
+| `budget.py` | Presupuesto del scan: entidades, peticiones y tiempo |
+| `http.py` | Cliente `httpx` asíncrono: guardia, redirecciones comprobadas, reintentos, límite por host y presupuesto |
+| `modules/base.py` | Contrato `Module` (`emit` y `try_emit`) y `Context` |
 | `registry.py` | Descubre las subclases de `Module` en `osineitor.modules` |
 | `engine.py` | Ejecuta los módulos, pivota por niveles, deduplica y registra incidencias |
 | `storage.py` | Guarda y recupera scans en SQLite |
@@ -72,7 +77,14 @@ class Module(ABC):
 4. **Deduplicación:** si una entidad ya existe, no se vuelve a investigar; sus datos se fusionan
    rellenando solo los campos vacíos de la existente.
 5. **Errores:** cualquier excepción de un módulo se captura y se guarda como evento `error`; el scan
-   continúa.
+   continúa. `ModuleSkipped` se registra como `skipped` (no aplica), no como error.
+6. **Presupuesto:** si se agota (entidades, peticiones o tiempo) el scan se detiene de forma
+   ordenada: se cancelan los módulos pendientes, **se conserva lo que ya había terminado** y el
+   resultado queda con `truncated = true` y un evento `budget`.
+
+Todo valor de entidad se **normaliza al crearse** (`normalize.canonical`), así que dos escrituras
+del mismo dato son una sola entidad. Los datos de terceros se emiten con `Module.try_emit`, que
+descarta un valor no válido sin perder el resto del resultado.
 
 Concurrencia: 10 tareas de módulo simultáneas como máximo; además `HttpClient` limita a 4
 peticiones simultáneas por host y reintenta (2 veces, con espera exponencial) ante errores de red
@@ -89,17 +101,17 @@ email alguien@acme.io
 
 ## Persistencia
 
-SQLite en `$XDG_DATA_HOME/osineitor/osineitor.db` (por defecto `~/.local/share/...`), o la
-ruta de `--db`. Tablas:
+SQLite en `osineitor.db` dentro del directorio de datos (`%LOCALAPPDATA%\osineitor` en Windows,
+`~/.local/share/osineitor` en Linux), o la ruta de `--db`. Tablas:
 
 - `scans`: objetivo, profundidad y fechas.
 - `entities`: entidades del scan; `data` en JSON.
-- `events`: errores y módulos omitidos.
+- `events`: errores, módulos omitidos y, si el scan se truncó, un evento `budget`.
 
 ## Configuración
 
 Orden de prioridad para cada key: variable `OSINEITOR_<NOMBRE>_KEY` → sección `[keys]` de
-`$XDG_CONFIG_HOME/osineitor/config.toml`. La sección `[settings]` admite `timeout` (segundos) y
+`config.toml` del directorio de configuración (`%APPDATA%\osineitor` en Windows). La sección `[settings]` admite `timeout` (segundos) y
 `user_agent`.
 
 ## Decisiones de diseño

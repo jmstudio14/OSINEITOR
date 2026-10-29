@@ -86,7 +86,9 @@ async def test_email_validate_free_provider_does_not_pivot_domain(ctx):
 
 
 async def test_email_validate_bad_syntax(ctx):
-    out = await EmailValidate(ctx).run(Entity(type=EntityType.EMAIL, value="not-an-email"))
+    # `model_construct` salta la validación del modelo para ejercitar la defensa del módulo.
+    bad = Entity.model_construct(type=EntityType.EMAIL, value="not-an-email", data={})
+    out = await EmailValidate(ctx).run(bad)
     assert out[0].data == {"valid_syntax": False}
 
 

@@ -7,7 +7,6 @@ from osineitor import registry
 from osineitor.config import Config
 from osineitor.http import HttpClient
 from osineitor.models import Entity, EntityType, ScanEvent, ScanResult
-from osineitor.storage import Storage
 
 
 def test_registry_modules_are_well_formed():
@@ -28,8 +27,7 @@ def test_config_roundtrip_and_env_priority(tmp_path, monkeypatch):
     assert loaded.key("missing") is None
 
 
-def test_storage_roundtrip(tmp_path):
-    storage = Storage(tmp_path / "db.sqlite")
+def test_storage_roundtrip(storage):
     seed = Entity(type=EntityType.DOMAIN, value="example.com")
     result = ScanResult(
         target=seed,

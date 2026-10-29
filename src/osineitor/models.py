@@ -8,7 +8,10 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from osineitor.errors import InvalidEntityValue
+from osineitor.normalize import canonical, canonical_hostname
 
 
 class EntityType(StrEnum):
@@ -33,6 +36,12 @@ class Entity(BaseModel):
     source: str | None = None
     parent: str | None = None
 
+    @model_validator(mode="after")
+    def _canonicalize(self) -> Entity:
+        """El valor se guarda en forma canónica: así la deduplicación y la clave son fiables."""
+        self.value = canonical(self.type, self.value)
+        return self
+
     @property
     def key(self) -> str:
         return f"{self.type}:{self.value.lower()}"
@@ -41,7 +50,7 @@ class Entity(BaseModel):
 class ScanEvent(BaseModel):
     """Error u omisión de un módulo durante un scan."""
 
-    kind: str  # "error" | "skipped"
+    kind: str  # "error" | "skipped" | "budget"
     module: str
     message: str
     entity: str | None = None
@@ -55,6 +64,7 @@ class ScanResult(BaseModel):
     entities: list[Entity] = Field(default_factory=list)
     events: list[ScanEvent] = Field(default_factory=list)
     scan_id: int | None = None
+    truncated: bool = False  # el scan se detuvo por agotar el presupuesto
 
     def by_type(self) -> dict[EntityType, list[Entity]]:
         grouped: dict[EntityType, list[Entity]] = {}
@@ -63,7 +73,9 @@ class ScanResult(BaseModel):
         return grouped
 
 
-DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+DOMAIN_RE = re.compile(
+    r"^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+([a-z]{2,63}|xn--[a-z0-9-]{1,59})$"
+)
 
 
 def detect_type(value: str) -> EntityType:
@@ -76,6 +88,10 @@ def detect_type(value: str) -> EntityType:
         pass
     if "@" in value and "." in value.rsplit("@", 1)[1]:
         return EntityType.EMAIL
-    if DOMAIN_RE.match(value.lower().removeprefix("www.")):
+    try:
+        host = canonical_hostname(value)  # admite IDN: `münchen.de` es un dominio
+    except InvalidEntityValue:
+        return EntityType.USERNAME
+    if DOMAIN_RE.match(host.removeprefix("www.")):
         return EntityType.DOMAIN
     return EntityType.USERNAME

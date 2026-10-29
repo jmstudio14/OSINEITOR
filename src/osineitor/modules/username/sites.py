@@ -11,8 +11,10 @@ from typing import Any
 
 import httpx
 
+from osineitor.errors import BudgetExceeded, NetworkGuardError
 from osineitor.models import Entity, EntityType
 from osineitor.modules.base import Module
+from osineitor.sanitize import quote_segment
 
 CONCURRENCY = 30
 TIMEOUT = 15
@@ -40,6 +42,17 @@ def _as_list(value: Any) -> list:
     if value is None:
         return []
     return value if isinstance(value, list) else [value]
+
+
+def build_urls(site: dict[str, Any], username: str) -> tuple[str, str]:
+    """URL del perfil y URL que se consulta, con el username codificado como un solo segmento."""
+    safe = quote_segment(username)
+    if "{}" in site["url"]:
+        profile_url = site["url"].replace("{}", safe)
+    else:  # sitios que solo exponen una API de comprobación (p. ej. Discord)
+        profile_url = f"{site['url'].rstrip('/')}#{safe}"
+    probe_url = site.get("urlProbe", site["url"]).replace("{}", safe)
+    return profile_url, probe_url
 
 
 def profile_exists(site: dict[str, Any], response: httpx.Response) -> bool:
@@ -71,11 +84,7 @@ class UsernameSites(Module):
         regex = site.get("regexCheck")
         if regex and not re.search(regex, username):
             return None
-        if "{}" in site["url"]:
-            profile_url = site["url"].replace("{}", username)
-        else:  # sitios que solo exponen una API de comprobación (p. ej. Discord)
-            profile_url = f"{site['url'].rstrip('/')}#{username}"
-        probe_url = site.get("urlProbe", site["url"]).replace("{}", username)
+        profile_url, probe_url = build_urls(site, username)
         method = site.get("request_method", "GET")
         payload = _fill(site.get("request_payload"), username)
         async with sem:
@@ -88,7 +97,7 @@ class UsernameSites(Module):
                     follow_redirects=site.get("errorType") != "response_url",
                     timeout=TIMEOUT,
                 )
-            except (httpx.HTTPError, ValueError):
+            except (httpx.HTTPError, ValueError, NetworkGuardError):
                 return None  # sitio caído o bloqueado: resultado desconocido, no se reporta
         return profile_url if profile_exists(site, response) else None
 
@@ -97,7 +106,15 @@ class UsernameSites(Module):
         sites = self.sites()
         sem = asyncio.Semaphore(CONCURRENCY)
         names = list(sites)
-        found = await asyncio.gather(*(self._check(sem, n, sites[n], username) for n in names))
+        outcomes = await asyncio.gather(
+            *(self._check(sem, n, sites[n], username) for n in names), return_exceptions=True
+        )
+        found: list[str | None] = []
+        for outcome in outcomes:
+            # Si se agota el presupuesto se conserva lo ya encontrado; el motor marca el resultado.
+            if isinstance(outcome, BaseException) and not isinstance(outcome, BudgetExceeded):
+                raise outcome
+            found.append(None if isinstance(outcome, BaseException) else outcome)
         return [
             self.emit(entity, EntityType.PROFILE, url, site=name, username=username)
             for name, url in zip(names, found, strict=True)

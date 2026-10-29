@@ -2,22 +2,34 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import platformdirs
+
 ENV_PREFIX = "OSINEITOR_"
 
 
 def config_dir() -> Path:
-    base = os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config"
-    return Path(base) / "osineitor"
+    """Directorio de configuración: `OSINEITOR_CONFIG_DIR`, o el estándar de cada sistema.
+
+    En Windows es `%APPDATA%\\osineitor`; en Linux respeta `XDG_CONFIG_HOME`.
+    """
+    override = os.environ.get("OSINEITOR_CONFIG_DIR")
+    if override:
+        return Path(override)
+    return Path(platformdirs.user_config_dir("osineitor", appauthor=False, roaming=True))
 
 
 def data_dir() -> Path:
-    base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
-    return Path(base) / "osineitor"
+    """Directorio de datos: `OSINEITOR_DATA_DIR`, o `%LOCALAPPDATA%\\osineitor` en Windows."""
+    override = os.environ.get("OSINEITOR_DATA_DIR")
+    if override:
+        return Path(override)
+    return Path(platformdirs.user_data_dir("osineitor", appauthor=False))
 
 
 def config_path() -> Path:
@@ -53,7 +65,8 @@ class Config:
         lines = ["[settings]", f"timeout = {self.timeout}", f"user_agent = {_q(self.user_agent)}"]
         lines += ["", "[keys]"] + [f"{k} = {_q(v)}" for k, v in sorted(self.keys.items())]
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        path.chmod(0o600)
+        with contextlib.suppress(OSError):
+            path.chmod(0o600)  # en Windows solo afecta al atributo de solo lectura
         return path
 
 

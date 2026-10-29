@@ -9,6 +9,7 @@ import dns.resolver
 
 from osineitor.models import Entity, EntityType
 from osineitor.modules.base import Module
+from osineitor.sanitize import is_valid_username
 
 EMAIL_RE = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@([A-Za-z0-9-]+\.)+[A-Za-z]{2,}$")
 FREE_PROVIDERS = {
@@ -85,6 +86,6 @@ class EmailValidate(Module):
             out.append(self.emit(entity, EntityType.DOMAIN, domain))
         # La parte local suele reutilizarse como username (sin el sufijo +etiqueta).
         handle = local.split("+", 1)[0]
-        if len(handle) >= 3:
+        if len(handle) >= 3 and is_valid_username(handle):
             out.append(self.emit(entity, EntityType.USERNAME, handle, derived_from_email=True))
         return out

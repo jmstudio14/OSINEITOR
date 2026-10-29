@@ -22,9 +22,14 @@ python -m pytest -q      # usa python -m: el pytest global puede ser otro intér
 - Un módulo = una subclase de `Module` en `src/osineitor/modules/<frente>/`. Se descubre solo.
 - Crea entidades con `self.emit(parent, tipo, valor, **datos)`; los datos con valor vacío se
   ignoran en la salida.
-- Fallos esperados → `ModuleError`. El engine captura cualquier excepción; no la silencies dentro
+- Las excepciones viven en `osineitor/errors.py`. Fallos esperados → `ModuleError`; «no aplica» →
+  `ModuleSkipped`. El engine captura cualquier excepción; no la silencies dentro
   del módulo salvo que el resultado sea realmente "desconocido" (como en `username_sites`).
 - Módulos que contactan al objetivo: `passive = False`.
+- Datos de terceros: emítelos con `try_emit` (un valor raro no debe perder el resto), valida los
+  hostnames con `normalize.canonical_hostname` y codifica todo lo que vaya a una URL con
+  `sanitize.quote_segment`. Nunca construyas URLs concatenando entradas sin codificar.
+- Todas las peticiones salen por `ctx.http` (guardia de red y presupuesto); no uses `httpx` directo.
 - Tests sin red: `respx` para HTTP, `FakeResolver` de `tests/conftest.py` para DNS.
 - Al añadir o cambiar módulos, actualiza README, `docs/MODULES.md` y `CHANGELOG.md`.
 

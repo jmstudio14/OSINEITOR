@@ -37,7 +37,9 @@ class Gravatar(Module):
             )
         ]
         if profile.get("preferredUsername"):
-            out.append(self.emit(entity, EntityType.USERNAME, profile["preferredUsername"]))
+            username = self.try_emit(entity, EntityType.USERNAME, profile["preferredUsername"])
+            if username:
+                out.append(username)
         for account in profile.get("accounts", []):
             if account.get("url"):
                 out.append(

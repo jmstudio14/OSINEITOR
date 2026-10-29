@@ -79,15 +79,15 @@ class HunterDomain(_HunterBase):
         ]
         for email in data.get("emails") or []:
             name = " ".join(filter(None, [email.get("first_name"), email.get("last_name")]))
-            out.append(
-                self.emit(
-                    entity,
-                    EntityType.EMAIL,
-                    email["value"].lower(),
-                    name=name or None,
-                    position=email.get("position"),
-                    confidence=email.get("confidence"),
-                    email_type=email.get("type"),
-                )
+            candidate = self.try_emit(
+                entity,
+                EntityType.EMAIL,
+                email["value"],
+                name=name or None,
+                position=email.get("position"),
+                confidence=email.get("confidence"),
+                email_type=email.get("type"),
             )
+            if candidate:
+                out.append(candidate)
         return out

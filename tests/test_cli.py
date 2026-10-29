@@ -332,3 +332,77 @@ def test_summarize_is_capped():
 
     entity = Entity(type=EntityType.RECORD, value="r", data={"big": "x" * 1000})
     assert len(cli._summarize(entity)) == 300
+
+
+@pytest.mark.parametrize(
+    ("command", "value", "message"),
+    [
+        ("domain", "bad domain", "dominio no válido"),
+        ("ip", "999.1.1.1", "dirección IP no válida"),
+        ("email", "no-es-un-email", "email no válido"),
+        ("username", "a/../b", "username no válido"),
+    ],
+)
+def test_invalid_targets_are_usage_errors_not_tracebacks(modules, command, value, message):
+    result = runner.invoke(app, [command, value, "--no-save"])
+    assert result.exit_code == 2
+    assert message in result.output
+    assert "Traceback" not in result.output
+
+
+def test_idn_domains_are_stored_as_punycode(modules):
+    result = runner.invoke(app, ["domain", "MÜNCHEN.de", "--no-save", "--json"])
+    assert json.loads(result.output)["target"]["value"] == "xn--mnchen-3ya.de"
+
+
+def test_scan_detects_idn_domains(modules):
+    result = runner.invoke(app, ["scan", "münchen.de", "--no-save", "--json"])
+    target = json.loads(result.output)["target"]
+    assert (target["type"], target["value"]) == ("domain", "xn--mnchen-3ya.de")
+
+
+def test_entity_budget_truncates_and_says_so(modules):
+    args = ["scan", "example.com", "--no-save", "--max-entities", "1"]
+    data = json.loads(runner.invoke(app, [*args, "--json"]).output)
+    assert data["truncated"] is True
+    assert values(data) == ["9.9.9.9"]
+    assert [e["kind"] for e in data["events"]] == ["budget"]
+
+    text = runner.invoke(app, args)
+    assert "Resultado incompleto" in text.output
+    assert "budget: engine" in text.output
+
+
+def test_budget_zero_means_unlimited(modules):
+    args = ["scan", "example.com", "--no-save", "--json", "--max-entities", "0"]
+    data = json.loads(runner.invoke(app, args).output)
+    assert data["truncated"] is False
+    assert values(data) == ["9.9.9.9", "info:9.9.9.9"]
+
+
+def test_budget_and_guard_options_reach_the_scan(monkeypatch):
+    from osineitor.models import Entity, ScanResult
+
+    captured = {}
+
+    async def fake_scan(seed, opts, live):
+        captured["opts"] = opts
+        return ScanResult(target=Entity(type=seed.type, value=seed.value), depth=opts.depth)
+
+    monkeypatch.setattr(cli, "_scan", fake_scan)
+    args = ["domain", "example.com", "--no-save", "--json", "--max-entities", "7"]
+    args += ["--max-requests", "11", "--max-time", "2.5", "--allow-private"]
+    assert runner.invoke(app, args).exit_code == 0
+    opts = captured["opts"]
+    assert (opts.max_entities, opts.max_requests, opts.max_time) == (7, 11, 2.5)
+    assert opts.allow_private is True
+
+    captured.clear()
+    runner.invoke(app, ["domain", "example.com", "--no-save", "--json"])
+    assert captured["opts"].allow_private is False
+    assert captured["opts"].max_entities == 2000
+
+
+def test_negative_budget_is_rejected(modules):
+    result = runner.invoke(app, ["domain", "example.com", "--max-entities", "-1"])
+    assert result.exit_code == 2
