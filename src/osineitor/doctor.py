@@ -66,7 +66,10 @@ async def run_doctor(
     *,
     active: bool = False,
     allow_private: bool = False,
+    proxy: str | None = None,
 ) -> list[Check]:
     # Sin caché ni presupuesto: cada comprobación tiene que llegar a la fuente real.
-    async with HttpClient(config, allow_private=allow_private, retries=1, backoff=0.5) as http:
+    async with HttpClient(
+        config, allow_private=allow_private, retries=1, backoff=0.5, proxy=proxy
+    ) as http:
         return [await check_module(cls, config, http, active=active) for cls in classes]

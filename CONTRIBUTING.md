@@ -46,6 +46,8 @@ python -m pytest -q
 - **Declara cómo probarlo con `osineitor doctor`:** un `canary` (valor de prueba seguro) o, si no
   lo hay, un `probe_url`.
 - **Pasivo por defecto.** Si el módulo envía tráfico al objetivo, marca `passive = False`.
+- **Todo por `ctx.http`.** Si consulta DNS con `self.ctx.resolver` (UDP, no pasa por `--proxy`),
+  marca `direct_dns = True`: con proxy se omite en lugar de filtrar la consulta. Un test lo exige.
 - **Sin dependencias nuevas** salvo que estén justificadas en el PR.
 - Documenta el módulo en [docs/MODULES.md](docs/MODULES.md) y en la tabla de módulos del README.
 - Añade una entrada en la sección `Sin publicar` de [CHANGELOG.md](CHANGELOG.md).

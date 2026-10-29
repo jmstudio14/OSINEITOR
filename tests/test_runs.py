@@ -213,6 +213,9 @@ def test_migrates_a_v010_database_without_losing_data(tmp_path):
         assert [e.value for e in loaded.entities] == ["9.9.9.9"]
         assert loaded.events[0].message == "viejo error"
         assert loaded.runs == []  # el scan antiguo no tiene estado por módulo
+        # No se inventan observaciones: el dato antiguo sigue mostrando su fuente.
+        assert loaded.entities[0].observations == []
+        assert loaded.entities[0].sources == ["dns"]
         new_id = store.save(
             ScanResult(target=SEED, depth=1, runs=[ModuleRun(module="a", status="ok")])
         )
@@ -220,6 +223,12 @@ def test_migrates_a_v010_database_without_losing_data(tmp_path):
     check = sqlite3.connect(path)
     assert check.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
     check.close()
+
+
+def test_observations_are_added_by_migration_3_without_touching_older_ones():
+    assert len(MIGRATIONS) == 3
+    assert "observations" in MIGRATIONS[2] and "observations" not in MIGRATIONS[0]
+    assert "observations" not in MIGRATIONS[1]
 
 
 def test_reopening_a_migrated_database_is_idempotent(tmp_path):

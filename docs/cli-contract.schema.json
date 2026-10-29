@@ -31,6 +31,28 @@
             "string",
             "null"
           ]
+        },
+        "observations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "module",
+              "query"
+            ],
+            "properties": {
+              "module": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
         }
       },
       "additionalProperties": true

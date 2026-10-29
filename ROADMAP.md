@@ -276,8 +276,8 @@ Estado a 29-10-2026 (v0.2.0), contrastado con el código. Leyenda: **✅ Hecho**
 | Fase | Versión | Hechos | Parciales | Pendientes | *M* hechos |
 |---|---|---|---|---|---|
 | 0 | 0.1.1 | 2 | 1 | 3 | 2 / 6 |
-| 1 | 0.2.0 | 12 | 3 | 3 | 11 / 12 |
-| 2 | 0.3.0 | 0 | 0 | 7 | 0 / 4 |
+| 1 | 0.2.0 | 16 | 1 | 1 | 11 / 12 |
+| 2 | 0.3.0 | 1 | 0 | 6 | 1 / 4 |
 | 3 | 0.4.0 | 0 | 0 | 7 | 0 / 3 |
 | 4 | 0.5.0–0.5.1 | 0 | 0 | 24 | 0 / 5 |
 | 5 | 0.6.0 | 0 | 0 | 15 | 0 / 1 |
@@ -288,9 +288,9 @@ Estado a 29-10-2026 (v0.2.0), contrastado con el código. Leyenda: **✅ Hecho**
 | 10 | 0.11.0 | 0 | 0 | 7 | 0 / 3 |
 | 11 | 1.0.0 | 0 | 0 | 5 | 0 / 3 |
 | G | 0.2.0–0.2.2 | 1 | 6 | 2 | 1 / 8 |
-| **Total (fases 0–11)** | | **15** | **4** | **114** | **14 / 50** |
+| **Total (fases 0–11)** | | **20** | **2** | **111** | **15 / 50** |
 
-Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **13 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
+Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **14 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
 
 ### Corte recomendado
 
@@ -359,20 +359,20 @@ está vacío, y que la herramienta no pueda dañar al propio analista ni explota
 | F1.5 | M | ✅ Hecho | Caché HTTP | Caché en disco con TTL por fuente (`--no-cache`, `--refresh`) para no repetir consultas ni gastar cuota |
 | F1.6 | M | 🟡 Parcial | Límites declarativos por fuente | Cada módulo declara su límite (p. ej. Shodan 1 petición/s) y el cliente HTTP lo respeta |
 | F1.7 | M | ✅ Hecho | Timeout por módulo y cancelación | Ningún módulo puede bloquear el scan más de su tiempo máximo |
-| F1.8 | S | ⬜ Pendiente | Proxy y Tor | `--proxy socks5://…` aplicado a todas las peticiones salientes |
-| F1.9 | S | ⬜ Pendiente | Registro estructurado | `--verbose` y `--log-file` en JSON, sin incluir nunca API keys |
+| F1.8 | S | ✅ Hecho | Proxy y Tor | `--proxy socks5://…` aplicado a todas las peticiones salientes |
+| F1.9 | S | ✅ Hecho | Registro estructurado | `--verbose` y `--log-file` en JSON, sin incluir nunca API keys |
 | F1.10 | M | ✅ Hecho | Reducción de falsos positivos en usernames | Comprobación doble con un username inexistente aleatorio: si el sitio también "lo encuentra", el resultado se descarta |
 | F1.11 | M | ✅ Hecho | Codificación y validación de entradas | Todo valor que se inserta en una URL se codifica (`quote(…, safe="")`); cada tipo de entidad valida su juego de caracteres; el username derivado de un email se sanea. Resuelve D8 |
 | F1.12 | M | ✅ Hecho | Normalización canónica de entidades | Dominios en minúsculas, punycode (IDNA) y sin punto final; IPv6 comprimida; URLs normalizadas; la clave de identidad usa la forma canónica; migración de los datos existentes. Resuelve D10 |
 | F1.13 | M | ✅ Hecho | Guardia de red | Los módulos activos y las redirecciones rechazan loopback, redes privadas, *link-local* y metadatos cloud (`169.254.169.254`) salvo `--allow-private`; los hostnames devueltos por fuentes externas se validan antes de emitirse. Resuelve D9 |
 | F1.14 | M | ✅ Hecho | Presupuestos de escaneo | `--max-entities`, `--max-requests`, `--max-time` y límite por módulo; al agotarse, el scan termina de forma ordenada e informa de lo omitido. Resuelve D11 |
 | F1.15 | S | ⬜ Pendiente | Detección de DNS wildcard | Sondeo con etiquetas aleatorias; los subdominios que solo resuelven por wildcard se marcan y no se pivotan |
-| F1.16 | S | 🟡 Parcial | Multiplataforma | Rutas con `platformdirs`, permisos equivalentes en Windows y CI en Linux, macOS y Windows. Resuelve D12 |
-| F1.17 | S | 🟡 Parcial | Experiencia de uso | Barra de progreso en `stderr`, `--quiet`, `stdout` limpio con `--json`, y *exit codes* documentados (éxito, error de uso, fuentes con errores, sin resultados). **Hecho en v0.2.0 salvo la barra de progreso** (los eventos `progress` del contrato la sustituyen para la GUI); los códigos están en [`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md) |
+| F1.16 | S | ✅ Hecho | Multiplataforma | Rutas con `platformdirs`, permisos equivalentes en Windows y CI en Linux, macOS y Windows. Resuelve D12. ⚠️ **No probado en macOS** |
+| F1.17 | S | ✅ Hecho | Experiencia de uso | Barra de progreso en `stderr`, `--quiet`, `stdout` limpio con `--json`, y *exit codes* documentados (éxito, error de uso, fuentes con errores, sin resultados). La GUI usa los eventos `progress` del contrato; los códigos están en [`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md). ⚠️ **Barra sin comprobar a ojo en una terminal real** |
 | F1.18 | M | ✅ Hecho | `rdap` distingue "TLD sin RDAP" de "no registrado" | Consulta el bootstrap de IANA [R15]; para un TLD sin servidor emite `omitido: TLD sin RDAP` en lugar de un resultado vacío. Resuelve D14 junto con F4.11 |
 
-**Estado (29-10-2026):** 12 de 18 hechos, 3 parciales y 3 pendientes (F1.8, F1.9 y F1.15,
-todos *S*): los 12 *M* están hechos salvo F1.6.
+**Estado (29-10-2026):** 16 de 18 hechos, 1 parcial y 1 pendiente (F1.15, *S*): los 12 *M* están
+hechos salvo F1.6.
 
 - **F1.2** usa valores de prueba fijos (`example.com`, `1.1.1.1`) y no `username_claimed` de Sherlock,
   que haría ~460 peticiones.
@@ -382,11 +382,22 @@ todos *S*): los 12 *M* están hechos salvo F1.6.
 - **F1.6** (parcial): el mecanismo funciona, pero ningún módulo declara aún un `min_interval`
   porque no se han verificado los límites reales de sus fuentes.
 - **F1.12**: las filas guardadas antiguas se canonicalizan al cargarlas, sin migración de esquema.
-- **F1.16** (parcial) se centra en Windows, la plataforma soportada: usa `platformdirs`, pero el
-  `chmod 0600` no equivale a una ACL y la CI no incluye macOS.
-- **F1.17** (parcial): hechos `--quiet`, `stdout` limpio y los códigos de salida
-  ([`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md)); falta la barra de progreso, que en la GUI
-  sustituyen los eventos `progress`.
+- **F1.16** se centra en Windows, la plataforma soportada: usa `platformdirs`; `config.toml` se
+  protege con una ACL (`icacls`, verificado en Windows) y `0600` desde la creación en POSIX. La CI
+  incluye ya macOS (3.13), **pero aún no se ha ejecutado en GitHub**: el test del modo `0600`
+  tampoco se ha corrido fuera de Windows. Los ficheros `.db` no se restringen (no guardan keys).
+- **F1.8**: `--proxy` aplica a todo el HTTP y evita dos fugas de DNS: la guardia de red no resuelve
+  hostnames en local con proxy, y `dns`/`email_validate` (DNS por UDP, que SOCKS no enruta) se
+  omiten. Probado con un servidor SOCKS5 de prueba y la CLI real; **no con Tor real**. No está en
+  la GUI (`ScanRequest`) ni hay `--tor`.
+- **F1.9**: `--verbose` (JSON por `stderr`) y `--log-file`, globales. Registra peticiones y módulos
+  sin consulta de URL ni cabeceras y enmascara las keys conocidas. No registra dentro de cada módulo
+  ni rota el fichero; el mensaje de un módulo que falla puede seguir llevando texto de la
+  excepción en `ScanResult.events` (preexistente, solo el registro está protegido).
+- **F1.17**: `--quiet`, `stdout` limpio y los códigos de salida
+  ([`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md)), más la barra de progreso (Rich, en `stderr`, solo
+  si `stdout` y `stderr` son una terminal). Probada con tests con terminales simuladas; **no se ha
+  mirado todavía en una consola real**. La GUI sigue usando los eventos `progress`.
 - Las duraciones, el TTL de caché (6 h) y los timeouts por módulo son estimaciones sin medir.
 
 **Criterios de aceptación**
@@ -403,7 +414,7 @@ todos *S*): los 12 *M* están hechos salvo F1.6.
 - `münchen.de` y `xn--mnchen-3ya.de` resultan en una única entidad.
 - Para un dominio `.es` el scan muestra `omitido: TLD sin RDAP`, no "sin resultados".
 - Con `--max-entities 50` un scan de 500 subdominios se detiene y lo indica.
-- La CI es verde en Linux, macOS y Windows. *(Hoy la CI cubre Windows y Linux; macOS no está.)*
+- ✅ La CI es verde en Linux, macOS y Windows. *(⚠️ No probado en macOS: añadida a la CI, aún sin ejecutar en GitHub.)*
 
 ---
 
@@ -453,7 +464,7 @@ preservación del Protocolo de Berkeley.
 
 | ID | P | Estado | Entregable | Detalle |
 |---|---|---|---|---|
-| F2.1 | M | ⬜ Pendiente | Observaciones múltiples | Una entidad guarda todas las fuentes que la vieron (`observations`: módulo, fecha, consulta realizada) en lugar de solo la primera |
+| F2.1 | M | ✅ Hecho | Observaciones múltiples | Una entidad guarda todas las fuentes que la vieron (`observations`: módulo, fecha, consulta realizada) en lugar de solo la primera |
 | F2.2 | M | ⬜ Pendiente | Evidencia con hash | Opción `--evidence` que guarda la respuesta original de cada fuente con su SHA-256, URL consultada y fecha UTC |
 | F2.3 | M | ⬜ Pendiente | Puntuación de confianza | Nivel `bajo/medio/alto` según número de fuentes independientes, tipo de fuente (autoritativa como DNS o RDAP frente a agregada) y antigüedad del dato |
 | F2.4 | S | ⬜ Pendiente | Frescura | Campos `first_seen` y `last_seen` por entidad; los datos de terceros conservan su propia fecha (p. ej. último escaneo de Shodan) |
@@ -461,9 +472,14 @@ preservación del Protocolo de Berkeley.
 | F2.6 | S | ⬜ Pendiente | Propósito del scan | Campo `--purpose` registrado en los metadatos; obligatorio en scans sobre emails o usernames si así se configura |
 | F2.7 | S | ⬜ Pendiente | Informe con anexo de evidencias | El informe HTML incluye una tabla de evidencias con hashes verificables |
 
-**Estado (29-10-2026):** ninguno hecho. Precursores: `Engine._merge` ya fusiona datos de varias
-fuentes (F2.1) pero conserva una sola fuente por entidad, y algunos módulos guardan fechas de
-terceros dentro de `data` (F2.4).
+**Estado (30-10-2026):** 1 de 7 hecho (F2.1, *M*). `Entity.observations` guarda cada vez que un
+módulo vio la entidad (módulo, entidad consultada, hora UTC), deduplicadas por módulo y consulta;
+persiste en la BD (versión 3) y la CLI y los informes listan todas las fuentes. La «consulta
+realizada» es hoy la entidad sobre la que corrió el módulo: la URL exacta y el hash llegan con
+F2.2. Siguen sin existir `first_seen`/`last_seen` (F2.4), la evidencia (F2.2) y la confianza (F2.3);
+algunos módulos guardan fechas de terceros dentro de `data`. El evento NDJSON `entity` lleva solo
+la primera observación (se emite al descubrirla); la lista completa va en `--json`. La GUI sigue
+mostrando `source`.
 
 **Criterios de aceptación**
 - Cualquier entidad de un informe se puede rastrear hasta la consulta exacta que la produjo.
@@ -787,7 +803,7 @@ Se aplican en todas las fases, no se planifican aparte.
 - Cobertura de tests ≥ 85 % en el núcleo y ≥ 70 % global; ningún test depende de la red.
 - Tipado estático con `mypy` (estricto en el núcleo) desde la fase 1. *(Pendiente: no hay `mypy` en
   `pyproject.toml` ni en la CI.)*
-- CI en Linux, macOS y Windows desde F1.16. *(Hoy: Windows y Linux; falta macOS.)*
+- ✅ CI en Linux, macOS y Windows desde F1.16. *(⚠️ No probado en macOS: añadida a la CI, aún sin ejecutar en GitHub.)*
 - Cada PR que añade un módulo incluye fixture real, canario de salud y documentación.
 
 ### Seguridad

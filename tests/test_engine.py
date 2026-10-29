@@ -139,6 +139,48 @@ async def test_duplicate_entities_merge_missing_data(ctx):
     assert result.entities[0].data == {"port": 80, "product": "nginx"}
 
 
+async def test_every_source_that_saw_an_entity_is_kept_as_an_observation(ctx):
+    seed = Entity(type=EntityType.IP, value="1.2.3.4")
+    result = await Engine(ctx, [ServiceA, ServiceB]).run(seed)
+    (service,) = result.entities
+    assert service.source == "svc_a"  # la primera, como antes
+    assert [(o.module, o.query) for o in service.observations] == [
+        ("svc_a", "ip:1.2.3.4"),
+        ("svc_b", "ip:1.2.3.4"),
+    ]
+    assert service.sources == ["svc_a", "svc_b"]
+
+
+class SeesTheSameIp(Module):
+    """Ve la misma IP desde cada dominio (y dos veces desde el mismo) y pivota a otro dominio."""
+
+    name = "sees_ip"
+    description = "test"
+    consumes = frozenset({EntityType.DOMAIN})
+
+    async def run(self, entity):
+        found = [self.emit(entity, EntityType.IP, "1.2.3.4") for _ in range(2)]
+        if entity.value == "example.com":
+            found.append(self.emit(entity, EntityType.DOMAIN, "other.example"))
+        return found
+
+
+async def test_same_module_from_two_parents_counts_twice_but_repeats_do_not(ctx):
+    result = await Engine(ctx, [SeesTheSameIp], depth=2).run(SEED)
+    ip = next(e for e in result.entities if e.key == "ip:1.2.3.4")
+    assert [(o.module, o.query) for o in ip.observations] == [
+        ("sees_ip", "domain:example.com"),
+        ("sees_ip", "domain:other.example"),
+    ]
+    assert ip.sources == ["sees_ip"]
+
+
+async def test_observations_do_not_change_how_data_is_merged(ctx):
+    seed = Entity(type=EntityType.IP, value="1.2.3.4")
+    result = await Engine(ctx, [ServiceA, ServiceB]).run(seed)
+    assert result.entities[0].data == {"port": 80, "product": "nginx"}
+
+
 class SlowFirst(Module):
     """Va primero en el orden de módulos pero termina el último."""
 

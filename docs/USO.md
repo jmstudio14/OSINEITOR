@@ -59,7 +59,8 @@ email alguien@example.com
 también las entidades descubiertas (p. ej. las IPs a las que resuelve un dominio). Cada nivel
 multiplica las peticiones: úsalo con criterio. Una entidad ya vista no se vuelve a investigar y los
 datos de varias fuentes sobre la misma entidad se fusionan; si discrepan, gana el módulo que va
-antes en el orden alfabético.
+antes en el orden alfabético. La columna «Fuente» lista todos los módulos que vieron cada entidad;
+`--json` y `show --json` añaden en `observations` quién la vio, sobre qué entidad y cuándo.
 
 ## Opciones de los scans
 
@@ -73,13 +74,31 @@ Valen para `scan`, `domain`, `ip`, `email` y `username`.
 | `--max-entities`, `--max-requests`, `--max-time` | [Presupuesto](#presupuesto) (`0` = sin límite) |
 | `--no-cache`, `--refresh` | [Caché](#caché) |
 | `--allow-private` | Permite conectar con redes privadas (ver [Red y entradas](#red-y-entradas)) |
+| `--proxy` | Envía todo el tráfico por un proxy (ver [Proxy y Tor](#proxy-y-tor)); también `OSINEITOR_PROXY` |
 | `--no-save` | No guarda el scan en el historial |
 | `--db` | Ruta de la base de datos SQLite |
 | `--json` / `--ndjson` | Salida para otros programas (ver más abajo) |
 | `--quiet`, `-q` | Sin salida legible |
 | `--control-stdin` | Permite cancelar escribiendo en stdin |
 
-`--no-color` es global y va antes de la orden: `osineitor --no-color scan example.com`.
+`--no-color`, `--verbose`/`-v` y `--log-file` son globales y van antes de la orden:
+`osineitor --no-color scan example.com`.
+
+## Registro
+
+`--verbose` escribe en `stderr` un registro JSON (una línea por registro) con cada petición HTTP
+(método, host y ruta, estado, duración, reintentos), cada módulo (estado, duración, peticiones) y
+el inicio y fin del scan. `--log-file RUTA` guarda lo mismo en un fichero (añade al final). Se pueden
+usar a la vez; con `--verbose` no se dibuja la barra de progreso.
+
+```bash
+osineitor --log-file=osineitor.jsonl domain example.com
+```
+
+**API keys:** el registro no incluye ni la consulta de las URLs ni cabeceras ni cuerpos, y además
+sustituye por `***` cualquier key configurada, también si aparece dentro de un mensaje de error.
+**Sí contiene** los objetivos y los hosts que se consultan, así que trata el fichero como parte de la
+investigación. No se rota ni se restringen sus permisos.
 
 ## Estado de cada módulo
 
@@ -132,6 +151,32 @@ red. Queda un riesgo residual de *DNS rebinding* documentado en [SECURITY.md](..
 username admite letras, números, `.`, `_` y `-` (hasta 64); un valor no válido se rechaza antes de
 lanzar nada (código de salida `2`).
 
+## Proxy y Tor
+
+`--proxy` (o la variable `OSINEITOR_PROXY`) envía las peticiones de los módulos por un proxy
+`socks5://`, `socks5h://`, `http://` o `https://`. Para usar Tor, apunta a su puerto SOCKS:
+
+```bash
+osineitor domain example.com --proxy=socks5://127.0.0.1:9050
+```
+
+(`9050` es el demonio `tor`; el Navegador Tor usa `9150`.) Con proxy:
+
+- **Los nombres los resuelve el proxy**, no tu equipo. Por eso la guardia de red deja de resolver
+  los hostnames en local; las IP privadas, loopback y de metadatos escritas como IP siguen
+  bloqueadas.
+- **`dns` y `email_validate` se omiten** (`omitido: consulta DNS directa`). Consultan DNS por UDP, que
+  un proxy SOCKS no enruta, y harían llegar tus consultas a tu resolvedor local. Pierdes los
+  registros DNS y el MX del email mientras uses proxy.
+- Si el proxy no responde, el módulo falla: **nunca se vuelve a conectar sin proxy**.
+- Con credenciales en la URL (`socks5://usuario:clave@host:puerto`) mejor usa `OSINEITOR_PROXY`
+  para que no queden en la línea de comandos; el registro nunca las incluye.
+
+**Limitaciones.** El tráfico del propio programa (por ejemplo, actualizar el bootstrap RDAP) también va
+por el proxy, pero **no se ha probado con una red Tor real**, solo con un servidor SOCKS5 de prueba. Muchos
+sitios bloquean las salidas de Tor: los módulos de usernames darán errores o vacíos que sin proxy no
+darían. `--proxy` no oculta lo que escribes en el scan a las fuentes consultadas, solo tu IP.
+
 ## Informes e historial
 
 Cada scan se guarda en una base SQLite del directorio de datos (salvo con `--no-save`).
@@ -160,6 +205,13 @@ Nombres de key: `shodan`, `abuseipdb`, `greynoise`, `hibp`, `hunter`, `ipinfo`.
 | Historial (SQLite) y cachés | `%LOCALAPPDATA%\osineitor\` | `~/.local/share/osineitor/` |
 
 El fichero de keys **no se cifra**: en Windows hereda los permisos de tu carpeta de usuario.
+
+## Barra de progreso
+
+En una terminal (con `stdout` y `stderr` sin redirigir) el scan muestra una barra en `stderr` con
+los módulos completados, las entidades y las peticiones; desaparece al terminar. Con `--json`,
+`--ndjson`, `--quiet` o cualquier redirección no se dibuja nada. Los programas que lanzan la CLI
+reciben el mismo avance como eventos `progress` con `--ndjson`.
 
 ## Uso desde otros programas
 

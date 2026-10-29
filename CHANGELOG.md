@@ -33,6 +33,29 @@ Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI 
 - ROADMAP: **Hito G · Aplicación de escritorio para Windows** (G1–G9), con la excepción al
   principio 8; F11.1 «interfaz web local» queda obsoleto.
 
+- **Observaciones múltiples (F2.1):** cada entidad guarda en `observations` todas las veces que un
+  módulo la vio (módulo, entidad consultada y hora UTC) en lugar de solo la primera fuente. Un mismo
+  dato visto por varios módulos, o por uno desde varias entidades, ya no pierde esa información. La
+  columna «Fuente» de la CLI y de los informes MD y HTML lista todos los módulos. Base de datos a la
+  versión 3 (migración automática; los scans antiguos quedan sin observaciones y muestran su
+  `source`). Contrato CLI↔GUI: `entity.observations` es un campo nuevo y opcional; el evento NDJSON
+  `entity` trae solo la primera observación (se emite al descubrirla) y la lista completa va en
+  `--json`. `source` no cambia.
+- **Proxy y Tor (F1.8):** `--proxy` (o `OSINEITOR_PROXY`) en `scan`, `domain`, `ip`, `email`,
+  `username` y `doctor` envía todas las peticiones por un proxy `socks5(h)://` o `http(s)://`
+  (nueva dependencia `httpx[socks]`). Con proxy los nombres los resuelve el proxy: la guardia de red
+  deja de usar el DNS local (las IP literales privadas siguen bloqueadas) y los módulos con DNS
+  directo (`dns`, `email_validate`, atributo nuevo `direct_dns`) se omiten. Un proxy caído no cae a
+  conexión directa. Un valor inválido es un error de uso (código 2) y la contraseña del proxy nunca
+  llega al registro. Probado con un servidor SOCKS5 de prueba; no con Tor real.
+- **Registro estructurado (F1.9):** opciones globales `--verbose`/`-v` (JSON por `stderr`) y
+  `--log-file RUTA` (JSON en fichero) con cada petición HTTP, cada módulo y el inicio y fin del scan.
+  Nunca guarda consultas de URL, cabeceras ni cuerpos, y enmascara con `***` cualquier API key
+  configurada. Sin las opciones no se escribe nada. Nuevo módulo `osineitor/logs.py`.
+- **Barra de progreso (F1.17):** en una terminal el scan dibuja una barra en `stderr`
+  (módulos completados, entidades y peticiones), alimentada por los eventos `progress`. No aparece
+  con `--json`, `--ndjson`, `--quiet` ni con `stdout`/`stderr` redirigidos. Mientras está activa,
+  las entidades en vivo se imprimen por la consola de la barra para no corromperla.
 - **Health check semanal (F1.3):** el workflow `.github/workflows/doctor.yml` ejecuta
   `osineitor doctor` cada lunes (y a demanda) y mantiene un único issue con la etiqueta
   `salud-fuentes` con las fuentes que fallan; lo actualiza mientras sigan fallando y lo cierra
@@ -102,7 +125,10 @@ Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI 
   un vacío silencioso.
 - **Rutas multiplataforma (F1.16):** configuración en `%APPDATA%\osineitor` y datos en
   `%LOCALAPPDATA%\osineitor` en Windows (con `platformdirs`); en Linux no cambia. Se pueden
-  fijar con `OSINEITOR_CONFIG_DIR` y `OSINEITOR_DATA_DIR`.
+  fijar con `OSINEITOR_CONFIG_DIR` y `OSINEITOR_DATA_DIR`. `config.toml` (con las API keys) queda
+  legible solo por el usuario actual: en Windows se le quita la herencia de ACL con `icacls`; en
+  el resto nace ya con `0600`. Si no se puede restringir, avisa en lugar de callar. La CI incluye
+  también macOS.
 - `crtsh` descarta los hostnames no válidos en lugar de emitirlos.
 - `dns` falla con error cuando el resolvedor no responde (antes devolvía un vacío que parecía
   «sin registros»). Un 429 de cualquier fuente se registra ahora como `quota`, no como error.

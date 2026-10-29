@@ -54,6 +54,7 @@ class EmailValidate(Module):
     consumes = frozenset({EntityType.EMAIL})
     produces = frozenset({EntityType.RECORD, EntityType.DOMAIN, EntityType.USERNAME})
     canary = "test@example.com"
+    direct_dns = True
 
     async def run(self, entity: Entity) -> list[Entity]:
         email = entity.value.strip().lower()

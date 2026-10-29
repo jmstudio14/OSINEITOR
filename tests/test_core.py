@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import httpx
 import respx
 
 from osineitor import registry
 from osineitor.config import Config
 from osineitor.http import HttpClient
-from osineitor.models import Entity, EntityType, ScanEvent, ScanResult
+from osineitor.models import Entity, EntityType, Observation, ScanEvent, ScanResult
+from osineitor.modules.base import Module
 
 
 def test_registry_modules_are_well_formed():
@@ -50,6 +53,60 @@ def test_storage_roundtrip(storage):
     assert loaded.target.value == "example.com"
     assert storage.list_scans()[0][:4] == (scan_id, "domain", "example.com", 1)
     assert storage.load(999) is None
+
+
+def test_storage_roundtrip_keeps_every_observation(storage):
+    seed = Entity(type=EntityType.DOMAIN, value="example.com")
+    at = datetime(2026, 10, 30, 8, 15, tzinfo=UTC)
+    seen = Entity(
+        type=EntityType.IP,
+        value="1.2.3.4",
+        source="dns",
+        parent=seed.key,
+        observations=[
+            Observation(module="dns", query=seed.key, at=at),
+            Observation(module="crtsh", query="domain:sub.example.com", at=at),
+        ],
+    )
+    loaded = storage.load(storage.save(ScanResult(target=seed, depth=1, entities=[seen])))
+    assert loaded.entities[0].observations == seen.observations
+    assert loaded.entities[0].sources == ["dns", "crtsh"]
+
+
+def test_sources_fall_back_to_source_for_data_without_observations():
+    assert Entity(type=EntityType.IP, value="1.2.3.4", source="dns").sources == ["dns"]
+    assert Entity(type=EntityType.IP, value="1.2.3.4").sources == []
+
+
+def test_sources_lists_each_module_once_in_arrival_order():
+    entity = Entity(
+        type=EntityType.IP,
+        value="1.2.3.4",
+        observations=[
+            Observation(module="dns", query="domain:a.example"),
+            Observation(module="crtsh", query="domain:a.example"),
+            Observation(module="dns", query="domain:b.example"),
+        ],
+    )
+    assert entity.sources == ["dns", "crtsh"]
+
+
+def test_emit_records_who_saw_it_and_on_what():
+    class Probe(Module):
+        name = "probe"
+        description = "test"
+        consumes = frozenset({EntityType.DOMAIN})
+
+        async def run(self, entity):
+            return []
+
+    parent = Entity(type=EntityType.DOMAIN, value="example.com")
+    before = datetime.now(UTC)
+    emitted = Probe(ctx=None).emit(parent, EntityType.IP, "1.2.3.4")  # type: ignore[arg-type]
+    (obs,) = emitted.observations
+    assert (obs.module, obs.query) == ("probe", "domain:example.com")
+    assert emitted.source == "probe" and emitted.parent == "domain:example.com"
+    assert before <= obs.at <= datetime.now(UTC)
 
 
 @respx.mock

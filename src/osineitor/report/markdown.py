@@ -21,7 +21,7 @@ def to_markdown(result: ScanResult) -> str:
         ]
         for e in entities:
             info = "<br>".join(f"**{k}**: {_cell(v)}" for k, v in details(e.data))
-            lines.append(f"| {_cell(e.value)} | {e.source or ''} | {info} |")
+            lines.append(f"| {_cell(e.value)} | {_cell(', '.join(e.sources))} | {info} |")
     if result.events:
         lines += ["", "## Incidencias", ""]
         lines += [

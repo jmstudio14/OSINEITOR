@@ -47,11 +47,19 @@ Todo lo que se descubre es una `Entity`:
 | `type` | `domain`, `ip`, `email`, `username`, `url`, `profile`, `service`, `vulnerability`, `breach` o `record` |
 | `value` | Valor identificador (`example.com`, `1.1.1.1:443`, `CVE-2024-0001`…) |
 | `data` | Diccionario libre con los detalles que aporta la fuente |
-| `source` | Nombre del módulo que la produjo |
+| `source` | Nombre del primer módulo que la vio |
 | `parent` | Clave de la entidad de la que se derivó (traza del pivoteo) |
+| `observations` | Todas las veces que un módulo la vio: `module`, `query` (clave de la entidad sobre la que corrió) y `at` (UTC) |
 
 La clave de identidad es `"<type>:<value en minúsculas>"`. Las entidades `record` agrupan la
 información de una fuente sobre otra entidad (p. ej. `dns:example.com`).
+
+**Observaciones.** `Module.emit` crea cada entidad con una observación `(módulo, entidad consultada,
+hora)`. Si otro módulo —o el mismo desde otra entidad— vuelve a ver lo mismo, el motor no crea un
+duplicado: suma su observación a la existente (`Engine._observe`). El mismo módulo sobre la misma
+entidad consultada cuenta una sola vez. `Entity.sources` devuelve los módulos distintos, en orden de
+llegada, y es lo que muestran la tabla de la CLI y los informes; para un dato guardado antes de
+existir las observaciones cae en `source`. `source` se mantiene (contrato aditivo) y no cambia.
 
 ## Contrato de un módulo
 
@@ -66,6 +74,7 @@ class Module(ABC):
     timeout: ClassVar[float] = 180.0  # segundos máximos por ejecución
     cache_ttl: ClassVar[int] = 6 * 3600  # caché de respuestas GET; 0 la desactiva
     min_interval: ClassVar[float] = 0.0  # segundos mínimos entre peticiones a su fuente
+    direct_dns: ClassVar[bool] = False  # usa `ctx.resolver` (UDP): se omite con --proxy
     canary: ClassVar[str | None] = None  # valor de prueba para `doctor`
     probe_url: ClassVar[str | None] = None  # alternativa: solo comprobar que la fuente responde
 
@@ -139,7 +148,8 @@ SQLite en `osineitor.db` dentro del directorio de datos (`%LOCALAPPDATA%\osineit
 `~/.local/share/osineitor` en Linux), o la ruta de `--db`. Tablas:
 
 - `scans`: objetivo, profundidad y fechas.
-- `entities`: entidades del scan; `data` en JSON.
+- `entities`: entidades del scan; `data` y `observations` en JSON (esta, desde la versión 3; los
+  scans anteriores quedan con `[]` y se muestran con su `source`).
 - `events`: errores, módulos omitidos y, según cómo termine el scan, un evento `budget`
   (truncado) o `cancelled`.
 - `module_runs`: el `ModuleRun` de cada ejecución (estado, entidades, peticiones, caché, ms).

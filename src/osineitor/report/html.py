@@ -43,8 +43,9 @@ def to_html(result: ScanResult) -> str:
         out.append("<table><tr><th>Valor</th><th>Fuente</th><th>Detalles</th></tr>")
         for e in entities:
             info = "".join(f"<dt>{escape(k)}</dt><dd>{escape(v)}</dd>" for k, v in details(e.data))
+            sources = escape(", ".join(e.sources))
             out.append(
-                f"<tr><td>{_value(e.value)}</td><td class='muted'>{escape(e.source or '')}</td>"
+                f"<tr><td>{_value(e.value)}</td><td class='muted'>{sources}</td>"
                 f"<td><dl>{info}</dl></td></tr>"
             )
         out.append("</table>")

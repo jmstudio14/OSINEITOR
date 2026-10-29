@@ -27,14 +27,23 @@ class EntityType(StrEnum):
     RECORD = "record"
 
 
+class Observation(BaseModel):
+    """Una vez que un módulo vio una entidad: quién, sobre qué entidad y cuándo."""
+
+    module: str
+    query: str  # clave de la entidad sobre la que corrió el módulo (p. ej. `domain:example.com`)
+    at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class Entity(BaseModel):
     """Una pieza de información descubierta (o la semilla de un scan)."""
 
     type: EntityType
     value: str
     data: dict[str, Any] = Field(default_factory=dict)
-    source: str | None = None
+    source: str | None = None  # la primera fuente que la vio; todas están en `observations`
     parent: str | None = None
+    observations: list[Observation] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _canonicalize(self) -> Entity:
@@ -45,6 +54,15 @@ class Entity(BaseModel):
     @property
     def key(self) -> str:
         return f"{self.type}:{self.value.lower()}"
+
+    @property
+    def sources(self) -> list[str]:
+        """Módulos que la vieron, sin repetir y en orden de llegada.
+
+        Un dato guardado antes de existir las observaciones solo tiene `source`.
+        """
+        names = list(dict.fromkeys(o.module for o in self.observations))
+        return names or ([self.source] if self.source else [])
 
 
 class ScanEvent(BaseModel):

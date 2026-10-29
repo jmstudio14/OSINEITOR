@@ -79,6 +79,23 @@ def test_ndjson_stream_is_valid_ordered_and_complete(modules):
     assert (end["status"], end["exit_code"], end["scan_id"]) == ("complete", 0, None)
 
 
+def test_entity_carries_its_observations_in_ndjson_and_in_json(modules, tmp_path):
+    db = str(tmp_path / "s.db")
+    events = parse_events(
+        runner.invoke(app, ["domain", "example.com", "--ndjson", "--db", db]).stdout
+    )
+    ip = next(e["entity"] for e in events if e["type"] == "entity" and e["entity"]["type"] == "ip")
+    # El evento se emite al descubrirla: trae la primera observación.
+    assert [(o["module"], o["query"]) for o in ip["observations"]] == [
+        ("fake_dns", "domain:example.com")
+    ]
+    shown = json.loads(runner.invoke(app, ["show", "1", "--db", db, "--json"]).stdout)
+    validate("scan_result", shown)
+    saved = next(e for e in shown["entities"] if e["type"] == "ip")
+    assert saved["observations"][0]["module"] == "fake_dns"
+    assert saved["observations"][0]["at"]
+
+
 def test_ndjson_stdout_is_ascii_even_with_non_ascii_data(modules):
     result = runner.invoke(app, ["scan", "example.com", "--ndjson", "--no-save"])
     assert result.stdout.isascii()  # no depende de la codificación de la tubería

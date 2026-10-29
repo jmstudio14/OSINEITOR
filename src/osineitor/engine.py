@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import logging
 import time
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from typing import Any
 
-from osineitor import events
+from osineitor import events, logs
 from osineitor.budget import Budget
 from osineitor.errors import BudgetExceeded, ModuleError, ModuleQuota, ModuleSkipped
 from osineitor.http import RunStats, current_stats
 from osineitor.models import Entity, ModuleRun, ScanEvent, ScanResult
 from osineitor.modules.base import Context, Module
+
+log = logs.get("engine")
 
 
 class Engine:
@@ -39,6 +42,7 @@ class Engine:
         self._jobs_total = 0
         self._ranks: dict[str, dict[str, int]] = {}  # entidad → campo → rank que lo aportó
         self._jobs_done = 0
+        self._proxy: str | None = getattr(ctx.http, "proxy", None)
         self.modules: list[Module] = []
         self.skipped: list[ScanEvent] = []
         for cls in module_classes:
@@ -46,6 +50,8 @@ class Engine:
                 self._skip(cls, "módulo activo (usa --active)")
             elif cls.requires_key and not ctx.config.key(cls.requires_key):
                 self._skip(cls, f"falta la API key '{cls.requires_key}'")
+            elif cls.direct_dns and self._proxy:
+                self._skip(cls, "consulta DNS directa: no se enruta por --proxy")
             else:
                 self.modules.append(cls(self._bind(ctx, cls)))
 
@@ -135,6 +141,15 @@ class Engine:
                 existing.data[k] = v
                 ranks[k] = rank
 
+    @staticmethod
+    def _observe(existing: Entity, incoming: Entity) -> None:
+        """Suma quién más la vio. El mismo módulo sobre la misma entidad no cuenta dos veces."""
+        seen = {(o.module, o.query) for o in existing.observations}
+        for obs in incoming.observations:
+            if (obs.module, obs.query) not in seen:
+                existing.observations.append(obs)
+                seen.add((obs.module, obs.query))
+
     def _emit_progress(self, result: ScanResult) -> None:
         self._emit(
             "progress",
@@ -156,6 +171,7 @@ class Engine:
             existing = index.get(entity.key)
             if existing is not None:
                 self._merge(existing, entity, rank)
+                self._observe(existing, entity)
                 continue
             # Solo el tope de entidades impide guardar: lo que un módulo terminó a
             # tiempo se conserva aunque se haya agotado el tiempo o las peticiones.
@@ -175,6 +191,7 @@ class Engine:
         if not result.truncated:
             result.truncated = True
             result.events.append(ScanEvent(kind="budget", module="engine", message=reason))
+            log.warning("scan.truncated", extra={"fields": {"reason": reason}})
 
     @staticmethod
     def _mark_cancelled(result: ScanResult) -> None:
@@ -182,6 +199,7 @@ class Engine:
             result.events.append(
                 ScanEvent(kind="cancelled", module="engine", message="scan cancelado")
             )
+            log.warning("scan.cancelled")
 
     async def run(self, seed: Entity) -> ScanResult:
         result = ScanResult(target=seed, depth=self.depth, events=list(self.skipped))
@@ -189,6 +207,18 @@ class Engine:
             ModuleRun(module=ev.module, status="skipped", message=ev.message) for ev in self.skipped
         ]
         self.budget.start()
+        log.info(
+            "scan.start",
+            extra={
+                "fields": {
+                    "target": seed.key,
+                    "depth": self.depth,
+                    "modules": [m.name for m in self.modules],
+                    "skipped": [ev.module for ev in self.skipped],
+                    "proxy": logs.redact_url(proxy) if (proxy := self._proxy) else None,
+                }
+            },
+        )
         self._emit(
             "scan.start",
             target={"type": seed.type.value, "value": seed.value},
@@ -224,6 +254,16 @@ class Engine:
             if not layer or result.truncated or result.cancelled:
                 break
         result.finished_at = datetime.now(UTC)
+        log.info(
+            "scan.end",
+            extra={
+                "fields": {
+                    "status": result.status,
+                    "entities": len(result.entities),
+                    "requests": self.budget.requests,
+                }
+            },
+        )
         return result
 
     async def _run_one(self, module: Module, entity: Entity, result: ScanResult) -> list[Entity]:
@@ -290,5 +330,7 @@ class Engine:
             message=message,
         )
         result.runs.append(run)
+        level = logging.WARNING if status in ("error", "quota") else logging.INFO
+        log.log(level, "module.end", extra={"fields": run.model_dump()})
         self._jobs_done += 1
         self._emit("module.end", **run.model_dump())

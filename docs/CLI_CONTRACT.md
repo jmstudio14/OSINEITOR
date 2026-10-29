@@ -30,7 +30,7 @@ por evento, con `flush` inmediato. Todos llevan `v` (1), `ts` (ISO 8601 UTC) y `
 | `scan.start` | Antes de ejecutar nada | `target{type,value}`, `depth`, `modules[]`, `skipped[{module,message}]`, `budget{max_entities,max_requests,max_seconds}` (`null` = sin límite) |
 | `module.start` | Un módulo empieza sobre una entidad | `module`, `entity` (clave `tipo:valor`) |
 | `module.end` | Ese módulo termina | `module`, `entity`, `status`, `entities`, `requests`, `cache_hits`, `duration_ms`, `message` |
-| `entity` | Entidad nueva (ya deduplicada y normalizada) | `entity{type,value,data,source,parent}` |
+| `entity` | Entidad nueva (ya deduplicada y normalizada) | `entity{type,value,data,source,parent,observations[{module,query,at}]}` |
 | `progress` | Tras cada `module.end` | `done`, `total` (ejecuciones conocidas hasta ahora; crece al pivotear), `entities`, `requests` |
 | `scan.end` | Siempre el último | `status`, `scan_id` (`null` con `--no-save`), `exit_code`; salvo con `failed`, también `entities` y `finished_at`; con `failed`, en su lugar `message` |
 
@@ -41,6 +41,10 @@ por evento, con `flush` inmediato. Todos llevan `v` (1), `ts` (ISO 8601 UTC) y `
 - Todo `module.start` tiene su `module.end`, también si el módulo se cancela. Los módulos que no
   llegan a arrancar (activos sin `--active`, falta la API key) no emiten `module.*`: constan en
   `scan.start.skipped`.
+- `entity.source` es la primera fuente que vio la entidad. `entity.observations` lista cada vez
+  que un módulo la vio: `module`, `query` (clave de la entidad sobre la que corrió) y `at` (ISO 8601
+  UTC). El evento `entity` se emite al **descubrirla**, así que trae solo la primera observación;
+  las que lleguen después de otros módulos constan en la salida `--json` (`entities[]`) y en la BD.
 - `--quiet` suprime la salida legible (no afecta a `--ndjson` ni a `--json`).
 
 ## Cancelar: `--control-stdin`
@@ -58,6 +62,12 @@ también se cancela. Las líneas que no son una orden conocida se ignoran. Ctrl+
 Es necesario porque en Windows `QProcess.terminate()` no detiene una aplicación de consola y
 matarla (`kill()`) perdería el resultado parcial. **Mantén stdin abierto** mientras dure el scan:
 una CLI lanzada con `--control-stdin` y sin stdin se cancela al instante.
+
+## Registro de diagnóstico
+
+`--verbose` y `--log-file` (opciones globales, antes de la orden) emiten un registro JSON para
+diagnosticar. **No forma parte del contrato**: su contenido puede cambiar entre versiones; para
+integrarse usa `--ndjson` y `--json`. `--verbose` escribe en `stderr`, así que `stdout` sigue limpio.
 
 ## Códigos de salida
 

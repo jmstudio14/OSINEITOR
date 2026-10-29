@@ -11,14 +11,24 @@ from typing import Any
 
 import httpx
 
-from osineitor import netguard
+from osineitor import logs, netguard
 from osineitor.budget import Budget
 from osineitor.cache import ResponseCache, cache_key
 from osineitor.config import Config
 
+log = logs.get("http")
+
 RETRY_STATUS = {429, 500, 502, 503, 504}
 MAX_REDIRECTS = 10
 GUARD_TTL = 60.0  # segundos que se recuerda que un host ya se comprobó
+
+
+def validate_proxy(value: str) -> str:
+    """Devuelve la URL del proxy si es `http(s)`/`socks5(h)` con host; si no, `ValueError`."""
+    value = value.strip()
+    if not httpx.Proxy(value).url.host:  # httpx ya rechaza los esquemas desconocidos
+        raise ValueError(f"el proxy {logs.redact_url(value)!r} no tiene host")
+    return value
 
 
 @dataclass
@@ -43,6 +53,10 @@ class SourceHttp:
         self.source = source
         self._cache_ttl = cache_ttl
         self._min_interval = min_interval
+
+    @property
+    def proxy(self) -> str | None:
+        return self._client.proxy
 
     async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         return await self._client.request(
@@ -74,13 +88,16 @@ class HttpClient:
         budget: Budget | None = None,
         cache: ResponseCache | None = None,
         refresh: bool = False,
+        proxy: str | None = None,
     ) -> None:
+        self.proxy = proxy
         # Las redirecciones las sigue `request()` para poder comprobar cada salto.
         self._client = httpx.AsyncClient(
             timeout=config.timeout,
             headers={"User-Agent": config.user_agent},
             follow_redirects=False,
             transport=transport,
+            proxy=proxy,
         )
         self._host_limits: dict[str, asyncio.Semaphore] = defaultdict(
             lambda: asyncio.Semaphore(per_host)
@@ -113,7 +130,7 @@ class HttpClient:
         now = time.monotonic()
         if self._safe_hosts.get(host, 0.0) > now:
             return
-        await netguard.ensure_public(url)
+        await netguard.ensure_public(url, resolve=not self.proxy)
         self._safe_hosts[host] = now + GUARD_TTL
 
     async def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
@@ -128,12 +145,20 @@ class HttpClient:
                 stats.requests += 1
             if source and interval:
                 await self._throttle(source, interval)
+            started = time.monotonic()
+            fields = {"method": method, "url": logs.redact_url(url), "source": source}
             try:
                 async with self._host_limits[host]:
                     response = await self._client.request(method, url, **kwargs)
+                fields |= {"status": response.status_code, "attempt": attempt}
+                fields["ms"] = round((time.monotonic() - started) * 1000)
+                log.debug("http", extra={"fields": fields})
                 if response.status_code not in RETRY_STATUS or attempt >= self._retries:
                     return response
-            except httpx.TransportError:
+            except httpx.TransportError as exc:
+                fields |= {"error": type(exc).__name__, "attempt": attempt}
+                fields["ms"] = round((time.monotonic() - started) * 1000)
+                log.warning("http.error", extra={"fields": fields})
                 if attempt >= self._retries:
                     raise
             attempt += 1
@@ -148,6 +173,7 @@ class HttpClient:
         if not self._refresh and (hit := self._cache.get(key, url)) is not None:
             if stats := current_stats.get():
                 stats.cache_hits += 1
+            log.debug("http.cache_hit", extra={"fields": {"url": logs.redact_url(url)}})
             return hit
         response = await self._follow(method, url, **kwargs)
         self._cache.put(key, response, ttl)

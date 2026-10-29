@@ -53,6 +53,8 @@ MIGRATIONS = [
         message TEXT NOT NULL
     );
     """,
+    # 3: todas las fuentes que vieron cada entidad (JSON; las filas antiguas quedan en `[]`).
+    "ALTER TABLE entities ADD COLUMN observations TEXT NOT NULL DEFAULT '[]'",
 ]
 
 
@@ -104,9 +106,18 @@ class Storage:
             )
             scan_id = cur.lastrowid
             self._conn.executemany(
-                "INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO entities (scan_id, type, value, source, parent, data, observations)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 [
-                    (scan_id, e.type, e.value, e.source, e.parent, json.dumps(e.data, default=str))
+                    (
+                        scan_id,
+                        e.type,
+                        e.value,
+                        e.source,
+                        e.parent,
+                        json.dumps(e.data, default=str),
+                        json.dumps([o.model_dump(mode="json") for o in e.observations]),
+                    )
                     for e in result.entities
                 ],
             )
@@ -143,10 +154,12 @@ class Storage:
             return None
         target_type, target, depth, started_at, finished_at = row
         entities = [
-            Entity(type=t, value=v, source=s, parent=p, data=json.loads(d))
-            for t, v, s, p, d in self._conn.execute(
-                "SELECT type, value, source, parent, data FROM entities WHERE scan_id = ?"
-                " ORDER BY rowid",
+            Entity(
+                type=t, value=v, source=s, parent=p, data=json.loads(d), observations=json.loads(o)
+            )
+            for t, v, s, p, d, o in self._conn.execute(
+                "SELECT type, value, source, parent, data, observations FROM entities"
+                " WHERE scan_id = ? ORDER BY rowid",
                 (scan_id,),
             )
         ]

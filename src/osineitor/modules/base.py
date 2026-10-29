@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from osineitor.config import Config
 from osineitor.errors import ModuleError, ModuleQuota, ModuleSkipped
 from osineitor.http import HttpClient, SourceHttp
-from osineitor.models import Entity, EntityType
+from osineitor.models import Entity, EntityType, Observation
 
 __all__ = ["Context", "Module", "ModuleError", "ModuleQuota", "ModuleSkipped", "status_error"]
 
@@ -41,6 +41,9 @@ class Module(ABC):
     requires_key: ClassVar[str | None] = None
     # Pasivo = no envía tráfico al objetivo, solo a terceros.
     passive: ClassVar[bool] = True
+    # Consulta DNS por UDP (`ctx.resolver`) fuera de `ctx.http`: no pasa por --proxy, así que con
+    # proxy se omite en lugar de filtrar las consultas al resolvedor local.
+    direct_dns: ClassVar[bool] = False
     # Segundos máximos por ejecución (módulo × entidad); al agotarse se registra como error.
     timeout: ClassVar[float] = 180.0
     # Segundos de caché de las respuestas GET. Nunca se cachean los módulos activos ni los que
@@ -64,7 +67,14 @@ class Module(ABC):
         return entity.type in self.consumes
 
     def emit(self, parent: Entity, type: EntityType, value: str, /, **data: object) -> Entity:
-        return Entity(type=type, value=value, data=dict(data), source=self.name, parent=parent.key)
+        return Entity(
+            type=type,
+            value=value,
+            data=dict(data),
+            source=self.name,
+            parent=parent.key,
+            observations=[Observation(module=self.name, query=parent.key)],
+        )
 
     def try_emit(
         self, parent: Entity, type: EntityType, value: str, /, **data: object

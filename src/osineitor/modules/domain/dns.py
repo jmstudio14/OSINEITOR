@@ -17,6 +17,7 @@ class Dns(Module):
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.IP, EntityType.RECORD})
     canary = "example.com"
+    direct_dns = True
 
     async def _query(
         self, name: str, rtype: str, refused: set[str] | None = None
