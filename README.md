@@ -153,6 +153,8 @@ resolver en memoria.
 
 - [Arquitectura](docs/ARCHITECTURE.md): engine, pivoteo, modelo de datos y persistencia.
 - [Referencia de módulos](docs/MODULES.md): fuentes, datos que aportan y limitaciones.
+- [Pruebas en Windows pendientes](docs/PRUEBAS_WINDOWS.md): qué módulos no se han comprobado en vivo
+  y cómo probarlos tras clonar el repositorio.
 - [Uso responsable](docs/USO_RESPONSABLE.md): autorización, RGPD y usos no aceptables.
 - [Roadmap](ROADMAP.md): fases siguientes, criterios de aceptación y fuera de alcance.
 - [Contribuir](CONTRIBUTING.md) · [Seguridad](SECURITY.md) · [Changelog](CHANGELOG.md) ·

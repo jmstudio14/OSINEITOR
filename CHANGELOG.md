@@ -24,6 +24,9 @@ Fase 1a del roadmap (seguridad y datos).
 - `osineitor/errors.py` con las excepciones compartidas y `ModuleSkipped` para «no aplica».
 - `Module.try_emit` para datos de terceros que pueden no ser válidos.
 - CI en Windows (3.11 y 3.13) además de Linux, y `.gitattributes` con finales de línea LF.
+- `docs/PRUEBAS_WINDOWS.md`: estado de verificación en vivo de cada módulo (varios no se han
+  podido comprobar desde el entorno de desarrollo), pasos para clonar en VS Code y probar desde
+  Windows, y tabla para registrar los resultados.
 
 ### Cambiado
 

@@ -295,8 +295,11 @@ punto de partida con el que se comparará la fase 1.
 
 **Estado (29-10-2026, v0.1.1):** F0.4 y F0.6 completados ([`docs/RDAP_COBERTURA.md`](docs/RDAP_COBERTURA.md)).
 F0.5 tiene el script listo (`scripts/fp_baseline.py`); la medición está **pendiente** de una red con
-acceso a los sitios. F0.1, F0.2 y F0.3 siguen **pendientes** de pruebas en vivo; las cubrirán `osineitor doctor` (F1.2)
-y el panel de salud de la aplicación de escritorio.
+acceso a los sitios. F0.1, F0.2 y F0.3 siguen **pendientes**: muchos módulos no se han podido
+ejecutar en vivo desde el entorno de desarrollo (su proxy bloquea las fuentes) y se comprobarán al
+clonar el repositorio en VS Code y probar desde Windows. El estado de cada módulo y los pasos están
+en [`docs/PRUEBAS_WINDOWS.md`](docs/PRUEBAS_WINDOWS.md); además los cubrirán `osineitor doctor`
+(F1.2) y el panel de salud de la aplicación de escritorio.
 
 **Criterios de aceptación**
 - Los 16 módulos tienen al menos una ejecución real documentada en el PR.
