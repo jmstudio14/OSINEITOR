@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError
+from osineitor.modules.base import Module, ModuleError, ModuleQuota, status_error
 from osineitor.modules.domain._util import is_root_domain
 
 
@@ -19,9 +19,9 @@ class _HunterBase(Module):
         if response.status_code == 401:
             raise ModuleError("API key de Hunter inválida")
         if response.status_code == 429:
-            raise ModuleError("cuota de Hunter agotada")
+            raise ModuleQuota("cuota de Hunter agotada")
         if response.status_code != 200:
-            raise ModuleError(f"api.hunter.io respondió {response.status_code}")
+            raise status_error("api.hunter.io", response)
         return response.json().get("data") or {}
 
 
@@ -30,6 +30,7 @@ class HunterVerify(_HunterBase):
     description = "Entregabilidad del email y fuentes públicas donde aparece (Hunter)"
     consumes = frozenset({EntityType.EMAIL})
     produces = frozenset({EntityType.RECORD, EntityType.URL})
+    canary = "test@example.com"
 
     async def run(self, entity: Entity) -> list[Entity]:
         data = await self._get("email-verifier", email=entity.value)
@@ -60,6 +61,7 @@ class HunterDomain(_HunterBase):
     description = "Emails públicos asociados a un dominio y su patrón (Hunter)"
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.EMAIL, EntityType.RECORD})
+    canary = "example.com"
 
     def accepts(self, entity: Entity) -> bool:
         return is_root_domain(entity)

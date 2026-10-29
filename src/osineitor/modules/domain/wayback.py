@@ -7,7 +7,7 @@ import re
 import httpx
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError
+from osineitor.modules.base import Module, ModuleError, status_error
 from osineitor.modules.domain._util import is_root_domain
 
 LIMIT = 5000
@@ -25,6 +25,8 @@ class Wayback(Module):
     description = "URLs archivadas en la Wayback Machine (con rutas sensibles destacadas)"
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.RECORD, EntityType.URL})
+    canary = "example.com"
+    timeout = 240.0  # su consulta admite 60 s × 3 intentos
 
     def accepts(self, entity: Entity) -> bool:
         return is_root_domain(entity)
@@ -44,7 +46,7 @@ class Wayback(Module):
         except httpx.TimeoutException as exc:
             raise ModuleError("web.archive.org no respondió a tiempo") from exc
         if response.status_code != 200:
-            raise ModuleError(f"web.archive.org respondió {response.status_code}")
+            raise status_error("web.archive.org", response)
         rows = response.json()[1:] if response.text.strip() else []
         if not rows:
             return []

@@ -6,9 +6,28 @@ Todos los cambios relevantes del proyecto. Formato basado en
 
 ## [Sin publicar]
 
-Fase 1a del roadmap (seguridad y datos).
+Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap.
 
 ### Añadido
+
+- **Estado por módulo (F1.1):** cada ejecución deja un `ModuleRun` (`ok`, `empty`, `error`,
+  `quota`, `skipped`) con entidades, peticiones, aciertos de caché y duración; se muestra en una
+  tabla tras el scan y se guarda en la nueva tabla `module_runs`. Nueva excepción `ModuleQuota`
+  (HTTP 429) y helper `status_error`.
+- **`osineitor doctor` (F1.2):** prueba cada módulo con un valor de prueba conocido (o comprueba
+  que la fuente responde) y sale con código 2 si alguno falla.
+- **Migraciones de esquema (F1.4):** `PRAGMA user_version` con migraciones transaccionales; una
+  base de la v0.1.0 se actualiza sin perder datos y una de una versión más nueva se rechaza.
+- **Caché HTTP (F1.5):** respuestas GET de fuentes pasivas y sin key, 6 h, en `cache.db`, sin
+  guardar URLs ni claves. `--no-cache`, `--refresh` y `osineitor cache clear|info`.
+- **Límites por fuente (F1.6):** cada módulo accede a HTTP mediante su propia vista
+  (`HttpClient.bind`) con caché, contador de peticiones y `min_interval` propios.
+- **Timeout por módulo (F1.7):** 180 s por defecto (240 s `crtsh`/`wayback`, 400 s
+  `username_sites`); al excederlo se registra como error y el scan continúa.
+- **Falsos positivos en usernames (F1.10):** cada positivo se contrasta con un username
+  inexistente; si el sitio también lo encuentra se descarta; el perfil lleva `verified`.
+- `modules/_manifest.py`: lista explícita de módulos para el ejecutable empaquetado, con un test
+  que la contrasta con el disco.
 
 - **Saneado de entradas (F1.11):** el username se codifica como un único segmento en las URLs
   de las ~460 firmas; un valor no válido se rechaza como error de uso antes de lanzar nada.
@@ -37,6 +56,8 @@ Fase 1a del roadmap (seguridad y datos).
   `%LOCALAPPDATA%\osineitor` en Windows (con `platformdirs`); en Linux no cambia. Se pueden
   fijar con `OSINEITOR_CONFIG_DIR` y `OSINEITOR_DATA_DIR`.
 - `crtsh` descarta los hostnames no válidos en lugar de emitirlos.
+- `dns` falla con error cuando el resolvedor no responde (antes devolvía un vacío que parecía
+  «sin registros»). Un 429 de cualquier fuente se registra ahora como `quota`, no como error.
 - `username_sites` conserva los perfiles ya encontrados si se agota el presupuesto.
 - Dependencias nuevas: `platformdirs` e `idna`.
 

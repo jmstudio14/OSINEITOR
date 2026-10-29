@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError
+from osineitor.modules.base import Module, status_error
 
 
 class Gravatar(Module):
@@ -13,6 +13,7 @@ class Gravatar(Module):
     description = "Perfil público de Gravatar y cuentas enlazadas"
     consumes = frozenset({EntityType.EMAIL})
     produces = frozenset({EntityType.PROFILE, EntityType.USERNAME})
+    canary = "test@example.com"
 
     async def run(self, entity: Entity) -> list[Entity]:
         digest = hashlib.sha256(entity.value.strip().lower().encode()).hexdigest()
@@ -20,7 +21,7 @@ class Gravatar(Module):
         if response.status_code == 404:
             return []
         if response.status_code != 200:
-            raise ModuleError(f"gravatar.com respondió {response.status_code}")
+            raise status_error("gravatar.com", response)
         entries = response.json().get("entry") or []
         if not entries:
             return []

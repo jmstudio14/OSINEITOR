@@ -22,12 +22,14 @@ from osineitor.budget import (
     DEFAULT_MAX_SECONDS,
     Budget,
 )
+from osineitor.cache import ResponseCache, default_cache_path
 from osineitor.config import Config, config_dir, config_path
+from osineitor.doctor import run_doctor
 from osineitor.engine import Engine
 from osineitor.http import HttpClient
 from osineitor.models import Entity, EntityType, ScanResult, detect_type
 from osineitor.modules.base import Context
-from osineitor.storage import Storage
+from osineitor.storage import Storage, StorageError
 
 LEGAL_NOTICE = (
     "OSINEITOR solo consulta fuentes abiertas. Úsalo sobre objetivos propios o con autorización "
@@ -38,6 +40,8 @@ LEGAL_NOTICE = (
 app = typer.Typer(help="Herramienta OSINT modular.\n\n" + LEGAL_NOTICE, no_args_is_help=True)
 config_app = typer.Typer(help="Gestiona API keys y ajustes.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
+cache_app = typer.Typer(help="Caché de respuestas HTTP.", no_args_is_help=True)
+app.add_typer(cache_app, name="cache")
 console = Console()
 
 Depth = Annotated[
@@ -72,6 +76,12 @@ AllowPrivate = Annotated[
         help="Permite conectar con IPs privadas, loopback y metadatos cloud (bloqueadas).",
     ),
 ]
+NoCache = Annotated[
+    bool, typer.Option("--no-cache", help="No lee ni guarda la caché de respuestas HTTP.")
+]
+Refresh = Annotated[
+    bool, typer.Option("--refresh", help="Ignora lo cacheado y vuelve a consultar las fuentes.")
+]
 
 
 @dataclass
@@ -83,6 +93,8 @@ class ScanOptions:
     max_requests: int
     max_time: float
     allow_private: bool
+    no_cache: bool = False
+    refresh: bool = False
 
 
 def _force_utf8() -> None:
@@ -102,6 +114,13 @@ def _force_utf8() -> None:
 def main() -> None:
     # Se ejecuta antes de cada orden. Sin docstring: el texto de ayuda está en `typer.Typer`.
     _force_utf8()
+
+
+def _open_storage(db: Path | None) -> Storage:
+    try:
+        return Storage(db)
+    except StorageError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 def _show_notice_once() -> None:
@@ -127,7 +146,10 @@ def _select_modules(only: list[str] | None) -> list[type]:
 async def _scan(seed: Entity, opts: ScanOptions, live: bool) -> ScanResult:
     config = Config.load()
     budget = Budget.from_limits(opts.max_entities, opts.max_requests, opts.max_time)
-    async with HttpClient(config, allow_private=opts.allow_private, budget=budget) as http:
+    cache = None if opts.no_cache else ResponseCache()
+    async with HttpClient(
+        config, allow_private=opts.allow_private, budget=budget, cache=cache, refresh=opts.refresh
+    ) as http:
         ctx = Context(config=config, http=http)
         engine = Engine(
             ctx,
@@ -172,6 +194,7 @@ def render(result: ScanResult) -> None:
         console.print(table)
     if not result.entities:
         console.print("[dim]Sin resultados.[/]")
+    _render_runs(result)
     for ev in result.events:
         color = {"error": "red", "budget": "yellow"}.get(ev.kind, "dim")
         where = f" ({ev.entity})" if ev.entity else ""
@@ -180,6 +203,43 @@ def render(result: ScanResult) -> None:
         console.print(
             "[yellow]Resultado incompleto: el scan se detuvo al agotar su presupuesto.[/]"
         )
+
+
+def _render_runs(result: ScanResult) -> None:
+    """Una línea por módulo: distingue «sin datos» de «falló» y muestra el coste."""
+    if not result.runs:
+        return
+    by_module: dict[str, list] = {}
+    for run in result.runs:
+        by_module.setdefault(run.module, []).append(run)
+    table = Table(title="Módulos", title_justify="left")
+    table.add_column("Módulo", no_wrap=True)
+    table.add_column("Estado")
+    for col in ("Entidades", "Peticiones", "Caché", "Tiempo"):
+        table.add_column(col, justify="right")
+    for module, runs in sorted(by_module.items()):
+        counts: dict[str, int] = {}
+        for run in runs:
+            counts[run.status] = counts.get(run.status, 0) + 1
+        status = " ".join(f"{_STATUS_STYLE.get(k, '')}{k}[/]×{n}" for k, n in counts.items())
+        table.add_row(
+            module,
+            status,
+            str(sum(r.entities for r in runs)),
+            str(sum(r.requests for r in runs)),
+            str(sum(r.cache_hits for r in runs)),
+            f"{sum(r.duration_ms for r in runs) / 1000:.1f} s",
+        )
+    console.print(table)
+
+
+_STATUS_STYLE = {
+    "ok": "[green]",
+    "empty": "[dim]",
+    "error": "[red]",
+    "quota": "[yellow]",
+    "skipped": "[dim]",
+}
 
 
 def _make_seed(etype: EntityType, value: str) -> Entity:
@@ -205,7 +265,7 @@ def _run_target(
         console.print(f"[bold]Escaneando {etype} {seed.value}[/] (profundidad {opts.depth})")
     result = asyncio.run(_scan(seed, opts, live=not as_json))
     if not no_save:
-        with Storage(db) as storage:
+        with _open_storage(db) as storage:
             storage.save(result)
     if as_json:
         print(result.model_dump_json(indent=2))
@@ -226,9 +286,21 @@ def domain(
     max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
     max_time: MaxTime = DEFAULT_MAX_SECONDS,
     allow_private: AllowPrivate = False,
+    no_cache: NoCache = False,
+    refresh: Refresh = False,
 ) -> None:
     """Investiga un dominio: RDAP/WHOIS, DNS, subdominios, histórico web."""
-    opts = ScanOptions(depth, active, module, max_entities, max_requests, max_time, allow_private)
+    opts = ScanOptions(
+        depth,
+        active,
+        module,
+        max_entities,
+        max_requests,
+        max_time,
+        allow_private,
+        no_cache,
+        refresh,
+    )
     _run_target(EntityType.DOMAIN, target, opts, no_save, json_out, db)
 
 
@@ -245,9 +317,21 @@ def ip(
     max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
     max_time: MaxTime = DEFAULT_MAX_SECONDS,
     allow_private: AllowPrivate = False,
+    no_cache: NoCache = False,
+    refresh: Refresh = False,
 ) -> None:
     """Investiga una IP: geolocalización, puertos/servicios, reputación."""
-    opts = ScanOptions(depth, active, module, max_entities, max_requests, max_time, allow_private)
+    opts = ScanOptions(
+        depth,
+        active,
+        module,
+        max_entities,
+        max_requests,
+        max_time,
+        allow_private,
+        no_cache,
+        refresh,
+    )
     _run_target(EntityType.IP, target, opts, no_save, json_out, db)
 
 
@@ -264,9 +348,21 @@ def email(
     max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
     max_time: MaxTime = DEFAULT_MAX_SECONDS,
     allow_private: AllowPrivate = False,
+    no_cache: NoCache = False,
+    refresh: Refresh = False,
 ) -> None:
     """Investiga un email: validez, perfiles asociados, filtraciones."""
-    opts = ScanOptions(depth, active, module, max_entities, max_requests, max_time, allow_private)
+    opts = ScanOptions(
+        depth,
+        active,
+        module,
+        max_entities,
+        max_requests,
+        max_time,
+        allow_private,
+        no_cache,
+        refresh,
+    )
     _run_target(EntityType.EMAIL, target, opts, no_save, json_out, db)
 
 
@@ -283,9 +379,21 @@ def username(
     max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
     max_time: MaxTime = DEFAULT_MAX_SECONDS,
     allow_private: AllowPrivate = False,
+    no_cache: NoCache = False,
+    refresh: Refresh = False,
 ) -> None:
     """Busca un nombre de usuario en cientos de sitios."""
-    opts = ScanOptions(depth, active, module, max_entities, max_requests, max_time, allow_private)
+    opts = ScanOptions(
+        depth,
+        active,
+        module,
+        max_entities,
+        max_requests,
+        max_time,
+        allow_private,
+        no_cache,
+        refresh,
+    )
     _run_target(EntityType.USERNAME, target, opts, no_save, json_out, db)
 
 
@@ -302,9 +410,21 @@ def scan(
     max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
     max_time: MaxTime = DEFAULT_MAX_SECONDS,
     allow_private: AllowPrivate = False,
+    no_cache: NoCache = False,
+    refresh: Refresh = False,
 ) -> None:
     """Detecta el tipo de objetivo y pivota entre frentes (profundidad 2 por defecto)."""
-    opts = ScanOptions(depth, active, module, max_entities, max_requests, max_time, allow_private)
+    opts = ScanOptions(
+        depth,
+        active,
+        module,
+        max_entities,
+        max_requests,
+        max_time,
+        allow_private,
+        no_cache,
+        refresh,
+    )
     _run_target(detect_type(target), target, opts, no_save, json_out, db)
 
 
@@ -340,7 +460,7 @@ def list_modules() -> None:
 def history(limit: int = 20, db: DbPath = None) -> None:
     """Muestra los últimos scans guardados."""
     table = Table("ID", "Tipo", "Objetivo", "Entidades", "Fecha")
-    with Storage(db) as storage:
+    with _open_storage(db) as storage:
         for scan_id, ttype, target, count, started in storage.list_scans(limit):
             table.add_row(str(scan_id), ttype, target, str(count), started[:19])
     console.print(table)
@@ -349,7 +469,7 @@ def history(limit: int = 20, db: DbPath = None) -> None:
 @app.command()
 def show(scan_id: int, db: DbPath = None) -> None:
     """Muestra un scan guardado."""
-    with Storage(db) as storage:
+    with _open_storage(db) as storage:
         result = storage.load(scan_id)
     if result is None:
         raise typer.BadParameter(f"no existe el scan {scan_id}")
@@ -368,7 +488,7 @@ def export(
     """Exporta un scan guardado a JSON, Markdown o HTML."""
     if fmt not in report.FORMATS:
         raise typer.BadParameter(f"formato no soportado: {fmt}")
-    with Storage(db) as storage:
+    with _open_storage(db) as storage:
         result = storage.load(scan_id)
     if result is None:
         raise typer.BadParameter(f"no existe el scan {scan_id}")
@@ -399,6 +519,60 @@ def config_show() -> None:
         )
     for name, value in sorted(config.keys.items()):
         console.print(f"  {name} = {value[:4]}{'*' * max(len(value) - 4, 0)}")
+
+
+@app.command()
+def doctor(
+    module: Only = None,
+    active: Active = False,
+    allow_private: AllowPrivate = False,
+) -> None:
+    """Prueba cada módulo contra su fuente real con un valor de prueba seguro."""
+    classes = _select_modules(module)
+    checks = asyncio.run(
+        run_doctor(Config.load(), classes, active=active, allow_private=allow_private)
+    )
+    styles = {
+        "ok": "[green]ok[/]",
+        "empty": "[yellow]sin datos[/]",
+        "fail": "[red]FALLO[/]",
+        "skipped": "[dim]omitido[/]",
+        "unchecked": "[dim]sin prueba[/]",
+    }
+    table = Table()
+    for col in ("Módulo", "Estado", "Detalle"):
+        table.add_column(col, overflow="fold")
+    table.add_column("Tiempo", justify="right")
+    for c in checks:
+        table.add_row(
+            c.module, styles[c.verdict], escape(c.detail), f"{c.duration_ms / 1000:.1f} s"
+        )
+    console.print(table)
+    failed = [c.module for c in checks if c.verdict == "fail"]
+    if failed:
+        console.print(f"[red]Fallan: {', '.join(failed)}[/]")
+        raise typer.Exit(2)
+
+
+@cache_app.command("clear")
+def cache_clear() -> None:
+    """Borra todas las respuestas cacheadas."""
+    if not default_cache_path().exists():
+        console.print("La caché está vacía.")
+        return
+    with ResponseCache() as cache:
+        console.print(f"Borradas {cache.clear()} respuestas de {cache.path}")
+
+
+@cache_app.command("info")
+def cache_info() -> None:
+    """Muestra cuántas respuestas vigentes hay en la caché."""
+    if not default_cache_path().exists():
+        console.print("La caché está vacía.")
+        return
+    with ResponseCache() as cache:
+        count, size = cache.info()
+        console.print(f"{count} respuestas vigentes ({size / 1024:.0f} KiB) en {cache.path}")
 
 
 @app.command()

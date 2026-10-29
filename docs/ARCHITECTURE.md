@@ -55,12 +55,19 @@ class Module(ABC):
     produces: ClassVar[frozenset[EntityType]]
     requires_key: ClassVar[str | None] = None
     passive: ClassVar[bool] = True
+    timeout: ClassVar[float] = 180.0  # segundos máximos por ejecución
+    cache_ttl: ClassVar[int] = 6 * 3600  # caché de respuestas GET; 0 la desactiva
+    min_interval: ClassVar[float] = 0.0  # segundos mínimos entre peticiones a su fuente
+    canary: ClassVar[str | None] = None  # valor de prueba para `doctor`
+    probe_url: ClassVar[str | None] = None  # alternativa: solo comprobar que la fuente responde
 
     def accepts(self, entity) -> bool: ...  # filtro extra sobre consumes
     async def run(self, entity) -> list[Entity]: ...
 ```
 
-- `self.ctx` da acceso a `config`, `http` y `resolver`.
+- `self.ctx` da acceso a `config`, `http` y `resolver`. El engine da a cada módulo su propio
+  `ctx.http` (`SourceHttp`): aplica la caché y `min_interval` de su fuente y cuenta sus peticiones.
+  Un módulo con API key o activo nunca usa caché.
 - `self.api_key` devuelve la key de `requires_key`.
 - `self.emit(parent, tipo, valor, **datos)` crea una entidad con `source` y `parent` rellenos.
 - `accepts()` evita trabajo redundante al pivotear. Los módulos de dominio usan
@@ -78,7 +85,11 @@ class Module(ABC):
    rellenando solo los campos vacíos de la existente.
 5. **Errores:** cualquier excepción de un módulo se captura y se guarda como evento `error`; el scan
    continúa. `ModuleSkipped` se registra como `skipped` (no aplica), no como error.
-6. **Presupuesto:** si se agota (entidades, peticiones o tiempo) el scan se detiene de forma
+6. **Estado por módulo:** cada ejecución (módulo × entidad) deja un `ModuleRun` con su estado
+   (`ok`, `empty`, `error`, `skipped`, `quota`), entidades, peticiones, aciertos de caché y
+   duración. Los módulos que no arrancaron (activo sin `--active`, sin key) también constan.
+   Un módulo que excede su `timeout` se cancela y queda como `error`.
+7. **Presupuesto:** si se agota (entidades, peticiones o tiempo) el scan se detiene de forma
    ordenada: se cancelan los módulos pendientes, **se conserva lo que ya había terminado** y el
    resultado queda con `truncated = true` y un evento `budget`.
 
@@ -107,6 +118,16 @@ SQLite en `osineitor.db` dentro del directorio de datos (`%LOCALAPPDATA%\osineit
 - `scans`: objetivo, profundidad y fechas.
 - `entities`: entidades del scan; `data` en JSON.
 - `events`: errores, módulos omitidos y, si el scan se truncó, un evento `budget`.
+- `module_runs`: el `ModuleRun` de cada ejecución (estado, entidades, peticiones, caché, ms).
+
+**Migraciones.** El esquema se versiona con `PRAGMA user_version`: `storage.MIGRATIONS` es una
+lista donde la posición es la versión y cada migración se aplica en una transacción. Una base de
+la v0.1.0 (versión 0) se actualiza sola sin perder datos; una de una versión más nueva se rechaza.
+Nunca se edita una migración ya publicada: los cambios van al final de la lista.
+
+**Caché HTTP.** `cache.db` (mismo directorio) guarda respuestas GET con éxito y su caducidad,
+indexadas por el hash de la petición. No guarda la URL ni cabeceras, así que una API key que
+viajara en la consulta no queda en disco.
 
 ## Configuración
 

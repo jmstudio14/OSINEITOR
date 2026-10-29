@@ -335,9 +335,12 @@ está vacío, y que la herramienta no pueda dañar al propio analista ni explota
 | F1.17 | S | Experiencia de uso | Barra de progreso en `stderr`, `--quiet`, `stdout` limpio con `--json`, y *exit codes* documentados (éxito, error de uso, fuentes con errores, sin resultados) |
 | F1.18 | M | `rdap` distingue "TLD sin RDAP" de "no registrado" | Consulta el bootstrap de IANA [R15]; para un TLD sin servidor emite `omitido: TLD sin RDAP` en lugar de un resultado vacío. Resuelve D14 junto con F4.11 |
 
-**Estado (29-10-2026):** completados F1.11, F1.12, F1.13, F1.14, F1.16 y F1.18 (fase 1a). Pendientes
-para la fase 1b: F1.1, F1.2, F1.4, F1.5, F1.6, F1.7 y F1.10 (los *S* F1.3, F1.8, F1.9, F1.15 y F1.17
-siguen sin empezar; F1.17 se adelanta en el contrato CLI↔GUI). F1.16 sube a *M* y pasa a centrarse en
+**Estado (29-10-2026):** completados F1.11, F1.12, F1.13, F1.14, F1.16 y F1.18 (fase 1a) y, en la
+fase 1b, F1.1, F1.2, F1.4, F1.5, F1.6, F1.7 y F1.10 (los *S* F1.3, F1.8, F1.9, F1.15 y F1.17 siguen
+sin empezar; F1.17 se adelanta en el contrato CLI↔GUI). Matices: F1.2 usa valores de prueba fijos
+(`example.com`, `1.1.1.1`) y no `username_claimed` de Sherlock, que haría ~460 peticiones; las
+duraciones, TTL de caché (6 h) y timeouts por módulo son estimaciones sin medir; ningún módulo
+declara aún un `min_interval` porque no se han verificado los límites reales de sus fuentes. F1.16 sube a *M* y pasa a centrarse en
 Windows, la plataforma soportada.
 
 **Criterios de aceptación**

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError
+from osineitor.modules.base import Module, ModuleError, status_error
 
 
 class Shodan(Module):
@@ -12,6 +12,7 @@ class Shodan(Module):
     consumes = frozenset({EntityType.IP})
     produces = frozenset({EntityType.SERVICE, EntityType.VULNERABILITY, EntityType.RECORD})
     requires_key = "shodan"
+    canary = "1.1.1.1"
 
     async def run(self, entity: Entity) -> list[Entity]:
         response = await self.ctx.http.get(
@@ -22,7 +23,7 @@ class Shodan(Module):
         if response.status_code == 401:
             raise ModuleError("API key de Shodan inválida o sin acceso a /shodan/host")
         if response.status_code != 200:
-            raise ModuleError(f"api.shodan.io respondió {response.status_code}")
+            raise status_error("api.shodan.io", response)
         data = response.json()
         out = [
             self.emit(

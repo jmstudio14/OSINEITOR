@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError
+from osineitor.modules.base import Module, status_error
 
 
 class InternetDb(Module):
@@ -11,13 +11,14 @@ class InternetDb(Module):
     description = "Puertos abiertos, CPEs, tags y CVEs (Shodan InternetDB, sin key)"
     consumes = frozenset({EntityType.IP})
     produces = frozenset({EntityType.SERVICE, EntityType.VULNERABILITY, EntityType.RECORD})
+    canary = "1.1.1.1"
 
     async def run(self, entity: Entity) -> list[Entity]:
         response = await self.ctx.http.get(f"https://internetdb.shodan.io/{entity.value}")
         if response.status_code == 404:
             return []
         if response.status_code != 200:
-            raise ModuleError(f"internetdb.shodan.io respondió {response.status_code}")
+            raise status_error("internetdb.shodan.io", response)
         data = response.json()
         out = [
             self.emit(

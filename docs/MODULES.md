@@ -1,7 +1,11 @@
 # Referencia de módulos
 
 Para cada módulo: qué consume, qué produce, de dónde saca los datos y sus limitaciones.
-`osineitor modules` muestra el estado actual (incluido si falta la API key).
+`osineitor modules` muestra el estado actual (incluido si falta la API key) y `osineitor doctor`
+prueba cada uno contra su fuente (valor de prueba: `example.com`, `1.1.1.1` o `test@example.com`;
+`username_sites` solo comprueba que `github.com` responde, porque sus ~460 peticiones no son una
+prueba de salud). Todos los módulos pasivos y sin key cachean sus respuestas 6 horas, salvo
+`username_sites`.
 
 ## Dominio
 
@@ -117,6 +121,10 @@ Para cada módulo: qué consume, qué produce, de dónde saca los datos y sus li
   (`modules/username/data/sites.json`, sin los marcados como NSFW).
 - **Detección:** según la firma, por código de estado 2xx, por ausencia de un mensaje de error en
   la página o por ausencia de redirección.
+- **Verificación:** cada positivo se vuelve a consultar con un username aleatorio inexistente
+  (`x` + 14 hex). Si el sitio también lo «encuentra», la firma da falsos positivos y el hallazgo
+  se descarta; si lo distingue, el perfil lleva `verified=True`; si no se pudo comprobar (la
+  firma rechaza el username de control o la petición falló), se conserva con `verified=None`.
 - **Límites:** WAFs, captchas y rediseños producen falsos positivos y negativos. Las respuestas
   403/429 y los errores de red se tratan como "desconocido" y no se reportan. Verifica cada perfil
   a mano.

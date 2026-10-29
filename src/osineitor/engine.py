@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
+import time
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 
 from osineitor.budget import Budget
-from osineitor.errors import BudgetExceeded, ModuleError, ModuleSkipped
-from osineitor.models import Entity, ScanEvent, ScanResult
+from osineitor.errors import BudgetExceeded, ModuleError, ModuleQuota, ModuleSkipped
+from osineitor.http import RunStats, current_stats
+from osineitor.models import Entity, ModuleRun, ScanEvent, ScanResult
 from osineitor.modules.base import Context, Module
 
 
@@ -32,21 +35,25 @@ class Engine:
         self.skipped: list[ScanEvent] = []
         for cls in module_classes:
             if not cls.passive and not active:
-                self.skipped.append(
-                    ScanEvent(
-                        kind="skipped", module=cls.name, message="módulo activo (usa --active)"
-                    )
-                )
+                self._skip(cls, "módulo activo (usa --active)")
             elif cls.requires_key and not ctx.config.key(cls.requires_key):
-                self.skipped.append(
-                    ScanEvent(
-                        kind="skipped",
-                        module=cls.name,
-                        message=f"falta la API key '{cls.requires_key}'",
-                    )
-                )
+                self._skip(cls, f"falta la API key '{cls.requires_key}'")
             else:
-                self.modules.append(cls(ctx))
+                self.modules.append(cls(self._bind(ctx, cls)))
+
+    def _skip(self, cls: type[Module], message: str) -> None:
+        self.skipped.append(ScanEvent(kind="skipped", module=cls.name, message=message))
+
+    @staticmethod
+    def _bind(ctx: Context, cls: type[Module]) -> Context:
+        """Contexto propio del módulo: su fuente tiene caché y límite de uso independientes."""
+        bind = getattr(ctx.http, "bind", None)
+        if bind is None:
+            return ctx
+        # Con API key o contactando al objetivo no se cachea: sería persistir datos sensibles.
+        ttl = cls.cache_ttl if cls.passive and not cls.requires_key else 0
+        http = bind(cls.name, cache_ttl=ttl, min_interval=cls.min_interval)
+        return dataclasses.replace(ctx, http=http)
 
     @staticmethod
     def _truncate(result: ScanResult, reason: str) -> None:
@@ -56,6 +63,9 @@ class Engine:
 
     async def run(self, seed: Entity) -> ScanResult:
         result = ScanResult(target=seed, depth=self.depth, events=list(self.skipped))
+        result.runs = [
+            ModuleRun(module=ev.module, status="skipped", message=ev.message) for ev in self.skipped
+        ]
         self.budget.start()
         index: dict[str, Entity] = {seed.key: seed}
         layer = [seed]
@@ -107,18 +117,62 @@ class Engine:
             if reason := self.budget.exhausted(len(result.entities)):
                 self._truncate(result, reason)
                 return []
+            stats = RunStats()
+            current_stats.set(stats)  # esta ejecución corre en su propia tarea
+            started = time.monotonic()
+            found: list[Entity] = []
+            status, message = "ok", ""
+            event_kind: str | None = None  # None: no se anota en `events` (p. ej. presupuesto)
             try:
-                return await module.run(entity)
+                found = await asyncio.wait_for(module.run(entity), module.timeout)
+                if not found:
+                    status = "empty"
             except BudgetExceeded as exc:
                 self._truncate(result, exc.reason)
-                return []
+                status, message = "skipped", exc.reason
             except ModuleSkipped as exc:
-                kind, message = "skipped", str(exc)
+                status, message, event_kind = "skipped", str(exc), "skipped"
+            except ModuleQuota as exc:
+                status, message, event_kind = "quota", str(exc), "error"
             except ModuleError as exc:
-                kind, message = "error", str(exc)
+                status, message, event_kind = "error", str(exc), "error"
+            except TimeoutError:
+                status, message = "error", f"sin respuesta tras {module.timeout:g} s"
+                event_kind = "error"
+            except asyncio.CancelledError:
+                # El tiempo del scan se agotó mientras corría: queda constancia de ello.
+                self._record(result, module, entity, stats, started, "skipped", "cancelado")
+                raise
             except Exception as exc:  # un módulo roto no debe tumbar el scan
-                kind, message = "error", f"{type(exc).__name__}: {exc}"
-        result.events.append(
-            ScanEvent(kind=kind, module=module.name, message=message, entity=entity.key)
+                status, message = "error", f"{type(exc).__name__}: {exc}"
+                event_kind = "error"
+        self._record(result, module, entity, stats, started, status, message, len(found))
+        if event_kind:
+            result.events.append(
+                ScanEvent(kind=event_kind, module=module.name, message=message, entity=entity.key)
+            )
+        return found
+
+    @staticmethod
+    def _record(
+        result: ScanResult,
+        module: Module,
+        entity: Entity,
+        stats: RunStats,
+        started: float,
+        status: str,
+        message: str,
+        count: int = 0,
+    ) -> None:
+        result.runs.append(
+            ModuleRun(
+                module=module.name,
+                status=status,
+                entity=entity.key,
+                entities=count,
+                requests=stats.requests,
+                cache_hits=stats.cache_hits,
+                duration_ms=round((time.monotonic() - started) * 1000),
+                message=message,
+            )
         )
-        return []

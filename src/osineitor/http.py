@@ -5,17 +5,60 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import defaultdict
+from contextvars import ContextVar
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 from osineitor import netguard
 from osineitor.budget import Budget
+from osineitor.cache import ResponseCache, cache_key
 from osineitor.config import Config
 
 RETRY_STATUS = {429, 500, 502, 503, 504}
 MAX_REDIRECTS = 10
 GUARD_TTL = 60.0  # segundos que se recuerda que un host ya se comprobó
+
+
+@dataclass
+class RunStats:
+    """Contadores de una ejecución de módulo; el motor los fija y `HttpClient` los incrementa."""
+
+    requests: int = 0
+    cache_hits: int = 0
+
+
+# Cada ejecución de módulo corre en su propia tarea: así cada una tiene sus contadores.
+current_stats: ContextVar[RunStats | None] = ContextVar("current_stats", default=None)
+
+
+class SourceHttp:
+    """Vista del cliente para un módulo: aplica la caché y el límite de uso de su fuente."""
+
+    def __init__(
+        self, client: HttpClient, source: str, *, cache_ttl: int = 0, min_interval: float = 0.0
+    ) -> None:
+        self._client = client
+        self.source = source
+        self._cache_ttl = cache_ttl
+        self._min_interval = min_interval
+
+    async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        return await self._client.request(
+            method,
+            url,
+            source=self.source,
+            cache_ttl=self._cache_ttl,
+            min_interval=self._min_interval,
+            **kwargs,
+        )
+
+    async def get(self, url: str, **kwargs: Any) -> httpx.Response:
+        return await self.request("GET", url, **kwargs)
+
+    async def post(self, url: str, **kwargs: Any) -> httpx.Response:
+        return await self.request("POST", url, **kwargs)
 
 
 class HttpClient:
@@ -29,6 +72,8 @@ class HttpClient:
         transport: httpx.AsyncBaseTransport | None = None,
         allow_private: bool = False,
         budget: Budget | None = None,
+        cache: ResponseCache | None = None,
+        refresh: bool = False,
     ) -> None:
         # Las redirecciones las sigue `request()` para poder comprobar cada salto.
         self._client = httpx.AsyncClient(
@@ -45,6 +90,21 @@ class HttpClient:
         self._guard = not allow_private
         self._safe_hosts: dict[str, float] = {}
         self.budget = budget
+        self._cache = cache
+        self._refresh = refresh  # ignora lo cacheado pero sigue guardando lo nuevo
+        self._last_call: dict[str, float] = {}
+        self._source_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+    def bind(self, source: str, *, cache_ttl: int = 0, min_interval: float = 0.0) -> SourceHttp:
+        return SourceHttp(self, source, cache_ttl=cache_ttl, min_interval=min_interval)
+
+    async def _throttle(self, source: str, interval: float) -> None:
+        """Espera lo necesario para respetar `interval` segundos entre peticiones a la fuente."""
+        async with self._source_locks[source]:
+            wait = self._last_call.get(source, 0.0) + interval - time.monotonic()
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._last_call[source] = time.monotonic()
 
     async def _check(self, url: str) -> None:
         if not self._guard:
@@ -58,10 +118,16 @@ class HttpClient:
 
     async def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         host = httpx.URL(url).host
+        source = kwargs.pop("source", None)
+        interval = kwargs.pop("min_interval", 0.0)
         attempt = 0
         while True:
             if self.budget:
                 self.budget.charge_request()
+            if stats := current_stats.get():
+                stats.requests += 1
+            if source and interval:
+                await self._throttle(source, interval)
             try:
                 async with self._host_limits[host]:
                     response = await self._client.request(method, url, **kwargs)
@@ -74,6 +140,20 @@ class HttpClient:
             await asyncio.sleep(self._backoff * 2 ** (attempt - 1))
 
     async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        ttl = kwargs.pop("cache_ttl", 0)
+        use_cache = bool(ttl) and self._cache is not None and method.upper() == "GET"
+        if not use_cache:
+            return await self._follow(method, url, **kwargs)
+        key = cache_key(url, kwargs.get("params"))
+        if not self._refresh and (hit := self._cache.get(key, url)) is not None:
+            if stats := current_stats.get():
+                stats.cache_hits += 1
+            return hit
+        response = await self._follow(method, url, **kwargs)
+        self._cache.put(key, response, ttl)
+        return response
+
+    async def _follow(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         follow = kwargs.pop("follow_redirects", True)
         hops = 0
         while True:
@@ -104,6 +184,8 @@ class HttpClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+        if self._cache is not None:
+            self._cache.close()
 
     async def __aenter__(self) -> HttpClient:
         return self

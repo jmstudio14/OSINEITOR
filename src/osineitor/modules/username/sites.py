@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import secrets
 from functools import cache
 from importlib import resources
 from typing import Any
@@ -73,18 +74,22 @@ class UsernameSites(Module):
     name = "username_sites"
     description = "Presencia del username en ~460 sitios (firmas de Sherlock)"
     consumes = frozenset({EntityType.USERNAME})
+    timeout = 400.0  # ~460 sitios con 30 en paralelo
+    cache_ttl = 0  # el resultado depende del username: no tiene sentido cachearlo
+    probe_url = "https://github.com"  # sin canario: 460 peticiones no son una prueba de salud
     produces = frozenset({EntityType.PROFILE})
 
     def sites(self) -> dict[str, dict[str, Any]]:
         return load_sites()
 
-    async def _check(
-        self, sem: asyncio.Semaphore, name: str, site: dict[str, Any], username: str
-    ) -> str | None:
+    async def _probe(
+        self, sem: asyncio.Semaphore, site: dict[str, Any], username: str
+    ) -> bool | None:
+        """¿Existe el perfil? `None` = desconocido (sitio caído, bloqueado o firma no aplicable)."""
         regex = site.get("regexCheck")
         if regex and not re.search(regex, username):
             return None
-        profile_url, probe_url = build_urls(site, username)
+        _, probe_url = build_urls(site, username)
         method = site.get("request_method", "GET")
         payload = _fill(site.get("request_payload"), username)
         async with sem:
@@ -98,8 +103,15 @@ class UsernameSites(Module):
                     timeout=TIMEOUT,
                 )
             except (httpx.HTTPError, ValueError, NetworkGuardError):
-                return None  # sitio caído o bloqueado: resultado desconocido, no se reporta
-        return profile_url if profile_exists(site, response) else None
+                return None
+        return profile_exists(site, response)
+
+    async def _check(
+        self, sem: asyncio.Semaphore, name: str, site: dict[str, Any], username: str
+    ) -> str | None:
+        if await self._probe(sem, site, username):
+            return build_urls(site, username)[0]
+        return None
 
     async def run(self, entity: Entity) -> list[Entity]:
         username = entity.value.strip()
@@ -109,14 +121,45 @@ class UsernameSites(Module):
         outcomes = await asyncio.gather(
             *(self._check(sem, n, sites[n], username) for n in names), return_exceptions=True
         )
-        found: list[str | None] = []
-        for outcome in outcomes:
+        found: dict[str, str] = {}
+        for name, outcome in zip(names, outcomes, strict=True):
             # Si se agota el presupuesto se conserva lo ya encontrado; el motor marca el resultado.
             if isinstance(outcome, BaseException) and not isinstance(outcome, BudgetExceeded):
                 raise outcome
-            found.append(None if isinstance(outcome, BaseException) else outcome)
+            if isinstance(outcome, str):
+                found[name] = outcome
+        verified = await self._verify(sem, sites, found)
         return [
-            self.emit(entity, EntityType.PROFILE, url, site=name, username=username)
-            for name, url in zip(names, found, strict=True)
-            if url
+            self.emit(
+                entity,
+                EntityType.PROFILE,
+                url,
+                site=name,
+                username=username,
+                verified=verified[name],
+            )
+            for name, url in found.items()
+            if verified[name] is not False
         ]
+
+    async def _verify(
+        self, sem: asyncio.Semaphore, sites: dict[str, dict[str, Any]], found: dict[str, str]
+    ) -> dict[str, bool | None]:
+        """Comprueba cada positivo con un username que no existe.
+
+        Si el sitio también «encuentra» ese username, la firma está dando falsos positivos y el
+        hallazgo se descarta (`False`). `True` = el sitio distingue; `None` = no se pudo comprobar
+        (la firma rechaza el username de control o la petición falló) y el hallazgo se conserva.
+        Solo se hace sobre los positivos, así que cuesta pocas peticiones.
+        """
+        control = "x" + secrets.token_hex(7)
+
+        async def one(name: str) -> bool | None:
+            try:
+                exists = await self._probe(sem, sites[name], control)
+            except BudgetExceeded:
+                return None
+            return None if exists is None else not exists
+
+        results = await asyncio.gather(*(one(n) for n in found))
+        return dict(zip(found, results, strict=True))

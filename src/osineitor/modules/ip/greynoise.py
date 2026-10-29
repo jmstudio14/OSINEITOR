@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError
+from osineitor.modules.base import Module, status_error
 
 
 class GreyNoise(Module):
@@ -12,6 +12,7 @@ class GreyNoise(Module):
     consumes = frozenset({EntityType.IP})
     produces = frozenset({EntityType.RECORD})
     requires_key = "greynoise"
+    canary = "1.1.1.1"
 
     async def run(self, entity: Entity) -> list[Entity]:
         response = await self.ctx.http.get(
@@ -21,7 +22,7 @@ class GreyNoise(Module):
         if response.status_code == 404:
             return []  # GreyNoise no ha visto esta IP
         if response.status_code != 200:
-            raise ModuleError(f"api.greynoise.io respondió {response.status_code}")
+            raise status_error("api.greynoise.io", response)
         data = response.json()
         return [
             self.emit(

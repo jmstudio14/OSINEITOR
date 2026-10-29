@@ -46,6 +46,7 @@ class HttpFingerprint(Module):
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.RECORD})
     passive = False
+    canary = "example.com"
 
     async def run(self, entity: Entity) -> list[Entity]:
         response = None

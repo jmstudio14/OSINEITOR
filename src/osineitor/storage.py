@@ -8,33 +8,56 @@ from datetime import datetime
 from pathlib import Path
 
 from osineitor.config import data_dir
-from osineitor.models import Entity, ScanEvent, ScanResult
+from osineitor.models import Entity, ModuleRun, ScanEvent, ScanResult
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS scans (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    target_type TEXT NOT NULL,
-    target TEXT NOT NULL,
-    depth INTEGER NOT NULL,
-    started_at TEXT NOT NULL,
-    finished_at TEXT
-);
-CREATE TABLE IF NOT EXISTS entities (
-    scan_id INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
-    type TEXT NOT NULL,
-    value TEXT NOT NULL,
-    source TEXT,
-    parent TEXT,
-    data TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS events (
-    scan_id INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
-    kind TEXT NOT NULL,
-    module TEXT NOT NULL,
-    entity TEXT,
-    message TEXT NOT NULL
-);
-"""
+# Migraciones por `PRAGMA user_version`: la posición en la lista (empezando en 1) es la versión.
+# Nunca se edita una ya publicada: los cambios van en una migración nueva al final.
+MIGRATIONS = [
+    # 1: esquema de la v0.1.0 (una BD de esa versión tiene user_version 0 pero ya estas tablas).
+    """
+    CREATE TABLE IF NOT EXISTS scans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        target_type TEXT NOT NULL,
+        target TEXT NOT NULL,
+        depth INTEGER NOT NULL,
+        started_at TEXT NOT NULL,
+        finished_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS entities (
+        scan_id INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        value TEXT NOT NULL,
+        source TEXT,
+        parent TEXT,
+        data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS events (
+        scan_id INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        module TEXT NOT NULL,
+        entity TEXT,
+        message TEXT NOT NULL
+    );
+    """,
+    # 2: estado de cada módulo en cada scan.
+    """
+    CREATE TABLE module_runs (
+        scan_id INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+        module TEXT NOT NULL,
+        status TEXT NOT NULL,
+        entity TEXT,
+        entities INTEGER NOT NULL,
+        requests INTEGER NOT NULL,
+        cache_hits INTEGER NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        message TEXT NOT NULL
+    );
+    """,
+]
+
+
+class StorageError(Exception):
+    """La base de datos no se puede usar con esta versión de OSINEITOR."""
 
 
 def default_db_path() -> Path:
@@ -47,7 +70,24 @@ class Storage:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.path)
         self._conn.execute("PRAGMA foreign_keys = ON")
-        self._conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        current = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        if current > len(MIGRATIONS):
+            self._conn.close()
+            raise StorageError(
+                f"la base de datos {self.path} es de una versión más nueva de OSINEITOR "
+                f"(esquema {current}, esta versión llega a {len(MIGRATIONS)})"
+            )
+        for version in range(current + 1, len(MIGRATIONS) + 1):
+            # Cada migración y su número de versión se confirman juntos: o entera o ninguna.
+            with self._conn:
+                self._conn.execute("BEGIN")  # el DDL de sqlite3 no abre transacción por sí solo
+                for statement in MIGRATIONS[version - 1].split(";"):
+                    if statement.strip():
+                        self._conn.execute(statement)
+                self._conn.execute(f"PRAGMA user_version = {version}")
 
     def save(self, result: ScanResult) -> int:
         with self._conn:
@@ -73,6 +113,23 @@ class Storage:
             self._conn.executemany(
                 "INSERT INTO events VALUES (?, ?, ?, ?, ?)",
                 [(scan_id, ev.kind, ev.module, ev.entity, ev.message) for ev in result.events],
+            )
+            self._conn.executemany(
+                "INSERT INTO module_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        scan_id,
+                        r.module,
+                        r.status,
+                        r.entity,
+                        r.entities,
+                        r.requests,
+                        r.cache_hits,
+                        r.duration_ms,
+                        r.message,
+                    )
+                    for r in result.runs
+                ],
             )
         result.scan_id = scan_id
         return scan_id
@@ -100,6 +157,23 @@ class Storage:
                 (scan_id,),
             )
         ]
+        runs = [
+            ModuleRun(
+                module=m,
+                status=st,
+                entity=e,
+                entities=n,
+                requests=rq,
+                cache_hits=ch,
+                duration_ms=ms,
+                message=msg,
+            )
+            for m, st, e, n, rq, ch, ms, msg in self._conn.execute(
+                "SELECT module, status, entity, entities, requests, cache_hits, duration_ms,"
+                " message FROM module_runs WHERE scan_id = ? ORDER BY rowid",
+                (scan_id,),
+            )
+        ]
         return ScanResult(
             scan_id=scan_id,
             target=Entity(type=target_type, value=target),
@@ -108,6 +182,7 @@ class Storage:
             finished_at=datetime.fromisoformat(finished_at) if finished_at else None,
             entities=entities,
             events=events,
+            runs=runs,
             truncated=any(ev.kind == "budget" for ev in events),
         )
 

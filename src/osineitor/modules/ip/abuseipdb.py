@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError
+from osineitor.modules.base import Module, status_error
 
 
 class AbuseIpDb(Module):
@@ -12,6 +12,7 @@ class AbuseIpDb(Module):
     consumes = frozenset({EntityType.IP})
     produces = frozenset({EntityType.RECORD})
     requires_key = "abuseipdb"
+    canary = "1.1.1.1"
 
     async def run(self, entity: Entity) -> list[Entity]:
         response = await self.ctx.http.get(
@@ -20,7 +21,7 @@ class AbuseIpDb(Module):
             headers={"Key": self.api_key or "", "Accept": "application/json"},
         )
         if response.status_code != 200:
-            raise ModuleError(f"api.abuseipdb.com respondió {response.status_code}")
+            raise status_error("api.abuseipdb.com", response)
         data = response.json().get("data", {})
         return [
             self.emit(

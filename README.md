@@ -32,11 +32,15 @@ osineitor domain ejemplo.com --active          # incluye módulos que contactan 
 osineitor domain ejemplo.com -m dns -m crtsh   # solo ciertos módulos
 osineitor ip 1.1.1.1 --json                    # salida JSON por stdout
 osineitor scan ejemplo.com --max-entities 200 --max-requests 500 --max-time 120
+osineitor domain ejemplo.com --refresh         # ignora la caché y vuelve a consultar
+osineitor domain ejemplo.com --no-cache        # ni lee ni guarda la caché
 
 osineitor history                   # scans guardados
 osineitor show 3                    # volver a ver el scan 3
 osineitor export 3 -f html          # informe en reports/ (json | md | html)
 osineitor modules                   # módulos disponibles y estado de sus API keys
+osineitor doctor                    # prueba cada módulo contra su fuente real
+osineitor cache info                # respuestas cacheadas (cache clear las borra)
 ```
 
 `--depth` controla cuántos niveles se pivota. Con `1` solo se analiza el objetivo; con `2`
@@ -47,6 +51,21 @@ Cada nivel multiplica las peticiones: úsalo con criterio.
 segundos (`--max-entities`, `--max-requests`, `--max-time`; `0` = sin límite). Al agotarlos el
 scan se detiene de forma ordenada, conserva lo ya encontrado y marca el resultado como
 incompleto.
+
+**Estado de cada módulo.** Tras cada scan se muestra una tabla con lo que pasó en cada módulo:
+`ok`, `empty` (respondió sin datos), `error`, `quota` (la fuente rechazó por límite de uso),
+`skipped` (no aplica, falta la API key o es activo), con entidades, peticiones, aciertos de caché
+y tiempo. Así «sin resultados» deja de confundirse con «la fuente falló». Cada módulo tiene un
+tiempo máximo (180 s por defecto); si lo supera se anota como error y el resto sigue.
+
+**Caché.** Las respuestas GET de las fuentes pasivas y sin API key se guardan 6 horas en
+`cache.db` (directorio de datos) para no repetir consultas ni gastar cuota. Nunca se cachean los
+módulos con API key ni los activos, y en la base solo se guarda un hash de la petición, no la URL.
+`--refresh` fuerza la consulta; `--no-cache` desactiva la caché; `osineitor cache clear` la vacía.
+
+**Doctor.** `osineitor doctor` lanza cada módulo con un valor de prueba conocido (p. ej.
+`example.com` o `1.1.1.1`) y muestra si responde. Sale con código 2 si algún módulo falla. No
+valida que los datos sean correctos, solo que la fuente contesta y se interpreta sin errores.
 
 **Red.** Por seguridad, ninguna petición se envía a IPs privadas, loopback ni al servicio de
 metadatos de una nube (`169.254.169.254`), tampoco a través de redirecciones: un subdominio
@@ -106,8 +125,9 @@ En Windows el fichero de keys hereda los permisos de tu carpeta de usuario; no s
 ## Limitaciones conocidas
 
 - **Usernames:** la detección se basa en el código de estado o en el texto de la respuesta.
-  WAFs, captchas y cambios en los sitios producen falsos positivos y negativos. Verifica a mano
-  cualquier perfil antes de sacar conclusiones.
+  WAFs, captchas y cambios en los sitios producen falsos positivos y negativos. Cada positivo se
+  contrasta con un username inexistente: si el sitio también lo «encuentra» se descarta. Aun así,
+  verifica a mano cualquier perfil antes de sacar conclusiones.
 - **crt.sh y Wayback** son servicios gratuitos que a menudo responden lento o con errores 5xx;
   el scan continúa y la incidencia aparece al final.
 - Las cuotas gratuitas de ipinfo, GreyNoise y Hunter son bajas.
@@ -135,8 +155,12 @@ class MiFuente(Module):
         return [self.emit(entity, EntityType.RECORD, f"mi_fuente:{entity.value}", **r.json())]
 ```
 
-Lanza `ModuleError("mensaje")` para fallos esperados (cuota, key inválida). Cualquier otra
-excepción también se captura y se registra sin detener el scan.
+Lanza `ModuleError("mensaje")` para fallos esperados (key inválida) y `ModuleQuota` si la fuente
+rechaza por límite de uso; `status_error("servicio", respuesta)` elige entre ambos según el código
+HTTP. Cualquier otra excepción también se captura y se registra sin detener el scan. Declara
+además `canary` (un valor de prueba seguro para `doctor`) o `probe_url`, y añade el fichero a
+`modules/_manifest.py` (un test lo exige: el ejecutable empaquetado no puede buscar módulos en
+disco).
 
 ## Desarrollo
 

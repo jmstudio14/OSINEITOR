@@ -433,3 +433,71 @@ def test_cli_does_not_crash_with_a_cp1252_pipe():
     )
     assert done.returncode == 0, done.stderr.decode("utf-8", "replace")
     assert "✗".encode() in done.stdout  # los símbolos salen como UTF-8, no como error
+
+
+def test_cache_commands(tmp_path):
+    from osineitor.cache import ResponseCache
+
+    assert "vacía" in runner.invoke(app, ["cache", "info"]).output
+    assert "vacía" in runner.invoke(app, ["cache", "clear"]).output
+    import httpx
+
+    with ResponseCache() as cache:
+        cache.put("k", httpx.Response(200, content=b"x" * 2048), ttl=60)
+    assert "1 respuestas vigentes" in runner.invoke(app, ["cache", "info"]).output
+    assert "Borradas 1" in runner.invoke(app, ["cache", "clear"]).output
+    assert "0 respuestas vigentes" in runner.invoke(app, ["cache", "info"]).output
+
+
+def test_scan_cache_flags_reach_the_http_client(modules, monkeypatch, db):
+    seen = {}
+    real = cli.HttpClient
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "HttpClient", spy)
+    runner.invoke(app, ["domain", "example.com", "--no-save", "--json"])
+    assert seen["cache"] is not None and seen["refresh"] is False
+    runner.invoke(app, ["domain", "example.com", "--no-save", "--json", "--refresh"])
+    assert seen["refresh"] is True
+    runner.invoke(app, ["domain", "example.com", "--no-save", "--json", "--no-cache"])
+    assert seen["cache"] is None
+
+
+def test_scan_output_lists_every_module_with_its_status(monkeypatch, db):
+    use_modules(
+        monkeypatch,
+        [
+            fake_module("fake_dns", {EntityType.DOMAIN}, EntityType.IP, "9.9.9.9"),
+            fake_module("fake_err", {EntityType.DOMAIN}, EntityType.IP, "x", error="se rompió"),
+            fake_module("fake_key", {EntityType.DOMAIN}, EntityType.IP, "x", key="nokey"),
+        ],
+    )
+    out = runner.invoke(app, ["domain", "example.com", "--db", db]).output
+    assert "Módulos" in out
+    line = {
+        m: next(ln for ln in out.splitlines() if m in ln and "×" in ln)
+        for m in ("fake_dns", "fake_err", "fake_key")
+    }
+    assert "ok×1" in line["fake_dns"]
+    assert "error×1" in line["fake_err"]
+    assert "skipped×1" in line["fake_key"]
+    # El estado por módulo se guarda y se recupera con `show`.
+    shown = runner.invoke(app, ["show", "1", "--db", db]).output
+    assert "error×1" in shown
+
+
+def test_database_from_a_newer_version_is_a_usage_error(tmp_path):
+    import sqlite3
+
+    from osineitor.storage import MIGRATIONS
+
+    path = tmp_path / "future.db"
+    conn = sqlite3.connect(path)
+    conn.execute(f"PRAGMA user_version = {len(MIGRATIONS) + 1}")
+    conn.close()
+    result = runner.invoke(app, ["history", "--db", str(path)])
+    assert result.exit_code == 2
+    assert "más nueva" in result.output

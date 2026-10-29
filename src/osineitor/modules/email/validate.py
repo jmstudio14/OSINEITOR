@@ -53,6 +53,7 @@ class EmailValidate(Module):
     description = "Sintaxis, MX y proveedor desechable; pivota a dominio y username"
     consumes = frozenset({EntityType.EMAIL})
     produces = frozenset({EntityType.RECORD, EntityType.DOMAIN, EntityType.USERNAME})
+    canary = "test@example.com"
 
     async def run(self, entity: Entity) -> list[Entity]:
         email = entity.value.strip().lower()
