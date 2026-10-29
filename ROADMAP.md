@@ -1,6 +1,6 @@
 # Roadmap de OSINEITOR
 
-> **Estado:** vigente · **Versión actual:** 0.1.0 · **Última revisión:** 29 de octubre de 2026
+> **Estado:** vigente · **Versión actual:** 0.1.1 · **Última revisión:** 29 de octubre de 2026
 >
 > Este documento define la dirección del proyecto después del MVP: qué se construirá, en qué
 > orden, por qué y cómo se sabrá que cada fase está terminada. No compromete fechas: el orden,
@@ -292,6 +292,11 @@ punto de partida con el que se comparará la fase 1.
 | F0.4 | M | Tests de la CLI | Cubrir todos los comandos con `typer.testing.CliRunner` |
 | F0.5 | M | Línea base de falsos positivos de usernames | Script reproducible que ejecuta `username_sites` con usernames aleatorios inexistentes y publica la tasa en `docs/`; es la referencia del criterio de la fase 1 |
 | F0.6 | M | Cobertura RDAP por TLD | Documentar qué TLD tienen RDAP según el bootstrap de IANA [R15] y cuáles quedan ciegos; alimenta F1.18 y F4.11 |
+
+**Estado (29-10-2026, v0.1.1):** F0.4 y F0.6 completados ([`docs/RDAP_COBERTURA.md`](docs/RDAP_COBERTURA.md)).
+F0.5 tiene el script listo (`scripts/fp_baseline.py`); la medición está **pendiente** de una red con
+acceso a los sitios. F0.1, F0.2 y F0.3 siguen **pendientes** de pruebas en vivo; las cubrirán `osineitor doctor` (F1.2)
+y el panel de salud de la aplicación de escritorio.
 
 **Criterios de aceptación**
 - Los 16 módulos tienen al menos una ejecución real documentada en el PR.
