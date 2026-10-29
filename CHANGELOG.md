@@ -6,9 +6,24 @@ Todos los cambios relevantes del proyecto. Formato basado en
 
 ## [Sin publicar]
 
-Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap.
+Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI (v0.2.0).
 
 ### Añadido
+
+- **Contrato CLI↔GUI (Hito G1, F1.17, F8.4):** [`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md) y
+  [`docs/cli-contract.schema.json`](docs/cli-contract.schema.json), validado en los tests contra la
+  salida real de la CLI.
+  - `--ndjson` (eventos `scan.start`, `module.start/end`, `entity`, `progress`, `notice`,
+    `scan.end`), `--quiet`, `--control-stdin` y `--no-color`.
+  - `--json` también en `modules`, `history`, `show`, `doctor`, `config show`, `version` y
+    `export`. `config show --json` solo lista nombres de keys.
+  - **Cancelación ordenada:** `{"cmd": "cancel"}` por stdin, el cierre de stdin y Ctrl+C detienen
+    el scan, guardan lo ya obtenido y terminan con código 130. Probado con un proceso hijo real.
+  - **Códigos de salida:** `0` ok, `1` error interno, `2` uso incorrecto, `3` algún módulo falló,
+    `4` resultado incompleto por presupuesto, `130` cancelado. `ScanResult.status`
+    (`complete`/`truncated`/`cancelled`) acompaña a cada resultado en JSON.
+- ROADMAP: **Hito G · Aplicación de escritorio para Windows** (G1–G9), con la excepción al
+  principio 8; F11.1 «interfaz web local» queda obsoleto.
 
 - **Estado por módulo (F1.1):** cada ejecución deja un `ModuleRun` (`ok`, `empty`, `error`,
   `quota`, `skipped`) con entidades, peticiones, aciertos de caché y duración; se muestra en una
@@ -48,6 +63,11 @@ Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap.
   Windows, y tabla para registrar los resultados.
 
 ### Cambiado
+
+- **Códigos de salida:** un scan que termina con módulos fallidos devuelve ahora `3` (antes `0`) y
+  uno truncado `4`; `doctor` con fallos devuelve `3` (antes `2`). Los scripts que comprobaban el
+  código de salida deben tolerarlo.
+- Versión `0.2.0`; `jsonschema` entra en las dependencias de desarrollo.
 
 - **RDAP (F1.18):** el módulo consulta el bootstrap de IANA (con caché de 7 días) y para los TLD
   sin servidor RDAP (`.es`, `.io`, `.de`…) queda **omitido con un aviso** en lugar de devolver

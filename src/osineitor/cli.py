@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
+import signal
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,7 +17,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from osineitor import __version__, registry, report
+from osineitor import __version__, events, registry, report
 from osineitor.budget import (
     DEFAULT_MAX_ENTITIES,
     DEFAULT_MAX_REQUESTS,
@@ -24,8 +26,17 @@ from osineitor.budget import (
 )
 from osineitor.cache import ResponseCache, default_cache_path
 from osineitor.config import Config, config_dir, config_path
+from osineitor.control import watch_stdin
 from osineitor.doctor import run_doctor
 from osineitor.engine import Engine
+from osineitor.events import (
+    EXIT_CANCELLED,
+    EXIT_INTERNAL,
+    EXIT_MODULE_ERRORS,
+    EXIT_OK,
+    EXIT_TRUNCATED,
+    NdjsonSink,
+)
 from osineitor.http import HttpClient
 from osineitor.models import Entity, EntityType, ScanResult, detect_type
 from osineitor.modules.base import Context
@@ -43,6 +54,7 @@ app.add_typer(config_app, name="config")
 cache_app = typer.Typer(help="Caché de respuestas HTTP.", no_args_is_help=True)
 app.add_typer(cache_app, name="cache")
 console = Console()
+err_console = Console(stderr=True)
 
 Depth = Annotated[
     int,
@@ -84,6 +96,24 @@ Refresh = Annotated[
 ]
 
 
+Ndjson = Annotated[
+    bool,
+    typer.Option(
+        "--ndjson",
+        help="Emite eventos NDJSON por stdout, uno por línea (para otros programas).",
+    ),
+]
+Quiet = Annotated[bool, typer.Option("--quiet", "-q", help="Sin salida legible para humanos.")]
+ControlStdin = Annotated[
+    bool,
+    typer.Option(
+        "--control-stdin",
+        help='Lee órdenes de stdin: {"cmd": "cancel"} cancela el scan y guarda lo ya obtenido.',
+    ),
+]
+NoColor = Annotated[bool, typer.Option("--no-color", help="Salida sin colores.")]
+
+
 @dataclass
 class ScanOptions:
     depth: int
@@ -95,6 +125,9 @@ class ScanOptions:
     allow_private: bool
     no_cache: bool = False
     refresh: bool = False
+    ndjson: bool = False
+    quiet: bool = False
+    control_stdin: bool = False
 
 
 def _force_utf8() -> None:
@@ -111,9 +144,11 @@ def _force_utf8() -> None:
 
 
 @app.callback()
-def main() -> None:
+def main(no_color: NoColor = False) -> None:
     # Se ejecuta antes de cada orden. Sin docstring: el texto de ayuda está en `typer.Typer`.
     _force_utf8()
+    if no_color:
+        console.no_color = True
 
 
 def _open_storage(db: Path | None) -> Storage:
@@ -121,6 +156,16 @@ def _open_storage(db: Path | None) -> Storage:
         return Storage(db)
     except StorageError as exc:
         raise typer.BadParameter(str(exc)) from exc
+
+
+def _notice_event_once(sink: NdjsonSink) -> None:
+    """El aviso legal viaja como evento `notice` (una sola vez), nunca como texto suelto."""
+    marker = config_dir() / ".notice_shown"
+    if marker.exists():
+        return
+    sink.emit(events.event("notice", code="legal", message=LEGAL_NOTICE))
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.touch()
 
 
 def _show_notice_once() -> None:
@@ -143,7 +188,9 @@ def _select_modules(only: list[str] | None) -> list[type]:
     return [m for m in classes if m.name in only]
 
 
-async def _scan(seed: Entity, opts: ScanOptions, live: bool) -> ScanResult:
+async def _scan(
+    seed: Entity, opts: ScanOptions, live: bool, sink: NdjsonSink | None = None
+) -> ScanResult:
     config = Config.load()
     budget = Budget.from_limits(opts.max_entities, opts.max_requests, opts.max_time)
     cache = None if opts.no_cache else ResponseCache()
@@ -158,8 +205,35 @@ async def _scan(seed: Entity, opts: ScanOptions, live: bool) -> ScanResult:
             active=opts.active,
             on_entity=_print_entity if live else None,
             budget=budget,
+            on_event=sink.emit if sink else None,
         )
-        return await engine.run(seed)
+        if opts.control_stdin:
+            watch_stdin(engine.cancel)
+        previous = signal.signal(signal.SIGINT, _on_sigint(asyncio.get_running_loop(), engine))
+        try:
+            return await engine.run(seed)
+        finally:
+            signal.signal(signal.SIGINT, previous)
+
+
+def _on_sigint(loop: asyncio.AbstractEventLoop, engine: Engine):
+    """Ctrl+C cancela de forma ordenada (se guarda lo ya obtenido) en lugar de abortar."""
+
+    def handler(signum, frame) -> None:
+        loop.call_soon_threadsafe(engine.cancel)
+
+    return handler
+
+
+def exit_code_for(result: ScanResult) -> int:
+    """Código de salida según el resultado; si hay varios motivos gana el más grave."""
+    if result.cancelled:
+        return EXIT_CANCELLED
+    if result.truncated:
+        return EXIT_TRUNCATED
+    if any(ev.kind == "error" for ev in result.events):
+        return EXIT_MODULE_ERRORS
+    return EXIT_OK
 
 
 def _print_entity(entity: Entity) -> None:
@@ -242,6 +316,10 @@ _STATUS_STYLE = {
 }
 
 
+def _print_json(data: object) -> None:
+    print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
+
+
 def _make_seed(etype: EntityType, value: str) -> Entity:
     """Crea la entidad semilla; un valor no válido es un error de uso, no un traceback."""
     try:
@@ -259,18 +337,54 @@ def _run_target(
     as_json: bool,
     db: Path | None,
 ) -> None:
+    if opts.ndjson and as_json:
+        raise typer.BadParameter("--ndjson y --json son excluyentes")
     seed = _make_seed(etype, value)
-    if not as_json:
+    sink = NdjsonSink() if opts.ndjson else None
+    human = not (as_json or opts.ndjson or opts.quiet)
+    if human:
         _show_notice_once()
         console.print(f"[bold]Escaneando {etype} {seed.value}[/] (profundidad {opts.depth})")
-    result = asyncio.run(_scan(seed, opts, live=not as_json))
-    if not no_save:
-        with _open_storage(db) as storage:
-            storage.save(result)
-    if as_json:
+    elif sink:
+        _notice_event_once(sink)
+    try:
+        result = asyncio.run(_scan(seed, opts, live=human, sink=sink))
+        if not no_save:
+            with _open_storage(db) as storage:
+                storage.save(result)
+    except typer.BadParameter:
+        raise
+    except Exception as exc:
+        if sink:
+            sink.emit(
+                events.event(
+                    "scan.end",
+                    status="failed",
+                    scan_id=None,
+                    exit_code=EXIT_INTERNAL,
+                    message=f"{type(exc).__name__}: {exc}",
+                )
+            )
+        err_console.print(f"[red]Error: {type(exc).__name__}: {escape(str(exc))}[/]")
+        raise typer.Exit(EXIT_INTERNAL) from exc
+    code = exit_code_for(result)
+    if sink:
+        sink.emit(
+            events.event(
+                "scan.end",
+                status=result.status,
+                scan_id=result.scan_id,
+                exit_code=code,
+                entities=len(result.entities),
+                finished_at=result.finished_at.isoformat() if result.finished_at else None,
+            )
+        )
+    elif as_json:
         print(result.model_dump_json(indent=2))
-    else:
+    elif not opts.quiet:
         render(result)
+    if code:
+        raise typer.Exit(code)
 
 
 @app.command()
@@ -288,6 +402,9 @@ def domain(
     allow_private: AllowPrivate = False,
     no_cache: NoCache = False,
     refresh: Refresh = False,
+    ndjson: Ndjson = False,
+    quiet: Quiet = False,
+    control_stdin: ControlStdin = False,
 ) -> None:
     """Investiga un dominio: RDAP/WHOIS, DNS, subdominios, histórico web."""
     opts = ScanOptions(
@@ -300,6 +417,9 @@ def domain(
         allow_private,
         no_cache,
         refresh,
+        ndjson,
+        quiet,
+        control_stdin,
     )
     _run_target(EntityType.DOMAIN, target, opts, no_save, json_out, db)
 
@@ -319,6 +439,9 @@ def ip(
     allow_private: AllowPrivate = False,
     no_cache: NoCache = False,
     refresh: Refresh = False,
+    ndjson: Ndjson = False,
+    quiet: Quiet = False,
+    control_stdin: ControlStdin = False,
 ) -> None:
     """Investiga una IP: geolocalización, puertos/servicios, reputación."""
     opts = ScanOptions(
@@ -331,6 +454,9 @@ def ip(
         allow_private,
         no_cache,
         refresh,
+        ndjson,
+        quiet,
+        control_stdin,
     )
     _run_target(EntityType.IP, target, opts, no_save, json_out, db)
 
@@ -350,6 +476,9 @@ def email(
     allow_private: AllowPrivate = False,
     no_cache: NoCache = False,
     refresh: Refresh = False,
+    ndjson: Ndjson = False,
+    quiet: Quiet = False,
+    control_stdin: ControlStdin = False,
 ) -> None:
     """Investiga un email: validez, perfiles asociados, filtraciones."""
     opts = ScanOptions(
@@ -362,6 +491,9 @@ def email(
         allow_private,
         no_cache,
         refresh,
+        ndjson,
+        quiet,
+        control_stdin,
     )
     _run_target(EntityType.EMAIL, target, opts, no_save, json_out, db)
 
@@ -381,6 +513,9 @@ def username(
     allow_private: AllowPrivate = False,
     no_cache: NoCache = False,
     refresh: Refresh = False,
+    ndjson: Ndjson = False,
+    quiet: Quiet = False,
+    control_stdin: ControlStdin = False,
 ) -> None:
     """Busca un nombre de usuario en cientos de sitios."""
     opts = ScanOptions(
@@ -393,6 +528,9 @@ def username(
         allow_private,
         no_cache,
         refresh,
+        ndjson,
+        quiet,
+        control_stdin,
     )
     _run_target(EntityType.USERNAME, target, opts, no_save, json_out, db)
 
@@ -412,6 +550,9 @@ def scan(
     allow_private: AllowPrivate = False,
     no_cache: NoCache = False,
     refresh: Refresh = False,
+    ndjson: Ndjson = False,
+    quiet: Quiet = False,
+    control_stdin: ControlStdin = False,
 ) -> None:
     """Detecta el tipo de objetivo y pivota entre frentes (profundidad 2 por defecto)."""
     opts = ScanOptions(
@@ -424,14 +565,34 @@ def scan(
         allow_private,
         no_cache,
         refresh,
+        ndjson,
+        quiet,
+        control_stdin,
     )
     _run_target(detect_type(target), target, opts, no_save, json_out, db)
 
 
 @app.command("modules")
-def list_modules() -> None:
+def list_modules(json_out: AsJson = False) -> None:
     """Lista los módulos disponibles y su estado."""
     config = Config.load()
+    if json_out:
+        _print_json(
+            [
+                {
+                    "name": m.name,
+                    "description": m.description,
+                    "consumes": sorted(m.consumes),
+                    "produces": sorted(m.produces),
+                    "passive": m.passive,
+                    "requires_key": m.requires_key,
+                    "key_configured": bool(m.requires_key and config.key(m.requires_key)),
+                    "timeout": m.timeout,
+                }
+                for m in registry.discover()
+            ]
+        )
+        return
     table = Table()
     table.add_column("Módulo", no_wrap=True)
     for col in ("Consume", "Produce", "Tipo", "API key", "Descripción"):
@@ -457,23 +618,35 @@ def list_modules() -> None:
 
 
 @app.command()
-def history(limit: int = 20, db: DbPath = None) -> None:
+def history(limit: int = 20, db: DbPath = None, json_out: AsJson = False) -> None:
     """Muestra los últimos scans guardados."""
-    table = Table("ID", "Tipo", "Objetivo", "Entidades", "Fecha")
     with _open_storage(db) as storage:
-        for scan_id, ttype, target, count, started in storage.list_scans(limit):
-            table.add_row(str(scan_id), ttype, target, str(count), started[:19])
+        scans = storage.list_scans(limit)
+    if json_out:
+        _print_json(
+            [
+                {"id": i, "target_type": t, "target": v, "entities": n, "started_at": started}
+                for i, t, v, n, started in scans
+            ]
+        )
+        return
+    table = Table("ID", "Tipo", "Objetivo", "Entidades", "Fecha")
+    for scan_id, ttype, target, count, started in scans:
+        table.add_row(str(scan_id), ttype, target, str(count), started[:19])
     console.print(table)
 
 
 @app.command()
-def show(scan_id: int, db: DbPath = None) -> None:
+def show(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> None:
     """Muestra un scan guardado."""
     with _open_storage(db) as storage:
         result = storage.load(scan_id)
     if result is None:
         raise typer.BadParameter(f"no existe el scan {scan_id}")
-    render(result)
+    if json_out:
+        print(result.model_dump_json(indent=2))
+    else:
+        render(result)
 
 
 @app.command()
@@ -484,6 +657,7 @@ def export(
         Path | None, typer.Option("--output", "-o", help="Fichero de salida.")
     ] = None,
     db: DbPath = None,
+    json_out: AsJson = False,
 ) -> None:
     """Exporta un scan guardado a JSON, Markdown o HTML."""
     if fmt not in report.FORMATS:
@@ -496,7 +670,10 @@ def export(
     output = output or Path("reports") / f"osineitor-{scan_id}-{result.target.value}.{ext}"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(report.render(result, fmt), encoding="utf-8")
-    console.print(f"Informe guardado en {output}")
+    if json_out:
+        _print_json({"scan_id": scan_id, "format": fmt, "path": str(output)})
+    else:
+        console.print(f"Informe guardado en {output}")
 
 
 @config_app.command("set")
@@ -509,9 +686,15 @@ def config_set(name: str, value: str) -> None:
 
 
 @config_app.command("show")
-def config_show() -> None:
+def config_show(json_out: AsJson = False) -> None:
     """Muestra las keys configuradas (enmascaradas)."""
     config = Config.load()
+    if json_out:
+        # Solo nombres: ni siquiera enmascarado se exporta ningún trozo del valor.
+        _print_json(
+            {"path": str(config_path()), "keys": [{"name": n} for n in sorted(config.keys)]}
+        )
+        return
     console.print(f"Fichero: {config_path()}")
     if not config.keys:
         console.print(
@@ -526,12 +709,17 @@ def doctor(
     module: Only = None,
     active: Active = False,
     allow_private: AllowPrivate = False,
+    json_out: AsJson = False,
 ) -> None:
     """Prueba cada módulo contra su fuente real con un valor de prueba seguro."""
     classes = _select_modules(module)
     checks = asyncio.run(
         run_doctor(Config.load(), classes, active=active, allow_private=allow_private)
     )
+    failed = [c.module for c in checks if c.verdict == "fail"]
+    if json_out:
+        _print_json([dataclasses.asdict(c) for c in checks])
+        raise typer.Exit(EXIT_MODULE_ERRORS if failed else EXIT_OK)
     styles = {
         "ok": "[green]ok[/]",
         "empty": "[yellow]sin datos[/]",
@@ -548,10 +736,9 @@ def doctor(
             c.module, styles[c.verdict], escape(c.detail), f"{c.duration_ms / 1000:.1f} s"
         )
     console.print(table)
-    failed = [c.module for c in checks if c.verdict == "fail"]
     if failed:
         console.print(f"[red]Fallan: {', '.join(failed)}[/]")
-        raise typer.Exit(2)
+        raise typer.Exit(EXIT_MODULE_ERRORS)
 
 
 @cache_app.command("clear")
@@ -576,9 +763,12 @@ def cache_info() -> None:
 
 
 @app.command()
-def version() -> None:
+def version(json_out: AsJson = False) -> None:
     """Muestra la versión."""
-    console.print(f"osineitor {__version__}")
+    if json_out:
+        _print_json({"version": __version__})
+    else:
+        console.print(f"osineitor {__version__}")
 
 
 if __name__ == "__main__":

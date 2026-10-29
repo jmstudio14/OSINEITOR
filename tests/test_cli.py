@@ -385,7 +385,7 @@ def test_budget_and_guard_options_reach_the_scan(monkeypatch):
 
     captured = {}
 
-    async def fake_scan(seed, opts, live):
+    async def fake_scan(seed, opts, live, sink=None):
         captured["opts"] = opts
         return ScanResult(target=Entity(type=seed.type, value=seed.value), depth=opts.depth)
 

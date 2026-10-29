@@ -110,6 +110,20 @@ email alguien@acme.io
 └─ gravatar ─► profile https://gravatar.com/alguien
 ```
 
+## Eventos y cancelación
+
+`Engine` acepta `on_event`, un callback que recibe los eventos del contrato
+([CLI_CONTRACT.md](CLI_CONTRACT.md)): `scan.start`, `module.start/end`, `entity` y `progress`.
+`events.NdjsonSink` los escribe como NDJSON en stdout; el CLI añade `notice` y `scan.end`, que
+necesitan datos que el motor no tiene (el aviso legal, el `scan_id` tras guardar).
+
+`Engine.cancel()` detiene el scan de forma ordenada: espera a que se resuelva la petición de
+cancelar, cancela las tareas en curso, **conserva lo que ya había terminado** y añade un evento
+`cancelled`. `ScanResult.status` resume el resultado (`cancelled` > `truncated` > `complete`).
+`control.watch_stdin` lanza un hilo demonio que lee stdin con `os.read` (no con `sys.stdin`, para no
+abortar el intérprete al salir) y llama a `cancel` al recibir `{"cmd": "cancel"}` o al cerrarse
+stdin. `cli.exit_code_for` traduce el resultado al código de salida.
+
 ## Persistencia
 
 SQLite en `osineitor.db` dentro del directorio de datos (`%LOCALAPPDATA%\osineitor` en Windows,

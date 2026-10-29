@@ -40,6 +40,7 @@ osineitor show 3                    # volver a ver el scan 3
 osineitor export 3 -f html          # informe en reports/ (json | md | html)
 osineitor modules                   # módulos disponibles y estado de sus API keys
 osineitor doctor                    # prueba cada módulo contra su fuente real
+osineitor domain ejemplo.com --ndjson   # eventos en streaming para otros programas
 osineitor cache info                # respuestas cacheadas (cache clear las borra)
 ```
 
@@ -64,8 +65,17 @@ módulos con API key ni los activos, y en la base solo se guarda un hash de la p
 `--refresh` fuerza la consulta; `--no-cache` desactiva la caché; `osineitor cache clear` la vacía.
 
 **Doctor.** `osineitor doctor` lanza cada módulo con un valor de prueba conocido (p. ej.
-`example.com` o `1.1.1.1`) y muestra si responde. Sale con código 2 si algún módulo falla. No
+`example.com` o `1.1.1.1`) y muestra si responde. Sale con código 3 si algún módulo falla. No
 valida que los datos sean correctos, solo que la fuente contesta y se interpreta sin errores.
+
+**Uso desde otros programas.** `--ndjson` emite un evento JSON por línea (inicio, cada módulo,
+cada entidad, progreso, fin), `--json` un único documento (también en `modules`, `history`,
+`show`, `doctor`, `config show`, `version` y `export`) y `--quiet` suprime la salida legible.
+`--control-stdin` permite cancelar escribiendo `{"cmd": "cancel"}` en stdin: se guarda lo ya
+obtenido. Códigos de salida: `0` ok, `1` error interno, `2` uso incorrecto, `3` algún módulo
+falló, `4` resultado incompleto por presupuesto, `130` cancelado. Es el contrato en el que se
+apoyará la aplicación de escritorio; está en [docs/CLI_CONTRACT.md](docs/CLI_CONTRACT.md) con su
+[esquema JSON](docs/cli-contract.schema.json).
 
 **Red.** Por seguridad, ninguna petición se envía a IPs privadas, loopback ni al servicio de
 metadatos de una nube (`169.254.169.254`), tampoco a través de redirecciones: un subdominio
@@ -176,6 +186,8 @@ resolver en memoria.
 ## Documentación
 
 - [Arquitectura](docs/ARCHITECTURE.md): engine, pivoteo, modelo de datos y persistencia.
+- [Contrato CLI para otros programas](docs/CLI_CONTRACT.md): eventos NDJSON, salidas JSON, cancelación
+  y códigos de salida.
 - [Referencia de módulos](docs/MODULES.md): fuentes, datos que aportan y limitaciones.
 - [Pruebas en Windows pendientes](docs/PRUEBAS_WINDOWS.md): qué módulos no se han comprobado en vivo
   y cómo probarlos tras clonar el repositorio.
