@@ -8,8 +8,14 @@ Todos los cambios relevantes del proyecto. Formato basado en
 
 ### Añadido
 
-- `ROADMAP.md` con las fases 0–9 posteriores al MVP, basado en una investigación del estado
-  del arte OSINT.
+- `ROADMAP.md` con las fases posteriores al MVP, basado en una investigación del estado del
+  arte OSINT y en un análisis de carencias del código: 12 fases (0 a 11), 134 entregables con
+  prioridad *M*/*S*/*C*, deuda técnica D8–D14 y un corte recomendado en v0.5.0.
+
+### Corregido
+
+- `docs/MODULES.md`: la limitación de `rdap` ahora lista los TLD sin RDAP verificados en IANA
+  (antes mencionaba solo `.es`).
 
 ## [0.1.0] - 2026-10-28
 
