@@ -7,7 +7,9 @@ import dataclasses
 import time
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
+from typing import Any
 
+from osineitor import events
 from osineitor.budget import Budget
 from osineitor.errors import BudgetExceeded, ModuleError, ModuleQuota, ModuleSkipped
 from osineitor.http import RunStats, current_stats
@@ -26,11 +28,17 @@ class Engine:
         concurrency: int = 10,
         on_entity: Callable[[Entity], None] | None = None,
         budget: Budget | None = None,
+        on_event: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self.depth = max(depth, 1)
         self.on_entity = on_entity
+        self.on_event = on_event  # eventos del contrato CLI↔GUI (ver osineitor.events)
         self.budget = budget or Budget()
         self._sem = asyncio.Semaphore(concurrency)
+        self._cancel = asyncio.Event()
+        self._jobs_total = 0
+        self._ranks: dict[str, dict[str, int]] = {}  # entidad → campo → rank que lo aportó
+        self._jobs_done = 0
         self.modules: list[Module] = []
         self.skipped: list[ScanEvent] = []
         for cls in module_classes:
@@ -55,11 +63,125 @@ class Engine:
         http = bind(cls.name, cache_ttl=ttl, min_interval=cls.min_interval)
         return dataclasses.replace(ctx, http=http)
 
+    def cancel(self) -> None:
+        """Pide detener el scan: se cancelan los módulos en curso y se conserva lo terminado."""
+        self._cancel.set()
+
+    def _emit(self, type_: str, **fields: Any) -> None:
+        if self.on_event:
+            self.on_event(events.event(type_, **fields))
+
+    async def _collect(
+        self,
+        tasks: list[asyncio.Task],
+        index: dict[str, Entity],
+        result: ScanResult,
+        layer: list[Entity],
+    ) -> None:
+        """Recoge los resultados de un nivel **según terminan** (no al final del más lento).
+
+        Acaba cuando terminan todas las tareas, se agota el tiempo o se pide cancelar. Lo que quede
+        en curso se cancela; lo ya terminado se conserva.
+        """
+        remaining = self.budget.remaining_seconds()
+        deadline = None if remaining is None else time.monotonic() + remaining
+        absorbed: set[asyncio.Task] = set()
+        pending = set(tasks)
+        canceller = asyncio.ensure_future(self._cancel.wait())
+        try:
+            while pending and not self._cancel.is_set():
+                left = None if deadline is None else max(deadline - time.monotonic(), 0.0)
+                done, _ = await asyncio.wait(
+                    pending | {canceller}, timeout=left, return_when=asyncio.FIRST_COMPLETED
+                )
+                if not done:
+                    break  # se agotó el tiempo
+                # En el orden de creación: dos módulos que terminan a la vez dan siempre el mismo
+                # resultado.
+                for rank, task in enumerate(tasks):
+                    if task in done:
+                        pending.discard(task)
+                        absorbed.add(task)
+                        self._absorb(task.result(), rank, index, result, layer)
+                        self._emit_progress(result)
+        finally:
+            canceller.cancel()
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        # Una tarea puede haber terminado justo antes de cancelar: su trabajo no se pierde.
+        for rank, task in enumerate(tasks):
+            if task.done() and not task.cancelled() and task not in absorbed:
+                self._absorb(task.result(), rank, index, result, layer)
+        if pending:
+            if self._cancel.is_set():
+                self._mark_cancelled(result)
+            else:
+                self._truncate(result, self.budget.exhausted() or "tiempo máximo agotado")
+
+    def _merge(self, existing: Entity, incoming: Entity, rank: int) -> None:
+        """Misma entidad desde otra fuente: completa lo que falte.
+
+        Si dos fuentes discrepan en un campo gana la de menor `rank` (el orden de los módulos),
+        llegue cuando llegue: el resultado no depende de quién termine antes.
+        """
+        ranks = self._ranks.setdefault(existing.key, {})
+        for k, v in incoming.data.items():
+            if v in (None, "", [], {}):
+                continue
+            current = existing.data.get(k)
+            if current in (None, "", [], {}) or rank < ranks.get(k, rank):
+                existing.data[k] = v
+                ranks[k] = rank
+
+    def _emit_progress(self, result: ScanResult) -> None:
+        self._emit(
+            "progress",
+            done=self._jobs_done,
+            total=self._jobs_total,
+            entities=len(result.entities),
+            requests=self.budget.requests,
+        )
+
+    def _absorb(
+        self,
+        found: list[Entity],
+        rank: int,
+        index: dict[str, Entity],
+        result: ScanResult,
+        layer: list[Entity],
+    ) -> None:
+        for entity in found:
+            existing = index.get(entity.key)
+            if existing is not None:
+                self._merge(existing, entity, rank)
+                continue
+            # Solo el tope de entidades impide guardar: lo que un módulo terminó a
+            # tiempo se conserva aunque se haya agotado el tiempo o las peticiones.
+            if reason := self.budget.entities_full(len(result.entities)):
+                self._truncate(result, reason)
+                continue
+            index[entity.key] = entity
+            self._ranks[entity.key] = dict.fromkeys(entity.data, rank)
+            result.entities.append(entity)
+            layer.append(entity)
+            if self.on_entity:
+                self.on_entity(entity)
+            self._emit("entity", entity=entity.model_dump(mode="json"))
+
     @staticmethod
     def _truncate(result: ScanResult, reason: str) -> None:
         if not result.truncated:
             result.truncated = True
             result.events.append(ScanEvent(kind="budget", module="engine", message=reason))
+
+    @staticmethod
+    def _mark_cancelled(result: ScanResult) -> None:
+        if not result.cancelled:
+            result.events.append(
+                ScanEvent(kind="cancelled", module="engine", message="scan cancelado")
+            )
 
     async def run(self, seed: Entity) -> ScanResult:
         result = ScanResult(target=seed, depth=self.depth, events=list(self.skipped))
@@ -67,47 +189,39 @@ class Engine:
             ModuleRun(module=ev.module, status="skipped", message=ev.message) for ev in self.skipped
         ]
         self.budget.start()
+        self._emit(
+            "scan.start",
+            target={"type": seed.type.value, "value": seed.value},
+            depth=self.depth,
+            modules=[m.name for m in self.modules],
+            skipped=[{"module": ev.module, "message": ev.message} for ev in self.skipped],
+            budget={
+                "max_entities": self.budget.max_entities,
+                "max_requests": self.budget.max_requests,
+                "max_seconds": self.budget.max_seconds,
+            },
+        )
         index: dict[str, Entity] = {seed.key: seed}
         layer = [seed]
         for _ in range(self.depth):
+            if self._cancel.is_set():
+                self._mark_cancelled(result)
+                break
             if reason := self.budget.exhausted(len(result.entities)):
                 self._truncate(result, reason)
                 break
             jobs = [(m, e) for e in layer for m in self.modules if m.accepts(e)]
             if not jobs:
                 break
+            self._jobs_total += len(jobs)
             tasks = [asyncio.create_task(self._run_one(m, e, result)) for m, e in jobs]
-            done, pending = await asyncio.wait(tasks, timeout=self.budget.remaining_seconds())
-            for task in pending:
-                task.cancel()
-            if pending:
-                await asyncio.gather(*pending, return_exceptions=True)
-                self._truncate(result, self.budget.exhausted() or "tiempo máximo agotado")
             layer = []
-            for task in tasks:
-                if task not in done:
-                    continue
-                for entity in task.result():
-                    existing = index.get(entity.key)
-                    if existing is not None:
-                        # Misma entidad desde otra fuente: completa los datos que falten.
-                        for k, v in entity.data.items():
-                            if existing.data.get(k) in (None, "", [], {}):
-                                existing.data[k] = v
-                        continue
-                    # Solo el tope de entidades impide guardar: lo que un módulo terminó a
-                    # tiempo se conserva aunque se haya agotado el tiempo o las peticiones.
-                    if reason := self.budget.entities_full(len(result.entities)):
-                        self._truncate(result, reason)
-                        continue
-                    index[entity.key] = entity
-                    result.entities.append(entity)
-                    layer.append(entity)
-                    if self.on_entity:
-                        self.on_entity(entity)
+            await self._collect(tasks, index, result, layer)
             if self.budget.blocked_reason:
                 self._truncate(result, self.budget.blocked_reason)
-            if not layer or result.truncated:
+            if self._cancel.is_set():
+                self._mark_cancelled(result)
+            if not layer or result.truncated or result.cancelled:
                 break
         result.finished_at = datetime.now(UTC)
         return result
@@ -119,6 +233,7 @@ class Engine:
                 return []
             stats = RunStats()
             current_stats.set(stats)  # esta ejecución corre en su propia tarea
+            self._emit("module.start", module=module.name, entity=entity.key)
             started = time.monotonic()
             found: list[Entity] = []
             status, message = "ok", ""
@@ -153,8 +268,8 @@ class Engine:
             )
         return found
 
-    @staticmethod
     def _record(
+        self,
         result: ScanResult,
         module: Module,
         entity: Entity,
@@ -164,15 +279,16 @@ class Engine:
         message: str,
         count: int = 0,
     ) -> None:
-        result.runs.append(
-            ModuleRun(
-                module=module.name,
-                status=status,
-                entity=entity.key,
-                entities=count,
-                requests=stats.requests,
-                cache_hits=stats.cache_hits,
-                duration_ms=round((time.monotonic() - started) * 1000),
-                message=message,
-            )
+        run = ModuleRun(
+            module=module.name,
+            status=status,
+            entity=entity.key,
+            entities=count,
+            requests=stats.requests,
+            cache_hits=stats.cache_hits,
+            duration_ms=round((time.monotonic() - started) * 1000),
+            message=message,
         )
+        result.runs.append(run)
+        self._jobs_done += 1
+        self._emit("module.end", **run.model_dump())

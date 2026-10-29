@@ -245,7 +245,8 @@ no bloquea) y **C** (opcional, se hace si hay demanda).
 | [8](#fase-8--interoperabilidad-y-extensibilidad-v090) | 0.9.0 | STIX, MISP, Gephi, librería y plugins externos | M | 7 |
 | [9](#fase-9--monitorización-continua-v0100) | 0.10.0 | Vigilancia periódica y alertas de cambios | M | 7 |
 | [10](#fase-10--asistencia-con-ia-v0110) | 0.11.0 | Resúmenes con IA verificables y servidor MCP | M | 2, 7 |
-| [11](#fase-11--producto-10-v100) | 1.0.0 | Interfaz web local, distribución y API estable | L | 8 |
+| [11](#fase-11--producto-10-v100) | 1.0.0 | Distribución y API estable (la interfaz web se sustituyó por el Hito G) | L | 8 |
+| [G](#hito-g--aplicación-de-escritorio-para-windows) | 0.2.0–0.2.2 | Aplicación de escritorio para Windows (intercalado tras la fase 1) | L | 1 |
 
 Esfuerzo: **S** ≈ 1 semana, **M** ≈ 2–4 semanas, **L** ≈ 1–2 meses de dedicación parcial de
 una persona. Son estimaciones propias, sin contrastar. Las fases 4, 5 y 6 son independientes
@@ -332,12 +333,12 @@ está vacío, y que la herramienta no pueda dañar al propio analista ni explota
 | F1.14 | M | Presupuestos de escaneo | `--max-entities`, `--max-requests`, `--max-time` y límite por módulo; al agotarse, el scan termina de forma ordenada e informa de lo omitido. Resuelve D11 |
 | F1.15 | S | Detección de DNS wildcard | Sondeo con etiquetas aleatorias; los subdominios que solo resuelven por wildcard se marcan y no se pivotan |
 | F1.16 | S | Multiplataforma | Rutas con `platformdirs`, permisos equivalentes en Windows y CI en Linux, macOS y Windows. Resuelve D12 |
-| F1.17 | S | Experiencia de uso | Barra de progreso en `stderr`, `--quiet`, `stdout` limpio con `--json`, y *exit codes* documentados (éxito, error de uso, fuentes con errores, sin resultados) |
+| F1.17 | S | Experiencia de uso | Barra de progreso en `stderr`, `--quiet`, `stdout` limpio con `--json`, y *exit codes* documentados (éxito, error de uso, fuentes con errores, sin resultados). **Hecho en v0.2.0 salvo la barra de progreso** (los eventos `progress` del contrato la sustituyen para la GUI); los códigos están en [`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md) |
 | F1.18 | M | `rdap` distingue "TLD sin RDAP" de "no registrado" | Consulta el bootstrap de IANA [R15]; para un TLD sin servidor emite `omitido: TLD sin RDAP` en lugar de un resultado vacío. Resuelve D14 junto con F4.11 |
 
 **Estado (29-10-2026):** completados F1.11, F1.12, F1.13, F1.14, F1.16 y F1.18 (fase 1a) y, en la
 fase 1b, F1.1, F1.2, F1.4, F1.5, F1.6, F1.7 y F1.10 (los *S* F1.3, F1.8, F1.9, F1.15 y F1.17 siguen
-sin empezar; F1.17 se adelanta en el contrato CLI↔GUI). Matices: F1.2 usa valores de prueba fijos
+sin empezar; F1.17 se completó en v0.2.0 con el contrato CLI↔GUI, salvo la barra de progreso). Matices: F1.2 usa valores de prueba fijos
 (`example.com`, `1.1.1.1`) y no `username_claimed` de Sherlock, que haría ~460 peticiones; las
 duraciones, TTL de caché (6 h) y timeouts por módulo son estimaciones sin medir; ningún módulo
 declara aún un `min_interval` porque no se han verificado los límites reales de sus fuentes. F1.16 sube a *M* y pasa a centrarse en
@@ -360,6 +361,38 @@ Windows, la plataforma soportada.
 - La CI es verde en Linux, macOS y Windows.
 
 ---
+
+### Hito G · Aplicación de escritorio para Windows
+
+**Objetivo:** una aplicación de Windows con ventana, menús y botones que **controla la CLI por
+debajo**, para usar OSINEITOR sin terminal. Es una decisión explícita del autor (no web ni TUI) y
+se intercala tras la fase 1 porque su base, el contrato CLI↔GUI, necesita el estado por módulo, la
+caché y la cancelación de la fase 1.
+
+> **Excepción al principio 8.** Este hito se abre antes de cerrar los entregables *M* de las fases
+> 2 en adelante. Lo que lo hace asumible es que la aplicación solo habla con la CLI mediante un
+> contrato versionado y es genérica (la lista de módulos y los tipos de entidad llegan de la CLI),
+> de modo que las fases futuras aparecen en ella sin rehacerla. Sus entregables no cuentan en el
+> recuento de 134 ni en el corte de v0.5.0.
+
+Plataforma soportada: **solo Windows 10/11 x64**. Pila: Python 3.13, PySide6 (Qt 6), PyInstaller
+en modo carpeta e Inno Setup.
+
+| ID | P | Entregable | Versión | Detalle |
+|---|---|---|---|---|
+| G1 | M | Contrato CLI↔GUI | 0.2.0 | `--ndjson`, `--json`, `--quiet`, `--control-stdin`, códigos de salida y cancelación ordenada, con esquema JSON y tests. **Hecho** ([`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md)) |
+| G2 | M | Esqueleto de la aplicación | 0.2.1 | Ventana, menús, barra de herramientas, localizador de la CLI y tema claro/oscuro |
+| G3 | M | Scan en vivo | 0.2.1 | Lanza la CLI con `--ndjson`, muestra entidades y progreso y cancela por stdin |
+| G4 | M | Historial, detalle y exportación | 0.2.1 | Lista de scans, panel de detalle de cada entidad y exportación a JSON/Markdown/HTML |
+| G5 | S | Panel de salud | 0.2.1 | Estado de cada módulo desde `doctor --json` |
+| G6 | M | Ajustes y API keys | 0.2.1 | Gestión de keys vía `osineitor config`; opción de almacenarlas en el Administrador de credenciales |
+| G7 | M | Avisos legales y `--active` | 0.2.1 | Aviso en el primer arranque y confirmación explícita antes de módulos activos |
+| G8 | M | Instalador de Windows | 0.2.2 | PyInstaller + Inno Setup, ZIP portable y SHA-256, construidos en CI |
+| G9 | M | Pruebas manuales en Windows | 0.2.2 | Lista de comprobación (instalar, escanear, cancelar, exportar, modo oscuro, desinstalar); las ejecuta el autor, la CI no puede |
+
+**Fuera de este hito:** grafo, hallazgos, procedencia en la interfaz, internacionalización y
+actualizaciones automáticas. El instalador sin firmar mostrará el aviso de SmartScreen; la firma
+(p. ej. SignPath Foundation, sujeta a sus requisitos) es una tarea del autor.
 
 ### Fase 2 · Procedencia y confianza (v0.3.0)
 
@@ -598,7 +631,7 @@ ampliarlo sin modificar el código.
 
 | ID | P | Entregable | Detalle |
 |---|---|---|---|
-| F8.4 | M | Streaming NDJSON | `--ndjson` emite entidades en tiempo real para encadenar con otras herramientas |
+| F8.4 | M | Streaming NDJSON | `--ndjson` emite entidades en tiempo real para encadenar con otras herramientas. **Adelantado y hecho en v0.2.0** como parte del contrato CLI↔GUI (Hito G) |
 | F8.5 | M | API de librería estable | `from osineitor import Scanner` con interfaz síncrona y asíncrona documentada |
 | F8.6 | M | Plugins externos | Descubrimiento de módulos por *entry points* (`osineitor.modules`), de modo que un paquete de PyPI pueda añadir fuentes |
 | F8.1 | S | Exportación STIX 2.1 | Observables de infraestructura (dominios, IPs, URLs, emails, vulnerabilidades) con la librería `stix2` |
@@ -659,14 +692,14 @@ de la superficie de ataque externa.
 
 ### Fase 11 · Producto 1.0 (v1.0.0)
 
-**Objetivo:** estabilidad, distribución y una interfaz para quien no usa la terminal.
+**Objetivo:** estabilidad y distribución. La interfaz para quien no usa la terminal es el [Hito G](#hito-g--aplicación-de-escritorio-para-windows).
 
 | ID | P | Entregable | Detalle |
 |---|---|---|---|
 | F11.2 | M | Publicación en PyPI | Con *trusted publishing* y firma de artefactos (Sigstore) |
 | F11.4 | M | Sitio de documentación | MkDocs con guía de usuario, referencia de módulos generada desde el código y tutoriales |
 | F11.6 | M | Compromiso de estabilidad | SemVer estricto sobre CLI, formato de exportación y API de librería; política de obsolescencia de dos versiones menores |
-| F11.1 | S | Interfaz web local | FastAPI + frontend ligero: lanzar scans, ver el grafo, gestionar casos. Solo escucha en `localhost` por defecto |
+| F11.1 | — | ~~Interfaz web local~~ | **Obsoleto:** sustituido por la aplicación de escritorio nativa del [Hito G](#hito-g--aplicación-de-escritorio-para-windows). Si más adelante hiciera falta una vista de grafo o de casos, se añade a esa aplicación |
 | F11.3 | S | Imagen Docker | Imagen oficial mínima y sin privilegios |
 | F11.5 | C | Internacionalización | Interfaz y documentación en español e inglés |
 

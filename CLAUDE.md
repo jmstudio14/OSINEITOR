@@ -34,6 +34,9 @@ python -m pytest -q      # usa python -m: el pytest global puede ser otro intér
 - Todas las peticiones salen por `ctx.http` (guardia de red y presupuesto); no uses `httpx` directo.
 - Tests sin red: `respx` para HTTP, `FakeResolver` de `tests/conftest.py` para DNS.
 - Al añadir o cambiar módulos, actualiza README, `docs/MODULES.md` y `CHANGELOG.md`.
+- Toda salida estructurada de la CLI (`--json`, `--ndjson`) sigue el contrato de
+  [docs/CLI_CONTRACT.md](docs/CLI_CONTRACT.md): cambios solo aditivos, y el esquema
+  `docs/cli-contract.schema.json` se actualiza en el mismo PR.
 
 ## Límites
 

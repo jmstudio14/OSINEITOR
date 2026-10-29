@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from osineitor.engine import Engine
 from osineitor.models import Entity, EntityType
 from osineitor.modules.base import Module, ModuleError
@@ -135,3 +137,37 @@ async def test_duplicate_entities_merge_missing_data(ctx):
     result = await Engine(ctx, [ServiceA, ServiceB]).run(seed)
     assert len(result.entities) == 1
     assert result.entities[0].data == {"port": 80, "product": "nginx"}
+
+
+class SlowFirst(Module):
+    """Va primero en el orden de módulos pero termina el último."""
+
+    name = "a_slow"
+    description = "test"
+    consumes = frozenset({EntityType.IP})
+
+    async def run(self, entity):
+        await asyncio.sleep(0.2)
+        return [self.emit(entity, EntityType.SERVICE, "1.2.3.4:80", port=80, product="apache")]
+
+
+class FastLast(Module):
+    name = "z_fast"
+    description = "test"
+    consumes = frozenset({EntityType.IP})
+
+    async def run(self, entity):
+        return [self.emit(entity, EntityType.SERVICE, "1.2.3.4:80", port=8080, product="nginx")]
+
+
+async def test_conflicting_data_resolves_by_module_order_not_by_arrival(ctx):
+    """Si dos fuentes discrepan gana la primera en el orden de módulos, aunque acabe después."""
+    seed = Entity(type=EntityType.IP, value="1.2.3.4")
+    for classes in ([SlowFirst, FastLast], [FastLast, SlowFirst]):
+        result = await Engine(ctx, classes).run(seed)
+        winner = "a_slow" if classes[0] is SlowFirst else "z_fast"
+        port = 80 if winner == "a_slow" else 8080
+        assert result.entities[0].data == {
+            "port": port,
+            "product": "apache" if port == 80 else "nginx",
+        }

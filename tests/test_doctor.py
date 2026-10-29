@@ -107,7 +107,7 @@ def test_cli_doctor_prints_table_and_fails_on_error(monkeypatch):
     mods = [make("d_ok", ok, canary="example.com"), make("d_fail", broken, canary="example.com")]
     monkeypatch.setattr(registry, "discover", lambda: mods)
     result = runner.invoke(app, ["doctor"])
-    assert result.exit_code == 2
+    assert result.exit_code == 3
     assert "d_ok" in result.output and "FALLO" in result.output
     assert "Fallan: d_fail" in result.output
     result = runner.invoke(app, ["doctor", "-m", "d_ok"])

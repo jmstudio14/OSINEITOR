@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from osineitor.errors import InvalidEntityValue
 from osineitor.normalize import canonical, canonical_hostname
@@ -50,7 +50,7 @@ class Entity(BaseModel):
 class ScanEvent(BaseModel):
     """Error u omisión de un módulo durante un scan."""
 
-    kind: str  # "error" | "skipped" | "budget"
+    kind: str  # "error" | "skipped" | "budget" | "cancelled"
     module: str
     message: str
     entity: str | None = None
@@ -79,6 +79,18 @@ class ScanResult(BaseModel):
     runs: list[ModuleRun] = Field(default_factory=list)
     scan_id: int | None = None
     truncated: bool = False  # el scan se detuvo por agotar el presupuesto
+
+    @property
+    def cancelled(self) -> bool:
+        return any(ev.kind == "cancelled" for ev in self.events)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def status(self) -> str:
+        """`cancelled` > `truncated` > `complete`: lo primero que debe saber quien lo consume."""
+        if self.cancelled:
+            return "cancelled"
+        return "truncated" if self.truncated else "complete"
 
     def by_type(self) -> dict[EntityType, list[Entity]]:
         grouped: dict[EntityType, list[Entity]] = {}
