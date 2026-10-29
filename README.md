@@ -1,93 +1,155 @@
+<div align="center">
+
 # OSINEITOR
 
-Herramienta OSINT modular de línea de comandos. Investiga **dominios, IPs, emails y nombres de
-usuario** desde fuentes abiertas, **pivota** automáticamente entre ellos (dominio → IPs →
-servicios; email → username → perfiles) y guarda cada investigación para exportarla como
-informe JSON, Markdown o HTML.
+**Herramienta OSINT modular: investiga dominios, IPs, emails y nombres de usuario desde fuentes
+abiertas y pivota automáticamente entre lo que descubre.**
 
-> **Aviso legal.** OSINEITOR solo consulta fuentes abiertas y APIs públicas. Úsalo sobre
-> objetivos propios o con autorización expresa. Investigar a personas físicas está sujeto al
-> RGPD y a la legislación local; tú eres responsable del uso que hagas de la herramienta.
-> Lee el [uso responsable](docs/USO_RESPONSABLE.md).
+[![CI](https://github.com/jmstudio14/OSINEITOR/actions/workflows/ci.yml/badge.svg)](https://github.com/jmstudio14/OSINEITOR/actions/workflows/ci.yml)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+![Windows | Linux](https://img.shields.io/badge/plataforma-Windows%20%7C%20Linux-lightgrey)
+[![Licencia MIT](https://img.shields.io/badge/licencia-MIT-green)](LICENSE)
+![Estado: en desarrollo](https://img.shields.io/badge/estado-en%20desarrollo-orange)
+
+[Instalación](#instalación) · [Inicio rápido](#inicio-rápido) · [Módulos](#módulos) ·
+[Guía de uso](docs/USO.md) · [Roadmap](ROADMAP.md)
+
+</div>
+
+---
+
+## ¿Qué es?
+
+OSINEITOR ejecuta una colección de módulos independientes, cada uno con una fuente abierta (DNS,
+RDAP, Certificate Transparency, Shodan InternetDB, Gravatar, cientos de sitios web…), y **encadena
+los resultados**: lo que un módulo descubre se convierte en el objetivo de los siguientes. Cada
+investigación se guarda y se exporta como informe JSON, Markdown o HTML.
+
+```
+dominio ─► IPs ─► puertos y servicios        email ─► username ─► perfiles en ~460 sitios
+        └► subdominios ─► IPs                      └► dominio ─► registros DNS
+```
+
+Está pensado para **reconocimiento propio y con autorización** (auditoría de tu infraestructura,
+bug bounty, investigación de tu propia huella digital) y como proyecto de aprendizaje. No es un
+producto para terceros ni un servicio.
+
+> **Aviso legal.** OSINEITOR solo consulta fuentes abiertas y APIs públicas. Úsalo sobre objetivos
+> propios o con autorización expresa. Investigar a personas físicas está sujeto al RGPD y a la
+> legislación local; tú eres responsable del uso que hagas de la herramienta. Lee el
+> [uso responsable](docs/USO_RESPONSABLE.md).
+
+## Estado del proyecto
+
+Versión **0.2.0**, en desarrollo. Lo que hay y lo que no:
+
+| Área | Estado |
+|---|---|
+| CLI con 16 módulos en 4 frentes | Disponible |
+| Tests y CI en Windows y Linux (Python 3.11 y 3.13) | En verde (más de 300 tests, sin red) |
+| Funcionamiento contra las fuentes reales | **Sin verificar en conjunto**: los tests simulan las respuestas. Falta la prueba en vivo desde Windows ([detalle](docs/PRUEBAS_WINDOWS.md)); `osineitor doctor` la hace por ti |
+| Aplicación de escritorio para Windows | En curso: [capa interna lista](docs/GUI.md), vistas pendientes |
+| Instalador de Windows y paquete en PyPI | No disponibles todavía |
+
+Plataforma principal: **Windows 10/11**. Linux se prueba en la CI, pero no es el objetivo.
+
+## Características
+
+- **Cuatro frentes, 16 módulos:** dominios e infraestructura, IPs y servicios, emails y
+  filtraciones, usernames. Los módulos son ficheros independientes que se descubren solos.
+- **Pivoteo configurable** (`--depth`) con deduplicación y fusión de lo que cada fuente aporta.
+- **Fiable y honesto con los fallos:** cada módulo informa de si respondió con datos, sin datos, con
+  error o por cuota, para no confundir «no hay resultados» con «la fuente falló». `osineitor
+  doctor` comprueba las fuentes. Tiempo máximo por módulo y caché de respuestas.
+- **Contenido:** presupuesto de entidades, peticiones y tiempo por scan; el resultado queda marcado
+  como incompleto si se agota.
+- **Seguro por defecto:** módulos pasivos salvo `--active`; ninguna petición va a redes privadas,
+  loopback ni metadatos de nube, tampoco por redirecciones; entradas saneadas y normalizadas.
+- **Integrable:** salida `--json` y `--ndjson` (eventos en streaming) con
+  [esquema JSON](docs/cli-contract.schema.json), cancelación ordenada y códigos de salida
+  documentados.
 
 ## Instalación
 
-Requiere Python 3.11+.
+Requiere **Python 3.11 o superior** y Git. Todavía no hay paquete publicado: se instala desde el
+código.
+
+**Windows (PowerShell):**
+
+```powershell
+git clone https://github.com/jmstudio14/OSINEITOR.git
+cd OSINEITOR
+py -3.13 -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e .
+osineitor version
+```
+
+Si PowerShell bloquea la activación, ejecuta antes `Set-ExecutionPolicy -Scope Process Bypass`.
+
+**Linux / macOS:**
 
 ```bash
 git clone https://github.com/jmstudio14/OSINEITOR.git
 cd OSINEITOR
-pip install -e .            # o: pip install -e '.[dev]' para desarrollo
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+osineitor version
+```
+
+Extras: `pip install -e ".[dev]"` (tests y linter) y `".[gui]"` (dependencia de la aplicación de
+escritorio, aún sin uso).
+
+## Inicio rápido
+
+```bash
+osineitor doctor                        # ¿qué fuentes responden desde tu red?
+osineitor scan example.com              # detecta el tipo y pivota (profundidad 2)
+osineitor email alguien@example.com     # validez, perfiles y brechas
+osineitor username johndoe              # presencia en cientos de sitios
+osineitor export 1 -f html              # informe del primer scan guardado
+```
+
+Salida real y abreviada de `osineitor email test@example.com -m email_validate`, un módulo que no
+necesita red de terceros: primero las entidades según se descubren y al final el estado de cada
+módulo.
+
+```
+  record        email:test@example.com  (email_validate)
+  domain        example.com  (email_validate)
+  username      test  (email_validate)
+[…tablas por tipo de entidad…]
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┓
+┃ Módulo         ┃ Estado ┃ Entidades ┃ Peticiones ┃ Caché ┃ Tiempo ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━┩
+│ email_validate │ ok×1   │         3 │          0 │     0 │  0.0 s │
+└────────────────┴────────┴───────────┴────────────┴───────┴────────┘
 ```
 
 ## Uso
 
-```bash
-osineitor scan ejemplo.com          # detecta el tipo y pivota (profundidad 2)
-osineitor domain ejemplo.com        # solo el dominio (profundidad 1)
-osineitor ip 1.1.1.1
-osineitor email alguien@ejemplo.com --depth 2
-osineitor username johndoe
-osineitor domain ejemplo.com --active          # incluye módulos que contactan al objetivo
-osineitor domain ejemplo.com -m dns -m crtsh   # solo ciertos módulos
-osineitor ip 1.1.1.1 --json                    # salida JSON por stdout
-osineitor scan ejemplo.com --max-entities 200 --max-requests 500 --max-time 120
-osineitor domain ejemplo.com --refresh         # ignora la caché y vuelve a consultar
-osineitor domain ejemplo.com --no-cache        # ni lee ni guarda la caché
+| Quiero… | Orden |
+|---|---|
+| Investigar un objetivo, deduciendo su tipo | `osineitor scan OBJETIVO` |
+| Investigar un tipo concreto | `osineitor domain`, `ip`, `email` o `username` |
+| Ver o recuperar scans anteriores | `osineitor history` · `show N` · `export N -f json\|md\|html` |
+| Ver los módulos y mis API keys | `osineitor modules` · `config show` |
+| Comprobar que las fuentes responden | `osineitor doctor` |
+| Gestionar la caché | `osineitor cache info` · `cache clear` |
 
-osineitor history                   # scans guardados
-osineitor show 3                    # volver a ver el scan 3
-osineitor export 3 -f html          # informe en reports/ (json | md | html)
-osineitor modules                   # módulos disponibles y estado de sus API keys
-osineitor doctor                    # prueba cada módulo contra su fuente real
-osineitor domain ejemplo.com --ndjson   # eventos en streaming para otros programas
-osineitor cache info                # respuestas cacheadas (cache clear las borra)
-```
+Opciones que más se usan en los scans:
 
-`--depth` controla cuántos niveles se pivota. Con `1` solo se analiza el objetivo; con `2`
-también se analizan las entidades descubiertas (p. ej. las IPs a las que resuelve un dominio).
-Cada nivel multiplica las peticiones: úsalo con criterio.
+| Opción | Efecto |
+|---|---|
+| `--depth N` | Niveles de pivoteo (1–4). Cada nivel multiplica las peticiones |
+| `-m MÓDULO` | Ejecuta solo ese módulo (repetible) |
+| `--active` | Permite los módulos que contactan al objetivo |
+| `--max-entities` · `--max-requests` · `--max-time` | Presupuesto del scan (`0` = sin límite) |
+| `--refresh` · `--no-cache` | Ignora o desactiva la caché de respuestas |
+| `--json` · `--ndjson` | Salida para otros programas |
 
-**Presupuesto.** Cada scan tiene topes para no dispararse: 2000 entidades, 3000 peticiones y 900
-segundos (`--max-entities`, `--max-requests`, `--max-time`; `0` = sin límite). Al agotarlos el
-scan se detiene de forma ordenada, conserva lo ya encontrado y marca el resultado como
-incompleto.
-
-**Estado de cada módulo.** Tras cada scan se muestra una tabla con lo que pasó en cada módulo:
-`ok`, `empty` (respondió sin datos), `error`, `quota` (la fuente rechazó por límite de uso),
-`skipped` (no aplica, falta la API key o es activo), con entidades, peticiones, aciertos de caché
-y tiempo. Así «sin resultados» deja de confundirse con «la fuente falló». Cada módulo tiene un
-tiempo máximo (180 s por defecto); si lo supera se anota como error y el resto sigue.
-
-**Caché.** Las respuestas GET de las fuentes pasivas y sin API key se guardan 6 horas en
-`cache.db` (directorio de datos) para no repetir consultas ni gastar cuota. Nunca se cachean los
-módulos con API key ni los activos, y en la base solo se guarda un hash de la petición, no la URL.
-`--refresh` fuerza la consulta; `--no-cache` desactiva la caché; `osineitor cache clear` la vacía.
-
-**Doctor.** `osineitor doctor` lanza cada módulo con un valor de prueba conocido (p. ej.
-`example.com` o `1.1.1.1`) y muestra si responde. Sale con código 3 si algún módulo falla. No
-valida que los datos sean correctos, solo que la fuente contesta y se interpreta sin errores.
-
-**Uso desde otros programas.** `--ndjson` emite un evento JSON por línea (inicio, cada módulo,
-cada entidad, progreso, fin), `--json` un único documento (también en `modules`, `history`,
-`show`, `doctor`, `config show`, `version` y `export`) y `--quiet` suprime la salida legible.
-`--control-stdin` permite cancelar escribiendo `{"cmd": "cancel"}` en stdin: se guarda lo ya
-obtenido. Códigos de salida: `0` ok, `1` error interno, `2` uso incorrecto, `3` algún módulo
-falló, `4` resultado incompleto por presupuesto, `130` cancelado. Es el contrato en el que se
-apoyará la aplicación de escritorio; está en [docs/CLI_CONTRACT.md](docs/CLI_CONTRACT.md) con su
-[esquema JSON](docs/cli-contract.schema.json).
-
-**Red.** Por seguridad, ninguna petición se envía a IPs privadas, loopback ni al servicio de
-metadatos de una nube (`169.254.169.254`), tampoco a través de redirecciones: un subdominio
-publicado por un tercero podría apuntar ahí. `--allow-private` lo permite si investigas tu
-propia red.
-
-**Entradas.** Los dominios se guardan en minúsculas y en punycode (`münchen.de` →
-`xn--mnchen-3ya.de`). Un username admite letras, números, `.`, `_` y `-` (hasta 64); un valor no
-válido se rechaza antes de lanzar nada.
-
-`scan` deduce el tipo de la entrada. Una cadena como `john.doe` es ambigua (parece un dominio);
-en ese caso usa el comando explícito: `osineitor username john.doe`.
+Todas las órdenes y su comportamiento (estado de cada módulo, presupuesto, caché, red, entradas)
+están en la **[guía de uso](docs/USO.md)**.
 
 ## Módulos
 
@@ -110,95 +172,95 @@ en ese caso usa el comando explícito: `osineitor username john.doe`.
 | Email | `hunter_verify` | Entregabilidad y fuentes públicas | `hunter` |
 | Username | `username_sites` | Presencia en ~460 sitios (firmas de Sherlock) | — |
 
-Los módulos **pasivos** solo hablan con terceros. Los **activos** envían tráfico al objetivo y
-solo se ejecutan con `--active`. Un módulo sin su API key se omite y se indica en la salida.
+Los módulos **pasivos** solo hablan con terceros. El único **activo**, `http_fingerprint`, envía
+tráfico al objetivo y solo se ejecuta con `--active`. Un módulo sin su API key se omite y se indica
+en la salida. Qué datos aporta cada uno y sus límites: [referencia de módulos](docs/MODULES.md).
 
-### API keys
+## Configuración
 
 ```bash
-osineitor config set shodan TU_KEY      # se guarda en el directorio de configuración (abajo)
-osineitor config show
+osineitor config set shodan TU_KEY      # guarda la key en el directorio de configuración
+osineitor config show                   # solo muestra las keys enmascaradas
 export OSINEITOR_SHODAN_KEY=TU_KEY      # alternativa: variable de entorno (tiene prioridad)
 ```
-
-Nombres: `shodan`, `abuseipdb`, `greynoise`, `hibp`, `hunter`, `ipinfo`.
-
-**Dónde se guarda todo** (`OSINEITOR_CONFIG_DIR` y `OSINEITOR_DATA_DIR` lo sobrescriben):
 
 | | Windows | Linux |
 |---|---|---|
 | Configuración y keys | `%APPDATA%\osineitor\config.toml` | `~/.config/osineitor/config.toml` |
 | Historial (SQLite) y cachés | `%LOCALAPPDATA%\osineitor\` | `~/.local/share/osineitor/` |
 
-En Windows el fichero de keys hereda los permisos de tu carpeta de usuario; no se cifra.
+El fichero de keys **no se cifra**: hereda los permisos de tu carpeta de usuario. Nombres de key,
+`--stdin` para no dejar la key en la línea de comandos y rutas alternativas: [guía de
+uso](docs/USO.md#api-keys-y-rutas).
+
+## Uso desde otros programas
+
+La CLI es la interfaz estable sobre la que se construye la aplicación de escritorio, y sirve igual
+a tus scripts: `--ndjson` emite un evento JSON por línea mientras corre el scan, `--json` un único
+documento, `--control-stdin` permite cancelar guardando lo ya obtenido y los códigos de salida
+distinguen un fallo de un resultado incompleto (`0` ok, `3` algún módulo falló, `4` incompleto,
+`130` cancelado). Contrato completo: [CLI_CONTRACT.md](docs/CLI_CONTRACT.md).
 
 ## Limitaciones conocidas
 
-- **Usernames:** la detección se basa en el código de estado o en el texto de la respuesta.
-  WAFs, captchas y cambios en los sitios producen falsos positivos y negativos. Cada positivo se
-  contrasta con un username inexistente: si el sitio también lo «encuentra» se descarta. Aun así,
-  verifica a mano cualquier perfil antes de sacar conclusiones.
-- **crt.sh y Wayback** son servicios gratuitos que a menudo responden lento o con errores 5xx;
-  el scan continúa y la incidencia aparece al final.
+- **Las fuentes reales no se han comprobado en conjunto.** El desarrollo se hace en un entorno que
+  bloquea casi todas; los tests simulan las respuestas. Ejecuta `osineitor doctor` y revisa
+  [las pruebas pendientes en Windows](docs/PRUEBAS_WINDOWS.md).
+- **Usernames:** la detección se basa en el código de estado o en el texto de la respuesta. WAFs,
+  captchas y cambios en los sitios producen falsos positivos y negativos. Cada positivo se
+  contrasta con un username inexistente y se descarta si el sitio también lo «encuentra», pero la
+  tasa real de falsos positivos **no está medida**. Verifica a mano cualquier perfil.
+- **Muchos TLD no tienen RDAP** (`.es`, `.io`, `.de`…): `rdap` lo indica como omitido, pero no hay
+  alternativa WHOIS todavía ([cobertura](docs/RDAP_COBERTURA.md)).
+- **crt.sh y Wayback** son servicios gratuitos que a menudo responden lento o con errores 5xx; el
+  scan continúa y la incidencia queda anotada.
 - Las cuotas gratuitas de ipinfo, GreyNoise y Hunter son bajas.
+- Los valores por defecto del presupuesto, la caché (6 h) y los tiempos máximos son estimaciones
+  sin medir.
 
-## Añadir un módulo
+## Hoja de ruta
 
-Crea un fichero en `src/osineitor/modules/<frente>/` con una subclase de `Module`; el registro
-lo descubre automáticamente:
+El plan completo, con criterios de aceptación y lo que queda fuera de alcance, está en el
+**[roadmap](ROADMAP.md)**. Lo más próximo:
 
-```python
-from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module
-
-
-class MiFuente(Module):
-    name = "mi_fuente"
-    description = "Qué aporta"
-    consumes = frozenset({EntityType.DOMAIN})
-    produces = frozenset({EntityType.RECORD})
-    requires_key = None  # o "nombre_de_la_key"
-    passive = True
-
-    async def run(self, entity: Entity) -> list[Entity]:
-        r = await self.ctx.http.get(f"https://api.ejemplo/{entity.value}")
-        return [self.emit(entity, EntityType.RECORD, f"mi_fuente:{entity.value}", **r.json())]
-```
-
-Lanza `ModuleError("mensaje")` para fallos esperados (key inválida) y `ModuleQuota` si la fuente
-rechaza por límite de uso; `status_error("servicio", respuesta)` elige entre ambos según el código
-HTTP. Cualquier otra excepción también se captura y se registra sin detener el scan. Declara
-además `canary` (un valor de prueba seguro para `doctor`) o `probe_url`, y añade el fichero a
-`modules/_manifest.py` (un test lo exige: el ejecutable empaquetado no puede buscar módulos en
-disco).
+1. **Aplicación de escritorio para Windows** (en curso) e instalador.
+2. **Procedencia y confianza por dato:** de dónde sale cada hallazgo y cuánto fiarse.
+3. Modelo de entidades ampliado y presets de scan; después, nuevos frentes (organizaciones, teléfonos, criptoactivos…).
 
 ## Desarrollo
 
 ```bash
-pip install -e '.[dev]'
+pip install -e ".[dev]"
 ruff check . && ruff format --check .
-python -m pytest
+python -m pytest -q
 ```
 
-Los tests no hacen peticiones reales: las respuestas HTTP se simulan con `respx` y el DNS con un
-resolver en memoria.
+Los tests no hacen peticiones reales: el HTTP se simula con `respx` y el DNS con un resolver en
+memoria. Para añadir una fuente nueva, sigue [CONTRIBUTING.md](CONTRIBUTING.md); el diseño está en
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Documentación
 
-- [Arquitectura](docs/ARCHITECTURE.md): engine, pivoteo, modelo de datos y persistencia.
-- [Aplicación de escritorio](docs/GUI.md): diseño, capa no visual y traspaso a las vistas.
-- [Contrato CLI para otros programas](docs/CLI_CONTRACT.md): eventos NDJSON, salidas JSON, cancelación
-  y códigos de salida.
-- [Referencia de módulos](docs/MODULES.md): fuentes, datos que aportan y limitaciones.
-- [Pruebas en Windows pendientes](docs/PRUEBAS_WINDOWS.md): qué módulos no se han comprobado en vivo
-  y cómo probarlos tras clonar el repositorio.
-- [Uso responsable](docs/USO_RESPONSABLE.md): autorización, RGPD y usos no aceptables.
-- [Roadmap](ROADMAP.md): fases siguientes, criterios de aceptación y fuera de alcance.
-- [Contribuir](CONTRIBUTING.md) · [Seguridad](SECURITY.md) · [Changelog](CHANGELOG.md) ·
-  [Código de conducta](CODE_OF_CONDUCT.md)
+| Documento | Contenido |
+|---|---|
+| [Guía de uso](docs/USO.md) | Órdenes, opciones, presupuesto, caché, red y códigos de salida |
+| [Referencia de módulos](docs/MODULES.md) | Fuentes, datos que aportan y limitaciones |
+| [Arquitectura](docs/ARCHITECTURE.md) | Motor, pivoteo, modelo de datos y persistencia |
+| [Contrato de la CLI](docs/CLI_CONTRACT.md) | Eventos NDJSON, salidas JSON y cancelación |
+| [Aplicación de escritorio](docs/GUI.md) | Diseño y estado de la interfaz gráfica |
+| [Pruebas en Windows](docs/PRUEBAS_WINDOWS.md) | Qué falta por comprobar en vivo |
+| [Uso responsable](docs/USO_RESPONSABLE.md) | Autorización, RGPD y usos no aceptables |
+| [Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md) | Hacia dónde va y qué ha cambiado |
 
-## Créditos
+## Seguridad y contribuciones
 
-Las firmas de detección de usernames proceden del proyecto
-[Sherlock](https://github.com/sherlock-project/sherlock) (MIT); ver
-`src/osineitor/modules/username/data/README.md`.
+Para informar de una vulnerabilidad, mira [SECURITY.md](SECURITY.md) (no abras un issue público).
+Las contribuciones son bienvenidas: [CONTRIBUTING.md](CONTRIBUTING.md) y
+[código de conducta](CODE_OF_CONDUCT.md).
+
+## Licencia y créditos
+
+[MIT](LICENSE) © 2026 jmstudio14.
+
+Las firmas de detección de usernames proceden de [Sherlock](https://github.com/sherlock-project/sherlock)
+(MIT); ver `src/osineitor/modules/username/data/README.md`.
