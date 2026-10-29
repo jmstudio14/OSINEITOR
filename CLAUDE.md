@@ -38,6 +38,13 @@ python -m pytest -q      # usa python -m: el pytest global puede ser otro intér
   [docs/CLI_CONTRACT.md](docs/CLI_CONTRACT.md): cambios solo aditivos, y el esquema
   `docs/cli-contract.schema.json` se actualiza en el mismo PR.
 
+## Aplicación de escritorio (`src/osineitor_gui`)
+
+Diseño y traspaso en [docs/GUI.md](docs/GUI.md). Reglas: la GUI solo habla con la CLI (del motor
+importa únicamente `detect_type` y `__version__`); Qt solo en `osineitor_gui/ui/` y `app.py`; las
+reglas de seguridad (confirmar `--active`) viven en `ScanRequest`, no en las vistas; las API keys
+viajan por stdin; textos en español con `tr()`.
+
 ## Límites
 
 - No añadir fuentes que extraigan datos personales de sitios que lo prohíben, eludan captchas o

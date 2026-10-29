@@ -186,6 +186,7 @@ resolver en memoria.
 ## Documentación
 
 - [Arquitectura](docs/ARCHITECTURE.md): engine, pivoteo, modelo de datos y persistencia.
+- [Aplicación de escritorio](docs/GUI.md): diseño, capa no visual y traspaso a las vistas.
 - [Contrato CLI para otros programas](docs/CLI_CONTRACT.md): eventos NDJSON, salidas JSON, cancelación
   y códigos de salida.
 - [Referencia de módulos](docs/MODULES.md): fuentes, datos que aportan y limitaciones.

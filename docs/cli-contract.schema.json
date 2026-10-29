@@ -698,6 +698,22 @@
         }
       },
       "additionalProperties": true
+    },
+    "config_key_output": {
+      "type": "object",
+      "required": [
+        "name",
+        "configured"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "configured": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
     }
   }
 }

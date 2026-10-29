@@ -677,12 +677,48 @@ def export(
 
 
 @config_app.command("set")
-def config_set(name: str, value: str) -> None:
+def config_set(
+    name: str,
+    value: Annotated[str | None, typer.Argument(help="Valor de la key.")] = None,
+    from_stdin: Annotated[
+        bool,
+        typer.Option(
+            "--stdin",
+            help="Lee el valor de stdin: así no aparece en la línea de comandos de otros procesos.",
+        ),
+    ] = False,
+    json_out: AsJson = False,
+) -> None:
     """Guarda una API key (p. ej. `osineitor config set shodan TU_KEY`)."""
+    if from_stdin == (value is not None):
+        raise typer.BadParameter(
+            "indica el valor como argumento o con --stdin, no ambos ni ninguno"
+        )
+    secret = sys.stdin.read().rstrip("\r\n") if from_stdin else value
+    if not secret or any(ch in secret for ch in "\r\n\x00"):
+        raise typer.BadParameter("el valor no puede estar vacío ni tener saltos de línea")
     config = Config.load()
-    config.keys[name.lower()] = value
+    config.keys[name.lower()] = secret
     path = config.save()
-    console.print(f"Key '{name.lower()}' guardada en {path}")
+    if json_out:
+        _print_json({"name": name.lower(), "configured": True})
+    else:
+        console.print(f"Key '{name.lower()}' guardada en {path}")
+
+
+@config_app.command("unset")
+def config_unset(name: str, json_out: AsJson = False) -> None:
+    """Elimina una API key del fichero de configuración."""
+    config = Config.load()
+    existed = config.keys.pop(name.lower(), None) is not None
+    if existed:
+        config.save()
+    if json_out:
+        _print_json({"name": name.lower(), "configured": False})
+    elif existed:
+        console.print(f"Key '{name.lower()}' eliminada.")
+    else:
+        console.print(f"La key '{name.lower()}' no estaba en el fichero.")
 
 
 @config_app.command("show")

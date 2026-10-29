@@ -501,3 +501,33 @@ def test_database_from_a_newer_version_is_a_usage_error(tmp_path):
     result = runner.invoke(app, ["history", "--db", str(path)])
     assert result.exit_code == 2
     assert "más nueva" in result.output
+
+
+def test_config_set_from_stdin_and_unset():
+    result = runner.invoke(
+        app, ["config", "set", "Shodan", "--stdin", "--json"], input="SECRET123\r\n"
+    )
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {"name": "shodan", "configured": True}
+    assert "shodan = SECR" in runner.invoke(app, ["config", "show"]).output  # sin el \r\n final
+    assert "SECRET123" not in runner.invoke(app, ["config", "show", "--json"]).stdout
+
+    gone = runner.invoke(app, ["config", "unset", "shodan", "--json"])
+    assert json.loads(gone.stdout) == {"name": "shodan", "configured": False}
+    assert "No hay keys" in runner.invoke(app, ["config", "show"]).output
+    assert "no estaba" in runner.invoke(app, ["config", "unset", "shodan"]).output
+
+
+@pytest.mark.parametrize(
+    "args, stdin",
+    [
+        (["config", "set", "x"], None),  # ni valor ni --stdin
+        (["config", "set", "x", "v", "--stdin"], "v"),  # ambos
+        (["config", "set", "x", "--stdin"], ""),  # vacío
+        (["config", "set", "x", "--stdin"], "a\nb"),  # salto de línea: rompería el TOML
+    ],
+)
+def test_config_set_rejects_ambiguous_or_unsafe_values(args, stdin):
+    result = runner.invoke(app, args, input=stdin)
+    assert result.exit_code == 2
+    assert "No hay keys" in runner.invoke(app, ["config", "show"]).output
