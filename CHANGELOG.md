@@ -6,6 +6,11 @@ Todos los cambios relevantes del proyecto. Formato basado en
 
 ## [Sin publicar]
 
+### Añadido
+
+- `ROADMAP.md` con las fases 0–9 posteriores al MVP, basado en una investigación del estado
+  del arte OSINT.
+
 ## [0.1.0] - 2026-10-28
 
 Primera versión.

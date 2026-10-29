@@ -130,6 +130,7 @@ resolver en memoria.
 - [Arquitectura](docs/ARCHITECTURE.md): engine, pivoteo, modelo de datos y persistencia.
 - [Referencia de módulos](docs/MODULES.md): fuentes, datos que aportan y limitaciones.
 - [Uso responsable](docs/USO_RESPONSABLE.md): autorización, RGPD y usos no aceptables.
+- [Roadmap](ROADMAP.md): fases siguientes, criterios de aceptación y fuera de alcance.
 - [Contribuir](CONTRIBUTING.md) · [Seguridad](SECURITY.md) · [Changelog](CHANGELOG.md) ·
   [Código de conducta](CODE_OF_CONDUCT.md)
 
