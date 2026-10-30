@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import re
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -12,6 +14,11 @@ from pydantic import BaseModel, Field, computed_field, model_validator
 
 from osineitor.errors import InvalidEntityValue
 from osineitor.normalize import canonical, canonical_hostname
+
+
+def digest(hashes: Iterable[str]) -> str:
+    """SHA-256 de las huellas ordenadas: no depende del orden en que terminaron los módulos."""
+    return hashlib.sha256("\n".join(sorted(hashes)).encode()).hexdigest()
 
 
 class EntityType(StrEnum):
@@ -27,14 +34,24 @@ class EntityType(StrEnum):
     RECORD = "record"
 
 
+class Observation(BaseModel):
+    """Una vez que un módulo vio una entidad: quién, sobre qué entidad y cuándo."""
+
+    module: str
+    query: str  # clave de la entidad sobre la que corrió el módulo (p. ej. `domain:example.com`)
+    at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class Entity(BaseModel):
     """Una pieza de información descubierta (o la semilla de un scan)."""
 
     type: EntityType
     value: str
     data: dict[str, Any] = Field(default_factory=dict)
-    source: str | None = None
+    source: str | None = None  # la primera fuente que la vio; todas están en `observations`
     parent: str | None = None
+    observations: list[Observation] = Field(default_factory=list)
+    confidence: str | None = None  # "bajo" | "medio" | "alto"; ver confidence.py
 
     @model_validator(mode="after")
     def _canonicalize(self) -> Entity:
@@ -45,6 +62,47 @@ class Entity(BaseModel):
     @property
     def key(self) -> str:
         return f"{self.type}:{self.value.lower()}"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def first_seen(self) -> datetime | None:
+        """Primera vez que un módulo la vio en este scan; `None` en datos sin observaciones."""
+        return min((o.at for o in self.observations), default=None)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def last_seen(self) -> datetime | None:
+        """Última vez que un módulo la vio en este scan. No es la fecha del dato de un tercero."""
+        return max((o.at for o in self.observations), default=None)
+
+    @property
+    def sources(self) -> list[str]:
+        """Módulos que la vieron, sin repetir y en orden de llegada.
+
+        Un dato guardado antes de existir las observaciones solo tiene `source`.
+        """
+        names = list(dict.fromkeys(o.module for o in self.observations))
+        return names or ([self.source] if self.source else [])
+
+
+class Evidence(BaseModel):
+    """Respuesta original de una fuente con su huella SHA-256: permite comprobar un dato después.
+
+    `module` y `entity` (clave consultada) la unen con las `Observation` que dio esa ejecución.
+    El cuerpo no sale en JSON: solo viaja a la base de datos.
+    """
+
+    module: str = ""
+    entity: str | None = None
+    kind: str  # "http" | "dns"
+    url: str  # sin credenciales ni valores de API key
+    method: str
+    status: int | None = None
+    at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    sha256: str
+    size: int  # bytes de la respuesta original (puede ser mayor que `body` si se recortó)
+    truncated: bool = False
+    body: bytes = Field(default=b"", exclude=True, repr=False)
 
 
 class ScanEvent(BaseModel):
@@ -77,6 +135,9 @@ class ScanResult(BaseModel):
     entities: list[Entity] = Field(default_factory=list)
     events: list[ScanEvent] = Field(default_factory=list)
     runs: list[ModuleRun] = Field(default_factory=list)
+    evidence: list[Evidence] = Field(default_factory=list)
+    scope: dict[str, list[str]] | None = None  # alcance declarado (ver scope.py)
+    purpose: str | None = None  # para qué se hizo el scan (`--purpose`)
     scan_id: int | None = None
     truncated: bool = False  # el scan se detuvo por agotar el presupuesto
 
@@ -91,6 +152,12 @@ class ScanResult(BaseModel):
         if self.cancelled:
             return "cancelled"
         return "truncated" if self.truncated else "complete"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def evidence_digest(self) -> str | None:
+        """Huella de todas las evidencias (para anotarla fuera de la base de datos)."""
+        return digest(e.sha256 for e in self.evidence) if self.evidence else None
 
     def by_type(self) -> dict[EntityType, list[Entity]]:
         grouped: dict[EntityType, list[Entity]] = {}

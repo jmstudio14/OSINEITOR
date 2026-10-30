@@ -3,7 +3,16 @@ from __future__ import annotations
 from html import escape
 
 from osineitor.models import ScanResult
-from osineitor.report._common import details, summary, title
+from osineitor.report._common import (
+    EVIDENCE_HEADERS,
+    NO_EVIDENCE,
+    details,
+    evidence_hint,
+    evidence_rows,
+    seen,
+    summary,
+    title,
+)
 
 CSS = """
 :root { --bg:#fff; --fg:#1d1f23; --muted:#5f6670; --line:#e3e6ea; --head:#f4f6f8; --acc:#0b6bcb; }
@@ -40,11 +49,15 @@ def to_html(result: ScanResult) -> str:
     out.append("</table>")
     for etype, entities in result.by_type().items():
         out.append(f"<h2>{escape(etype)} ({len(entities)})</h2>")
-        out.append("<table><tr><th>Valor</th><th>Fuente</th><th>Detalles</th></tr>")
+        out.append(
+            "<table><tr><th>Valor</th><th>Fuente</th><th>Confianza</th><th>Visto</th><th>Detalles</th></tr>"
+        )
         for e in entities:
             info = "".join(f"<dt>{escape(k)}</dt><dd>{escape(v)}</dd>" for k, v in details(e.data))
+            sources = escape(", ".join(e.sources))
             out.append(
-                f"<tr><td>{_value(e.value)}</td><td class='muted'>{escape(e.source or '')}</td>"
+                f"<tr><td>{_value(e.value)}</td><td class='muted'>{sources}</td>"
+                f"<td>{escape(e.confidence or '')}</td><td class='muted'>{seen(e)}</td>"
                 f"<td><dl>{info}</dl></td></tr>"
             )
         out.append("</table>")
@@ -58,5 +71,19 @@ def to_html(result: ScanResult) -> str:
                 f"{where}: {escape(ev.message)}</li>"
             )
         out.append("</ul>")
+    out.append("<h2>Evidencias</h2>")
+    if result.evidence:
+        out.append(f"<p class='muted'>{escape(evidence_hint(result))}</p><table><tr>")
+        out += [f"<th>{escape(h)}</th>" for h in EVIDENCE_HEADERS]
+        out.append("</tr>")
+        for row in evidence_rows(result):
+            cells = [
+                f"<td><code>{escape(c)}</code></td>" if i in (2, 6) else f"<td>{escape(c)}</td>"
+                for i, c in enumerate(row)
+            ]
+            out.append(f"<tr>{''.join(cells)}</tr>")
+        out.append("</table>")
+    else:
+        out.append(f"<p class='muted'>{escape(NO_EVIDENCE)}</p>")
     out.append("</body></html>")
     return "\n".join(out)

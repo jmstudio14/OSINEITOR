@@ -50,10 +50,12 @@ DISPOSABLE = {
 
 class EmailValidate(Module):
     name = "email_validate"
+    authority = "authoritative"
     description = "Sintaxis, MX y proveedor desechable; pivota a dominio y username"
     consumes = frozenset({EntityType.EMAIL})
     produces = frozenset({EntityType.RECORD, EntityType.DOMAIN, EntityType.USERNAME})
     canary = "test@example.com"
+    direct_dns = True
 
     async def run(self, entity: Entity) -> list[Entity]:
         email = entity.value.strip().lower()
@@ -63,12 +65,15 @@ class EmailValidate(Module):
         try:
             answer = await self.ctx.resolver.resolve(domain, "MX", lifetime=10)
             mx = sorted(r.exchange.to_text().rstrip(".") for r in answer)
+            self.record_evidence(f"dns://{domain}/MX", "\n".join(mx))
         except (
             dns.resolver.NXDOMAIN,
             dns.resolver.NoAnswer,
             dns.resolver.NoNameservers,
             dns.exception.Timeout,
-        ):
+        ) as exc:
+            if isinstance(exc, dns.resolver.NXDOMAIN | dns.resolver.NoAnswer):
+                self.record_evidence(f"dns://{domain}/MX", type(exc).__name__.upper())
             mx = []
 
         out = [

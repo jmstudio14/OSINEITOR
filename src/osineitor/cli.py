@@ -3,21 +3,25 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
+import functools
 import json
 import signal
 import sys
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from pydantic import ValidationError
 from rich.console import Console
 from rich.markup import escape
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from osineitor import __version__, events, registry, report
+from osineitor import __version__, events, evidence, logs, registry, report
 from osineitor.budget import (
     DEFAULT_MAX_ENTITIES,
     DEFAULT_MAX_REQUESTS,
@@ -34,13 +38,18 @@ from osineitor.events import (
     EXIT_INTERNAL,
     EXIT_MODULE_ERRORS,
     EXIT_OK,
+    EXIT_TAMPERED,
     EXIT_TRUNCATED,
     NdjsonSink,
 )
-from osineitor.http import HttpClient
+from osineitor.http import HttpClient, validate_proxy
 from osineitor.models import Entity, EntityType, ScanResult, detect_type
 from osineitor.modules.base import Context
+from osineitor.scope import Scope, ScopeError
 from osineitor.storage import Storage, StorageError
+
+MAX_PURPOSE = 500
+PURPOSE_REQUIRED_FOR = (EntityType.EMAIL, EntityType.USERNAME)
 
 LEGAL_NOTICE = (
     "OSINEITOR solo consulta fuentes abiertas. Úsalo sobre objetivos propios o con autorización "
@@ -88,11 +97,46 @@ AllowPrivate = Annotated[
         help="Permite conectar con IPs privadas, loopback y metadatos cloud (bloqueadas).",
     ),
 ]
+Proxy = Annotated[
+    str | None,
+    typer.Option(
+        "--proxy",
+        envvar="OSINEITOR_PROXY",
+        help="Proxy para todas las peticiones (socks5://host:puerto, http://...). "
+        "Omite los módulos con DNS directo.",
+    ),
+]
 NoCache = Annotated[
     bool, typer.Option("--no-cache", help="No lee ni guarda la caché de respuestas HTTP.")
 ]
 Refresh = Annotated[
     bool, typer.Option("--refresh", help="Ignora lo cacheado y vuelve a consultar las fuentes.")
+]
+SaveEvidence = Annotated[
+    bool,
+    typer.Option(
+        "--evidence",
+        help="Guarda la respuesta original de cada fuente con su SHA-256 (sin caché). "
+        "Se comprueba con `osineitor verify`.",
+    ),
+]
+Purpose = Annotated[
+    str | None,
+    typer.Option(
+        "--purpose",
+        envvar="OSINEITOR_PURPOSE",
+        help="Para qué haces el scan (queda guardado con él). Obligatorio en emails y usernames "
+        "si `require_purpose` está activo.",
+    ),
+]
+ScopeFile = Annotated[
+    Path | None,
+    typer.Option(
+        "--scope",
+        envvar="OSINEITOR_SCOPE",
+        help="Fichero YAML con el alcance (`domains`, `ips`, `exclude`): lo que caiga fuera "
+        "no entra en el resultado ni se investiga.",
+    ),
 ]
 
 
@@ -112,6 +156,13 @@ ControlStdin = Annotated[
     ),
 ]
 NoColor = Annotated[bool, typer.Option("--no-color", help="Salida sin colores.")]
+Verbose = Annotated[
+    bool, typer.Option("--verbose", "-v", help="Registro JSON de peticiones y módulos en stderr.")
+]
+LogFile = Annotated[
+    Path | None,
+    typer.Option("--log-file", help="Guarda el registro JSON en este fichero (sin API keys)."),
+]
 
 
 @dataclass
@@ -128,6 +179,31 @@ class ScanOptions:
     ndjson: bool = False
     quiet: bool = False
     control_stdin: bool = False
+    proxy: str | None = None
+    evidence: bool = False
+    scope: Scope | None = None
+    purpose: str | None = None
+
+
+def _purpose(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    if not value or len(value) > MAX_PURPOSE or any(ch in value for ch in "\r\n\x00"):
+        raise typer.BadParameter(
+            f"debe tener entre 1 y {MAX_PURPOSE} caracteres, sin saltos de línea",
+            param_hint="--purpose",
+        )
+    return value
+
+
+def _scope(path: Path | None) -> Scope | None:
+    if path is None:
+        return None
+    try:
+        return Scope.from_file(path)
+    except ScopeError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--scope") from exc
 
 
 def _force_utf8() -> None:
@@ -144,11 +220,33 @@ def _force_utf8() -> None:
 
 
 @app.callback()
-def main(no_color: NoColor = False) -> None:
+def main(
+    ctx: typer.Context,
+    no_color: NoColor = False,
+    verbose: Verbose = False,
+    log_file: LogFile = None,
+) -> None:
     # Se ejecuta antes de cada orden. Sin docstring: el texto de ayuda está en `typer.Typer`.
     _force_utf8()
     if no_color:
         console.no_color = True
+    try:
+        logs.setup(verbose, log_file)
+    except OSError as exc:
+        raise typer.BadParameter(f"no se puede abrir el fichero de registro: {exc}") from exc
+    ctx.call_on_close(logs.close)
+
+
+def _proxy(value: str | None) -> str | None:
+    """Valida `--proxy`: un valor no válido es un error de uso, no un traceback a mitad de scan."""
+    if value is None or not value.strip():
+        return None
+    try:
+        proxy = validate_proxy(value)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    logs.mask_credentials(proxy)
+    return proxy
 
 
 def _open_storage(db: Path | None) -> Storage:
@@ -188,32 +286,79 @@ def _select_modules(only: list[str] | None) -> list[type]:
     return [m for m in classes if m.name in only]
 
 
+@contextlib.contextmanager
+def _progress_bar(
+    enabled: bool,
+) -> Iterator[tuple[Callable[[dict[str, Any]], None] | None, Console]]:
+    """Barra de progreso en `stderr`, solo si ambos flujos son una terminal.
+
+    Devuelve el manejador de eventos que la alimenta (`None` si no hay barra) y la consola por la
+    que imprimir las entidades en vivo: con barra tiene que ser la suya, porque Rich solo sabe
+    dibujar líneas por encima de su propia barra. Sin barra es la salida normal.
+    """
+    if not (enabled and console.is_terminal and err_console.is_terminal):
+        yield None, console
+        return
+    columns = (
+        SpinnerColumn(),
+        TextColumn("Módulos"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TextColumn("{task.fields[entities]} entidades · {task.fields[requests]} peticiones"),
+    )
+    with Progress(*columns, console=err_console, transient=True) as progress:
+        task = progress.add_task("", total=None, entities=0, requests=0)
+
+        def on_event(event: dict[str, Any]) -> None:
+            if event["type"] == "progress":
+                progress.update(
+                    task,
+                    total=event["total"],  # crece al pivotear
+                    completed=event["done"],
+                    entities=event["entities"],
+                    requests=event["requests"],
+                )
+
+        yield on_event, progress.console
+
+
 async def _scan(
     seed: Entity, opts: ScanOptions, live: bool, sink: NdjsonSink | None = None
 ) -> ScanResult:
     config = Config.load()
     budget = Budget.from_limits(opts.max_entities, opts.max_requests, opts.max_time)
-    cache = None if opts.no_cache else ResponseCache()
+    # Una evidencia es una captura fresca: una respuesta cacheada no tiene fecha original.
+    cache = None if opts.no_cache or opts.evidence else ResponseCache()
     async with HttpClient(
-        config, allow_private=opts.allow_private, budget=budget, cache=cache, refresh=opts.refresh
+        config,
+        allow_private=opts.allow_private,
+        budget=budget,
+        cache=cache,
+        refresh=opts.refresh,
+        proxy=opts.proxy,
     ) as http:
         ctx = Context(config=config, http=http)
-        engine = Engine(
-            ctx,
-            _select_modules(opts.only),
-            depth=opts.depth,
-            active=opts.active,
-            on_entity=_print_entity if live else None,
-            budget=budget,
-            on_event=sink.emit if sink else None,
-        )
-        if opts.control_stdin:
-            watch_stdin(engine.cancel)
-        previous = signal.signal(signal.SIGINT, _on_sigint(asyncio.get_running_loop(), engine))
-        try:
-            return await engine.run(seed)
-        finally:
-            signal.signal(signal.SIGINT, previous)
+        with _progress_bar(live and not logs.to_stderr()) as (on_progress, out):
+            handlers = [h for h in (sink.emit if sink else None, on_progress) if h]
+            engine = Engine(
+                ctx,
+                _select_modules(opts.only),
+                depth=opts.depth,
+                active=opts.active,
+                on_entity=functools.partial(_print_entity, out=out) if live else None,
+                budget=budget,
+                on_event=(lambda event: [h(event) for h in handlers]) if handlers else None,
+                evidence=opts.evidence,
+                scope=opts.scope,
+                purpose=opts.purpose,
+            )
+            if opts.control_stdin:
+                watch_stdin(engine.cancel)
+            previous = signal.signal(signal.SIGINT, _on_sigint(asyncio.get_running_loop(), engine))
+            try:
+                return await engine.run(seed)
+            finally:
+                signal.signal(signal.SIGINT, previous)
 
 
 def _on_sigint(loop: asyncio.AbstractEventLoop, engine: Engine):
@@ -236,8 +381,10 @@ def exit_code_for(result: ScanResult) -> int:
     return EXIT_OK
 
 
-def _print_entity(entity: Entity) -> None:
-    console.print(f"  [cyan]{entity.type:<13}[/] {escape(entity.value)}  [dim]({entity.source})[/]")
+def _print_entity(entity: Entity, out: Console | None = None) -> None:
+    (out or console).print(
+        f"  [cyan]{entity.type:<13}[/] {escape(entity.value)}  [dim]({entity.source})[/]"
+    )
 
 
 def _summarize(entity: Entity) -> str:
@@ -262,9 +409,17 @@ def render(result: ScanResult) -> None:
         table = Table(title=f"{etype} ({len(entities)})", title_justify="left", expand=True)
         table.add_column("Valor", overflow="fold", ratio=2)
         table.add_column("Fuente", ratio=1)
+        table.add_column("Confianza", no_wrap=True)
         table.add_column("Detalles", overflow="fold", ratio=4)
         for e in entities:
-            table.add_row(e.value, e.source or "", _summarize(e))
+            level = e.confidence or ""
+            style = _CONFIDENCE_STYLE.get(level, "")
+            table.add_row(
+                e.value,
+                ", ".join(e.sources),
+                f"{style}{level}[/]" if style else level,
+                _summarize(e),
+            )
         console.print(table)
     if not result.entities:
         console.print("[dim]Sin resultados.[/]")
@@ -276,6 +431,17 @@ def render(result: ScanResult) -> None:
     if result.truncated:
         console.print(
             "[yellow]Resultado incompleto: el scan se detuvo al agotar su presupuesto.[/]"
+        )
+    if result.purpose:
+        console.print(f"Propósito: {escape(result.purpose)}", soft_wrap=True)
+    if result.scope:
+        declared = "; ".join(f"{k}: {', '.join(v)}" for k, v in result.scope.items())
+        console.print(f"Alcance: {escape(declared)}", soft_wrap=True)
+    if result.evidence:
+        console.print(
+            f"Evidencias:{len(result.evidence)} · huella {result.evidence_digest}\n"
+            "[dim]Anótala fuera de la base de datos y compárala con `verify --digest`.[/]",
+            soft_wrap=True,
         )
 
 
@@ -306,6 +472,8 @@ def _render_runs(result: ScanResult) -> None:
         )
     console.print(table)
 
+
+_CONFIDENCE_STYLE = {"alto": "[green]", "medio": "[yellow]", "bajo": "[red]"}
 
 _STATUS_STYLE = {
     "ok": "[green]",
@@ -340,6 +508,15 @@ def _run_target(
     if opts.ndjson and as_json:
         raise typer.BadParameter("--ndjson y --json son excluyentes")
     seed = _make_seed(etype, value)
+    if opts.scope and not opts.scope.allows(seed):
+        raise typer.BadParameter(f"el objetivo {seed.key} está fuera del alcance declarado")
+    if etype in PURPOSE_REQUIRED_FOR and not opts.purpose and Config.load().purpose_required():
+        raise typer.BadParameter(
+            f"los scans de {etype} exigen --purpose (require_purpose está activo)",
+            param_hint="--purpose",
+        )
+    if opts.evidence and no_save:
+        err_console.print("[yellow]Aviso: con --no-save las evidencias no se guardan.[/]")
     sink = NdjsonSink() if opts.ndjson else None
     human = not (as_json or opts.ndjson or opts.quiet)
     if human:
@@ -377,6 +554,7 @@ def _run_target(
                 exit_code=code,
                 entities=len(result.entities),
                 finished_at=result.finished_at.isoformat() if result.finished_at else None,
+                **({"evidence_digest": result.evidence_digest} if result.evidence else {}),
             )
         )
     elif as_json:
@@ -400,11 +578,15 @@ def domain(
     max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
     max_time: MaxTime = DEFAULT_MAX_SECONDS,
     allow_private: AllowPrivate = False,
+    proxy: Proxy = None,
     no_cache: NoCache = False,
     refresh: Refresh = False,
     ndjson: Ndjson = False,
     quiet: Quiet = False,
     control_stdin: ControlStdin = False,
+    save_evidence: SaveEvidence = False,
+    scope: ScopeFile = None,
+    purpose: Purpose = None,
 ) -> None:
     """Investiga un dominio: RDAP/WHOIS, DNS, subdominios, histórico web."""
     opts = ScanOptions(
@@ -420,6 +602,10 @@ def domain(
         ndjson,
         quiet,
         control_stdin,
+        _proxy(proxy),
+        save_evidence,
+        _scope(scope),
+        _purpose(purpose),
     )
     _run_target(EntityType.DOMAIN, target, opts, no_save, json_out, db)
 
@@ -437,11 +623,15 @@ def ip(
     max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
     max_time: MaxTime = DEFAULT_MAX_SECONDS,
     allow_private: AllowPrivate = False,
+    proxy: Proxy = None,
     no_cache: NoCache = False,
     refresh: Refresh = False,
     ndjson: Ndjson = False,
     quiet: Quiet = False,
     control_stdin: ControlStdin = False,
+    save_evidence: SaveEvidence = False,
+    scope: ScopeFile = None,
+    purpose: Purpose = None,
 ) -> None:
     """Investiga una IP: geolocalización, puertos/servicios, reputación."""
     opts = ScanOptions(
@@ -457,6 +647,10 @@ def ip(
         ndjson,
         quiet,
         control_stdin,
+        _proxy(proxy),
+        save_evidence,
+        _scope(scope),
+        _purpose(purpose),
     )
     _run_target(EntityType.IP, target, opts, no_save, json_out, db)
 
@@ -474,11 +668,15 @@ def email(
     max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
     max_time: MaxTime = DEFAULT_MAX_SECONDS,
     allow_private: AllowPrivate = False,
+    proxy: Proxy = None,
     no_cache: NoCache = False,
     refresh: Refresh = False,
     ndjson: Ndjson = False,
     quiet: Quiet = False,
     control_stdin: ControlStdin = False,
+    save_evidence: SaveEvidence = False,
+    scope: ScopeFile = None,
+    purpose: Purpose = None,
 ) -> None:
     """Investiga un email: validez, perfiles asociados, filtraciones."""
     opts = ScanOptions(
@@ -494,6 +692,10 @@ def email(
         ndjson,
         quiet,
         control_stdin,
+        _proxy(proxy),
+        save_evidence,
+        _scope(scope),
+        _purpose(purpose),
     )
     _run_target(EntityType.EMAIL, target, opts, no_save, json_out, db)
 
@@ -511,11 +713,15 @@ def username(
     max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
     max_time: MaxTime = DEFAULT_MAX_SECONDS,
     allow_private: AllowPrivate = False,
+    proxy: Proxy = None,
     no_cache: NoCache = False,
     refresh: Refresh = False,
     ndjson: Ndjson = False,
     quiet: Quiet = False,
     control_stdin: ControlStdin = False,
+    save_evidence: SaveEvidence = False,
+    scope: ScopeFile = None,
+    purpose: Purpose = None,
 ) -> None:
     """Busca un nombre de usuario en cientos de sitios."""
     opts = ScanOptions(
@@ -531,6 +737,10 @@ def username(
         ndjson,
         quiet,
         control_stdin,
+        _proxy(proxy),
+        save_evidence,
+        _scope(scope),
+        _purpose(purpose),
     )
     _run_target(EntityType.USERNAME, target, opts, no_save, json_out, db)
 
@@ -548,11 +758,15 @@ def scan(
     max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
     max_time: MaxTime = DEFAULT_MAX_SECONDS,
     allow_private: AllowPrivate = False,
+    proxy: Proxy = None,
     no_cache: NoCache = False,
     refresh: Refresh = False,
     ndjson: Ndjson = False,
     quiet: Quiet = False,
     control_stdin: ControlStdin = False,
+    save_evidence: SaveEvidence = False,
+    scope: ScopeFile = None,
+    purpose: Purpose = None,
 ) -> None:
     """Detecta el tipo de objetivo y pivota entre frentes (profundidad 2 por defecto)."""
     opts = ScanOptions(
@@ -568,6 +782,10 @@ def scan(
         ndjson,
         quiet,
         control_stdin,
+        _proxy(proxy),
+        save_evidence,
+        _scope(scope),
+        _purpose(purpose),
     )
     _run_target(detect_type(target), target, opts, no_save, json_out, db)
 
@@ -647,6 +865,52 @@ def show(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> None:
         print(result.model_dump_json(indent=2))
     else:
         render(result)
+
+
+@app.command()
+def verify(
+    scan_id: int,
+    digest: Annotated[
+        str | None,
+        typer.Option("--digest", help="Huella de evidencias anotada al hacer el scan."),
+    ] = None,
+    db: DbPath = None,
+    json_out: AsJson = False,
+) -> None:
+    """Recalcula las huellas de las evidencias de un scan y detecta si se han manipulado."""
+    with _open_storage(db) as storage:
+        result = storage.load(scan_id)
+    if result is None:
+        raise typer.BadParameter(f"no existe el scan {scan_id}")
+    check = evidence.verify(result, digest)
+    code = EXIT_OK if check.ok else EXIT_TAMPERED
+    if json_out:
+        _print_json(
+            {
+                "scan_id": scan_id,
+                "checked": check.checked,
+                "ok": check.ok,
+                "mismatches": check.mismatches,
+                "evidence_digest": check.evidence_digest,
+                "digest_match": check.digest_match,
+            }
+        )
+        raise typer.Exit(code)
+    if not check.checked:
+        console.print("[dim]Este scan no guardó evidencias (se hace con --evidence).[/]")
+    elif check.mismatches:
+        for m in check.mismatches:
+            console.print(
+                f"[red]Alterada[/] #{m['number']} {m['module']} {escape(m['url'])}\n"
+                f"  esperada {m['expected']}\n  actual   {m['actual']}"
+            )
+    else:
+        console.print(f"[green]Íntegras[/]: {check.checked} evidencias coinciden con su huella.")
+    if check.evidence_digest:
+        console.print(f"Huella de evidencias: {check.evidence_digest}", soft_wrap=True)
+    if check.digest_match is False:
+        console.print("[red]La huella no coincide con la indicada en --digest.[/]")
+    raise typer.Exit(code)
 
 
 @app.command()
@@ -745,12 +1009,19 @@ def doctor(
     module: Only = None,
     active: Active = False,
     allow_private: AllowPrivate = False,
+    proxy: Proxy = None,
     json_out: AsJson = False,
 ) -> None:
     """Prueba cada módulo contra su fuente real con un valor de prueba seguro."""
     classes = _select_modules(module)
     checks = asyncio.run(
-        run_doctor(Config.load(), classes, active=active, allow_private=allow_private)
+        run_doctor(
+            Config.load(),
+            classes,
+            active=active,
+            allow_private=allow_private,
+            proxy=_proxy(proxy),
+        )
     )
     failed = [c.module for c in checks if c.verdict == "fail"]
     if json_out:

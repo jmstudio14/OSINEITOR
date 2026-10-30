@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import httpx
 import respx
 
 from osineitor import registry
 from osineitor.config import Config
 from osineitor.http import HttpClient
-from osineitor.models import Entity, EntityType, ScanEvent, ScanResult
+from osineitor.models import Entity, EntityType, Observation, ScanEvent, ScanResult
+from osineitor.modules.base import Module
 
 
 def test_registry_modules_are_well_formed():
@@ -50,6 +53,87 @@ def test_storage_roundtrip(storage):
     assert loaded.target.value == "example.com"
     assert storage.list_scans()[0][:4] == (scan_id, "domain", "example.com", 1)
     assert storage.load(999) is None
+
+
+def test_storage_roundtrip_keeps_every_observation(storage):
+    seed = Entity(type=EntityType.DOMAIN, value="example.com")
+    at = datetime(2026, 10, 30, 8, 15, tzinfo=UTC)
+    seen = Entity(
+        type=EntityType.IP,
+        value="1.2.3.4",
+        source="dns",
+        parent=seed.key,
+        observations=[
+            Observation(module="dns", query=seed.key, at=at),
+            Observation(module="crtsh", query="domain:sub.example.com", at=at),
+        ],
+    )
+    loaded = storage.load(storage.save(ScanResult(target=seed, depth=1, entities=[seen])))
+    assert loaded.entities[0].observations == seen.observations
+    assert loaded.entities[0].sources == ["dns", "crtsh"]
+
+
+def test_sources_fall_back_to_source_for_data_without_observations():
+    assert Entity(type=EntityType.IP, value="1.2.3.4", source="dns").sources == ["dns"]
+    assert Entity(type=EntityType.IP, value="1.2.3.4").sources == []
+
+
+def test_sources_lists_each_module_once_in_arrival_order():
+    entity = Entity(
+        type=EntityType.IP,
+        value="1.2.3.4",
+        observations=[
+            Observation(module="dns", query="domain:a.example"),
+            Observation(module="crtsh", query="domain:a.example"),
+            Observation(module="dns", query="domain:b.example"),
+        ],
+    )
+    assert entity.sources == ["dns", "crtsh"]
+
+
+def test_first_and_last_seen_are_the_extremes_of_the_observations():
+    t1, t2, t3 = (datetime(2026, 10, 30, h, tzinfo=UTC) for h in (8, 9, 10))
+    entity = Entity(
+        type=EntityType.IP,
+        value="1.2.3.4",
+        observations=[
+            Observation(module="dns", query="domain:a.example", at=t2),
+            Observation(module="crtsh", query="domain:a.example", at=t3),
+            Observation(module="dns", query="domain:b.example", at=t1),
+        ],
+    )
+    assert (entity.first_seen, entity.last_seen) == (t1, t3)
+    dumped = entity.model_dump(mode="json")
+    assert dumped["first_seen"].startswith("2026-10-30T08:00") and dumped["last_seen"]
+
+
+def test_data_without_observations_has_no_seen_dates_and_keeps_third_party_dates():
+    legacy = Entity(
+        type=EntityType.URL,
+        value="https://example.com/",
+        source="wayback",
+        data={"first_seen": "20100101000000", "last_seen": "20200101000000"},
+    )
+    assert (legacy.first_seen, legacy.last_seen) == (None, None)
+    assert legacy.data["first_seen"] == "20100101000000"  # la fecha del tercero no se toca
+
+
+def test_emit_records_who_saw_it_and_on_what():
+    class Probe(Module):
+        name = "probe"
+        description = "test"
+        consumes = frozenset({EntityType.DOMAIN})
+
+        async def run(self, entity):
+            return []
+
+    parent = Entity(type=EntityType.DOMAIN, value="example.com")
+    before = datetime.now(UTC)
+    emitted = Probe(ctx=None).emit(parent, EntityType.IP, "1.2.3.4")  # type: ignore[arg-type]
+    (obs,) = emitted.observations
+    assert (obs.module, obs.query) == ("probe", "domain:example.com")
+    assert emitted.source == "probe" and emitted.parent == "domain:example.com"
+    assert before <= obs.at <= datetime.now(UTC)
 
 
 @respx.mock

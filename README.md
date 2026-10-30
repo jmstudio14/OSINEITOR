@@ -133,6 +133,7 @@ módulo.
 | Investigar un objetivo, deduciendo su tipo | `osineitor scan OBJETIVO` |
 | Investigar un tipo concreto | `osineitor domain`, `ip`, `email` o `username` |
 | Ver o recuperar scans anteriores | `osineitor history` · `show N` · `export N -f json\|md\|html` |
+| Comprobar que las evidencias no se han alterado | `osineitor verify N` |
 | Ver los módulos y mis API keys | `osineitor modules` · `config show` |
 | Comprobar que las fuentes responden | `osineitor doctor` |
 | Gestionar la caché | `osineitor cache info` · `cache clear` |
@@ -146,6 +147,9 @@ Opciones que más se usan en los scans:
 | `--active` | Permite los módulos que contactan al objetivo |
 | `--max-entities` · `--max-requests` · `--max-time` | Presupuesto del scan (`0` = sin límite) |
 | `--refresh` · `--no-cache` | Ignora o desactiva la caché de respuestas |
+| `--evidence` | Guarda la respuesta original de cada fuente con su SHA-256 (`osineitor verify`) |
+| `--scope scope.yml` | Limita el scan a los dominios y redes declarados (lo de fuera se descarta) |
+| `--purpose "TEXTO"` | Anota para qué haces el scan (exigible en emails y usernames) |
 | `--json` · `--ndjson` | Salida para otros programas |
 
 Todas las órdenes y su comportamiento (estado de cada módulo, presupuesto, caché, red, entradas)

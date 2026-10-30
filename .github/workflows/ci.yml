@@ -13,11 +13,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows es la plataforma soportada; Linux se mantiene como apoyo barato.
+          # Windows es la plataforma soportada; Linux y macOS se mantienen como apoyo barato.
           - { os: windows-latest, python-version: "3.13" }
           - { os: windows-latest, python-version: "3.11" }
           - { os: ubuntu-latest, python-version: "3.13" }
           - { os: ubuntu-latest, python-version: "3.11" }
+          - { os: macos-latest, python-version: "3.13" }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

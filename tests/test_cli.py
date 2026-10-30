@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 
 import pytest
@@ -531,3 +532,54 @@ def test_config_set_rejects_ambiguous_or_unsafe_values(args, stdin):
     result = runner.invoke(app, args, input=stdin)
     assert result.exit_code == 2
     assert "No hay keys" in runner.invoke(app, ["config", "show"]).output
+
+
+def _terminals(monkeypatch, *, out_tty=True, err_tty=True):
+    out, err = io.StringIO(), io.StringIO()
+    monkeypatch.setattr(cli, "console", Console(file=out, force_terminal=out_tty))
+    monkeypatch.setattr(cli, "err_console", Console(file=err, force_terminal=err_tty, width=100))
+    return out, err
+
+
+def test_progress_bar_draws_on_stderr_and_routes_entities_through_it(monkeypatch):
+    out, err = _terminals(monkeypatch)
+    with cli._progress_bar(True) as (on_event, printer):
+        assert printer is not cli.console
+        on_event({"type": "progress", "done": 1, "total": 3, "entities": 4, "requests": 7})
+        on_event({"type": "progress", "done": 2, "total": 5, "entities": 6, "requests": 9})
+        on_event({"type": "scan.start"})  # otros eventos se ignoran
+        printer.print("ENTIDADUNO")
+    assert out.getvalue() == ""
+    assert "Módulos" in err.getvalue()
+    assert "6 entidades · 9 peticiones" in err.getvalue()
+    assert "ENTIDADUNO" in err.getvalue()
+
+
+@pytest.mark.parametrize(
+    "enabled, out_tty, err_tty",
+    [(False, True, True), (True, False, True), (True, True, False)],
+)
+def test_progress_bar_is_off_unless_both_streams_are_terminals(
+    monkeypatch, enabled, out_tty, err_tty
+):
+    out, err = _terminals(monkeypatch, out_tty=out_tty, err_tty=err_tty)
+    with cli._progress_bar(enabled) as (on_event, printer):
+        assert on_event is None
+        assert printer is cli.console
+    assert out.getvalue() == err.getvalue() == ""
+
+
+def test_scan_shows_progress_and_entities_on_stderr_when_both_are_terminals(modules, monkeypatch):
+    out, err = _terminals(monkeypatch)
+    result = runner.invoke(app, ["domain", "example.com", "--no-save"])
+    assert result.exit_code == 0
+    assert "fake_dns" in err.getvalue()  # entidades en vivo por la consola de la barra
+    assert "entidades" in err.getvalue()  # la barra llegó a pintarse
+    assert "Escaneando" in out.getvalue()  # el resto de la salida sigue en stdout
+
+
+@pytest.mark.parametrize("flag", ["--json", "--quiet", "--ndjson"])
+def test_scan_draws_no_bar_in_machine_or_quiet_modes(modules, monkeypatch, flag):
+    out, err = _terminals(monkeypatch)
+    runner.invoke(app, ["domain", "example.com", "--no-save", flag])
+    assert err.getvalue() == ""

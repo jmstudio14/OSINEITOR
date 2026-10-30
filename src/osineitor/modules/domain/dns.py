@@ -13,10 +13,12 @@ RECORD_TYPES = ("A", "AAAA", "CNAME", "MX", "NS", "TXT", "CAA")
 
 class Dns(Module):
     name = "dns"
+    authority = "authoritative"
     description = "Registros A/AAAA/CNAME/MX/NS/TXT/CAA, SPF y DMARC"
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.IP, EntityType.RECORD})
     canary = "example.com"
+    direct_dns = True
 
     async def _query(
         self, name: str, rtype: str, refused: set[str] | None = None
@@ -28,7 +30,8 @@ class Dns(Module):
         """
         try:
             answer = await self.ctx.resolver.resolve(name, rtype, lifetime=10)
-        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer) as exc:
+            self.record_evidence(f"dns://{name}/{rtype}", type(exc).__name__.upper())
             return []
         except dns.resolver.NoNameservers as exc:
             if refused is not None and any(
@@ -44,6 +47,7 @@ class Dns(Module):
                 values.append(b"".join(rdata.strings).decode(errors="replace"))
             else:
                 values.append(rdata.to_text().rstrip("."))
+        self.record_evidence(f"dns://{name}/{rtype}", "\n".join(values))
         return values
 
     async def run(self, entity: Entity) -> list[Entity]:

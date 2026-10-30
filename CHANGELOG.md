@@ -33,6 +33,66 @@ Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI 
 - ROADMAP: **Hito G · Aplicación de escritorio para Windows** (G1–G9), con la excepción al
   principio 8; F11.1 «interfaz web local» queda obsoleto.
 
+- **Anexo de evidencias en los informes (F2.7):** los informes HTML y Markdown terminan con una
+  sección «Evidencias»: módulo, entidad consultada, URL, fecha UTC, estado, bytes y SHA-256 completo
+  de cada respuesta guardada con `--evidence`, más la huella del conjunto y cómo comprobarla con
+  `osineitor verify`. Sin evidencias lo dice en una línea. Los cuerpos no van en el informe. Todo el
+  contenido se escapa.
+- **Propósito del scan (F2.6):** `--purpose "TEXTO"` (o `OSINEITOR_PURPOSE`) en los scans guarda
+  con ellos para qué se hicieron (máx. 500 caracteres); se ve en `show`, en los informes MD y HTML y
+  en `scan.start`. El ajuste `require_purpose` (`[settings]` de `config.toml`, o
+  `OSINEITOR_REQUIRE_PURPOSE`, que manda sobre el fichero) hace obligatorio el propósito en los scans
+  de email y username: sin él, código 2 antes de consultar nada. Base de datos a la versión 7
+  (`scans.purpose`). Contrato CLI↔GUI, solo aditivo: `purpose` en `scan.start` y `scan_result`. La GUI
+  aún no pasa `--purpose`.
+- **Alcance declarado (F2.5):** `--scope scope.yml` (o `OSINEITOR_SCOPE`) en los scans limita la
+  investigación a los `domains` y `ips` (IP o CIDR) del fichero, con `exclude`. Lo que cae fuera no
+  entra en el resultado ni se pivota, y deja un evento «fuera de alcance» por clave. Los dominios se
+  comparan como igual o subdominio (no por sufijo de texto). Un fichero inválido o un objetivo fuera
+  del alcance es un error de uso (código 2). Nueva dependencia `pyyaml>=6`. Base de datos a la
+  versión 6 (`scans.scope`). Contrato CLI↔GUI, solo aditivo: `scope` en `scan.start` y
+  `scan_result`. No controla las redirecciones HTTP a hosts ajenos.
+- **Confianza (F2.3):** cada entidad lleva un nivel `bajo`, `medio` o `alto` según las fuentes distintas
+  que la vieron, si alguna es autoritativa (atributo nuevo `Module.authority`: `dns`, `rdap`,
+  `http_fingerprint`, `email_validate`) y la antigüedad del dato (más de 90 días baja un nivel). Se
+  muestra en la tabla de la CLI y en los informes MD y HTML. Base de datos a la versión 5 (los scans
+  antiguos quedan sin nivel). Contrato CLI↔GUI: `entity.confidence` opcional; el evento NDJSON `entity`
+  lo trae a `null` porque se calcula al terminar el scan.
+- **Frescura (F2.4):** cada entidad expone `first_seen` y `last_seen` (primera y última observación
+  del scan, UTC; `null` en scans anteriores) en `--json` y NDJSON, y los informes MD y HTML añaden la
+  columna «Visto». Se derivan de las observaciones: sin migración. Las fechas de terceros siguen en
+  `data` con su nombre. Contrato CLI↔GUI: campos opcionales nuevos en `entity`.
+- **Evidencia con hash (F2.2):** `--evidence` en los scans guarda la respuesta original de cada
+  fuente (HTTP y consultas DNS, también las negativas) con su SHA-256, la URL consultada sin API
+  keys, la fecha UTC y el módulo y la entidad que la provocaron. Desactiva la caché. Nueva orden
+  `osineitor verify N [--digest HUELLA]` que recalcula los hashes y sale con el código `5` si algo
+  no coincide; la huella de evidencias se imprime al terminar el scan para anotarla fuera de la base
+  de datos. Base de datos a la versión 4 (tabla `evidence`). Contrato CLI↔GUI, solo aditivo:
+  `evidence` y `evidence_digest` en `scan_result`, `evidence_digest` en `scan.end`, esquema
+  `verify_output` y código de salida 5. Guía en `docs/EVIDENCIA.md`.
+- **Observaciones múltiples (F2.1):** cada entidad guarda en `observations` todas las veces que un
+  módulo la vio (módulo, entidad consultada y hora UTC) en lugar de solo la primera fuente. Un mismo
+  dato visto por varios módulos, o por uno desde varias entidades, ya no pierde esa información. La
+  columna «Fuente» de la CLI y de los informes MD y HTML lista todos los módulos. Base de datos a la
+  versión 3 (migración automática; los scans antiguos quedan sin observaciones y muestran su
+  `source`). Contrato CLI↔GUI: `entity.observations` es un campo nuevo y opcional; el evento NDJSON
+  `entity` trae solo la primera observación (se emite al descubrirla) y la lista completa va en
+  `--json`. `source` no cambia.
+- **Proxy y Tor (F1.8):** `--proxy` (o `OSINEITOR_PROXY`) en `scan`, `domain`, `ip`, `email`,
+  `username` y `doctor` envía todas las peticiones por un proxy `socks5(h)://` o `http(s)://`
+  (nueva dependencia `httpx[socks]`). Con proxy los nombres los resuelve el proxy: la guardia de red
+  deja de usar el DNS local (las IP literales privadas siguen bloqueadas) y los módulos con DNS
+  directo (`dns`, `email_validate`, atributo nuevo `direct_dns`) se omiten. Un proxy caído no cae a
+  conexión directa. Un valor inválido es un error de uso (código 2) y la contraseña del proxy nunca
+  llega al registro. Probado con un servidor SOCKS5 de prueba; no con Tor real.
+- **Registro estructurado (F1.9):** opciones globales `--verbose`/`-v` (JSON por `stderr`) y
+  `--log-file RUTA` (JSON en fichero) con cada petición HTTP, cada módulo y el inicio y fin del scan.
+  Nunca guarda consultas de URL, cabeceras ni cuerpos, y enmascara con `***` cualquier API key
+  configurada. Sin las opciones no se escribe nada. Nuevo módulo `osineitor/logs.py`.
+- **Barra de progreso (F1.17):** en una terminal el scan dibuja una barra en `stderr`
+  (módulos completados, entidades y peticiones), alimentada por los eventos `progress`. No aparece
+  con `--json`, `--ndjson`, `--quiet` ni con `stdout`/`stderr` redirigidos. Mientras está activa,
+  las entidades en vivo se imprimen por la consola de la barra para no corromperla.
 - **Health check semanal (F1.3):** el workflow `.github/workflows/doctor.yml` ejecuta
   `osineitor doctor` cada lunes (y a demanda) y mantiene un único issue con la etiqueta
   `salud-fuentes` con las fuentes que fallan; lo actualiza mientras sigan fallando y lo cierra
@@ -102,7 +162,10 @@ Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI 
   un vacío silencioso.
 - **Rutas multiplataforma (F1.16):** configuración en `%APPDATA%\osineitor` y datos en
   `%LOCALAPPDATA%\osineitor` en Windows (con `platformdirs`); en Linux no cambia. Se pueden
-  fijar con `OSINEITOR_CONFIG_DIR` y `OSINEITOR_DATA_DIR`.
+  fijar con `OSINEITOR_CONFIG_DIR` y `OSINEITOR_DATA_DIR`. `config.toml` (con las API keys) queda
+  legible solo por el usuario actual: en Windows se le quita la herencia de ACL con `icacls`; en
+  el resto nace ya con `0600`. Si no se puede restringir, avisa en lugar de callar. La CI incluye
+  también macOS.
 - `crtsh` descarta los hostnames no válidos en lugar de emitirlos.
 - `dns` falla con error cuando el resolvedor no responde (antes devolvía un vacío que parecía
   «sin registros»). Un 429 de cualquier fuente se registra ahora como `quota`, no como error.

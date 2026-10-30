@@ -44,8 +44,12 @@ def is_public(address: str) -> bool:
     return ip.is_global and not ip.is_multicast
 
 
-async def ensure_public(url: str) -> None:
-    """Lanza `NetworkGuardError` si la URL apunta (o resuelve) a una dirección no pública."""
+async def ensure_public(url: str, *, resolve: bool = True) -> None:
+    """Lanza `NetworkGuardError` si la URL apunta (o resuelve) a una dirección no pública.
+
+    Con `resolve=False` (hay un proxy) los nombres no se resuelven aquí: lo haría el DNS local y
+    filtraría cada host consultado. Solo se comprueban las IP literales.
+    """
     host = httpx.URL(url).host
     if not host:
         raise NetworkGuardError("URL sin host")
@@ -53,7 +57,7 @@ async def ensure_public(url: str) -> None:
         ipaddress.ip_address(host)
         addresses = [host]
     except ValueError:
-        addresses = await resolve_host(host)
+        addresses = await resolve_host(host) if resolve else []
     for address in addresses:
         if not is_public(address):
             raise NetworkGuardError(

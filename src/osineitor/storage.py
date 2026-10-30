@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from osineitor.config import data_dir
-from osineitor.models import Entity, ModuleRun, ScanEvent, ScanResult
+from osineitor.models import Entity, Evidence, ModuleRun, ScanEvent, ScanResult
 
 # Migraciones por `PRAGMA user_version`: la posición en la lista (empezando en 1) es la versión.
 # Nunca se edita una ya publicada: los cambios van en una migración nueva al final.
@@ -53,6 +53,31 @@ MIGRATIONS = [
         message TEXT NOT NULL
     );
     """,
+    # 3: todas las fuentes que vieron cada entidad (JSON; las filas antiguas quedan en `[]`).
+    "ALTER TABLE entities ADD COLUMN observations TEXT NOT NULL DEFAULT '[]'",
+    # 4: respuesta original de cada fuente con su SHA-256 (`--evidence`).
+    """
+    CREATE TABLE evidence (
+        scan_id INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+        module TEXT NOT NULL,
+        entity TEXT,
+        kind TEXT NOT NULL,
+        url TEXT NOT NULL,
+        method TEXT NOT NULL,
+        status INTEGER,
+        at TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        truncated INTEGER NOT NULL,
+        body BLOB NOT NULL
+    );
+    """,
+    # 5: confianza de cada entidad (las filas antiguas quedan sin valor).
+    "ALTER TABLE entities ADD COLUMN confidence TEXT",
+    # 6: alcance declarado del scan (JSON; NULL si no hubo).
+    "ALTER TABLE scans ADD COLUMN scope TEXT",
+    # 7: propósito declarado del scan (NULL si no se indicó).
+    "ALTER TABLE scans ADD COLUMN purpose TEXT",
 ]
 
 
@@ -92,21 +117,33 @@ class Storage:
     def save(self, result: ScanResult) -> int:
         with self._conn:
             cur = self._conn.execute(
-                "INSERT INTO scans (target_type, target, depth, started_at, finished_at)"
-                " VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO scans (target_type, target, depth, started_at, finished_at, scope,"
+                " purpose) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     result.target.type,
                     result.target.value,
                     result.depth,
                     result.started_at.isoformat(),
                     result.finished_at.isoformat() if result.finished_at else None,
+                    json.dumps(result.scope) if result.scope else None,
+                    result.purpose,
                 ),
             )
             scan_id = cur.lastrowid
             self._conn.executemany(
-                "INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO entities (scan_id, type, value, source, parent, data, observations,"
+                " confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 [
-                    (scan_id, e.type, e.value, e.source, e.parent, json.dumps(e.data, default=str))
+                    (
+                        scan_id,
+                        e.type,
+                        e.value,
+                        e.source,
+                        e.parent,
+                        json.dumps(e.data, default=str),
+                        json.dumps([o.model_dump(mode="json") for o in e.observations]),
+                        e.confidence,
+                    )
                     for e in result.entities
                 ],
             )
@@ -131,22 +168,52 @@ class Storage:
                     for r in result.runs
                 ],
             )
+            self._conn.executemany(
+                "INSERT INTO evidence (scan_id, module, entity, kind, url, method, status, at,"
+                " sha256, size, truncated, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        scan_id,
+                        v.module,
+                        v.entity,
+                        v.kind,
+                        v.url,
+                        v.method,
+                        v.status,
+                        v.at.isoformat(),
+                        v.sha256,
+                        v.size,
+                        int(v.truncated),
+                        v.body,
+                    )
+                    for v in result.evidence
+                ],
+            )
         result.scan_id = scan_id
         return scan_id
 
     def load(self, scan_id: int) -> ScanResult | None:
         row = self._conn.execute(
-            "SELECT target_type, target, depth, started_at, finished_at FROM scans WHERE id = ?",
+            "SELECT target_type, target, depth, started_at, finished_at, scope,"
+            " purpose FROM scans WHERE id = ?",
             (scan_id,),
         ).fetchone()
         if row is None:
             return None
-        target_type, target, depth, started_at, finished_at = row
+        target_type, target, depth, started_at, finished_at, scope, purpose = row
         entities = [
-            Entity(type=t, value=v, source=s, parent=p, data=json.loads(d))
-            for t, v, s, p, d in self._conn.execute(
-                "SELECT type, value, source, parent, data FROM entities WHERE scan_id = ?"
-                " ORDER BY rowid",
+            Entity(
+                type=t,
+                value=v,
+                source=s,
+                parent=p,
+                data=json.loads(d),
+                observations=json.loads(o),
+                confidence=c,
+            )
+            for t, v, s, p, d, o, c in self._conn.execute(
+                "SELECT type, value, source, parent, data, observations, confidence FROM entities"
+                " WHERE scan_id = ? ORDER BY rowid",
                 (scan_id,),
             )
         ]
@@ -174,6 +241,26 @@ class Storage:
                 (scan_id,),
             )
         ]
+        evidence = [
+            Evidence(
+                module=m,
+                entity=e,
+                kind=k,
+                url=u,
+                method=me,
+                status=st,
+                at=datetime.fromisoformat(at),
+                sha256=h,
+                size=sz,
+                truncated=bool(tr),
+                body=b,
+            )
+            for m, e, k, u, me, st, at, h, sz, tr, b in self._conn.execute(
+                "SELECT module, entity, kind, url, method, status, at, sha256, size, truncated,"
+                " body FROM evidence WHERE scan_id = ? ORDER BY rowid",
+                (scan_id,),
+            )
+        ]
         return ScanResult(
             scan_id=scan_id,
             target=Entity(type=target_type, value=target),
@@ -183,6 +270,9 @@ class Storage:
             entities=entities,
             events=events,
             runs=runs,
+            evidence=evidence,
+            scope=json.loads(scope) if scope else None,
+            purpose=purpose,
             truncated=any(ev.kind == "budget" for ev in events),
         )
 

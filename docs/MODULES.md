@@ -25,7 +25,7 @@ prueba de salud). Todos los módulos pasivos y sin key cachean sus respuestas 6 
 
 ### `dns`
 - **Consume:** dominio y subdominios. **Produce:** `record` `dns:<dominio>`, `ip`.
-- **Fuente:** resolver DNS del sistema (dnspython).
+- **Fuente:** resolver DNS del sistema (dnspython). Con `--proxy` se omite (consulta DNS directa).
 - **Datos:** A, AAAA, CNAME, MX, NS, TXT, CAA, política SPF y DMARC (`_dmarc.<dominio>`).
 - **Pivote:** cada IP de A/AAAA pasa al siguiente nivel.
 - **Errores:** si ningún tipo de registro obtiene respuesta, falla en vez de devolver un vacío.
@@ -94,7 +94,8 @@ prueba de salud). Todos los módulos pasivos y sin key cachean sus respuestas 6 
 
 ### `email_validate`
 - **Consume:** email. **Produce:** `record` `email:<email>`, `domain`, `username`.
-- **Datos:** sintaxis, registros MX, si es proveedor gratuito o desechable.
+- **Datos:** sintaxis, registros MX, si es proveedor gratuito o desechable. Con `--proxy` se
+  omite (el MX se consulta por DNS directo).
 - **Pivote:** el dominio (salvo proveedores gratuitos o desechables) y la parte local como
   username (sin la etiqueta `+…`, mínimo 3 caracteres).
 

@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import logging
 import time
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from typing import Any
 
-from osineitor import events
+from osineitor import events, logs
 from osineitor.budget import Budget
+from osineitor.confidence import assess
 from osineitor.errors import BudgetExceeded, ModuleError, ModuleQuota, ModuleSkipped
 from osineitor.http import RunStats, current_stats
 from osineitor.models import Entity, ModuleRun, ScanEvent, ScanResult
 from osineitor.modules.base import Context, Module
+from osineitor.scope import Scope
+
+log = logs.get("engine")
 
 
 class Engine:
@@ -29,8 +34,15 @@ class Engine:
         on_entity: Callable[[Entity], None] | None = None,
         budget: Budget | None = None,
         on_event: Callable[[dict[str, Any]], None] | None = None,
+        evidence: bool = False,
+        scope: Scope | None = None,
+        purpose: str | None = None,
     ) -> None:
         self.depth = max(depth, 1)
+        self.evidence = evidence  # guarda la respuesta original de cada fuente (ver evidence.py)
+        self.scope = scope  # lo que cae fuera no entra en el resultado ni se pivota
+        self._out_of_scope: set[str] = set()
+        self.purpose = purpose
         self.on_entity = on_entity
         self.on_event = on_event  # eventos del contrato CLI↔GUI (ver osineitor.events)
         self.budget = budget or Budget()
@@ -39,6 +51,7 @@ class Engine:
         self._jobs_total = 0
         self._ranks: dict[str, dict[str, int]] = {}  # entidad → campo → rank que lo aportó
         self._jobs_done = 0
+        self._proxy: str | None = getattr(ctx.http, "proxy", None)
         self.modules: list[Module] = []
         self.skipped: list[ScanEvent] = []
         for cls in module_classes:
@@ -46,6 +59,8 @@ class Engine:
                 self._skip(cls, "módulo activo (usa --active)")
             elif cls.requires_key and not ctx.config.key(cls.requires_key):
                 self._skip(cls, f"falta la API key '{cls.requires_key}'")
+            elif cls.direct_dns and self._proxy:
+                self._skip(cls, "consulta DNS directa: no se enruta por --proxy")
             else:
                 self.modules.append(cls(self._bind(ctx, cls)))
 
@@ -135,6 +150,15 @@ class Engine:
                 existing.data[k] = v
                 ranks[k] = rank
 
+    @staticmethod
+    def _observe(existing: Entity, incoming: Entity) -> None:
+        """Suma quién más la vio. El mismo módulo sobre la misma entidad no cuenta dos veces."""
+        seen = {(o.module, o.query) for o in existing.observations}
+        for obs in incoming.observations:
+            if (obs.module, obs.query) not in seen:
+                existing.observations.append(obs)
+                seen.add((obs.module, obs.query))
+
     def _emit_progress(self, result: ScanResult) -> None:
         self._emit(
             "progress",
@@ -156,6 +180,10 @@ class Engine:
             existing = index.get(entity.key)
             if existing is not None:
                 self._merge(existing, entity, rank)
+                self._observe(existing, entity)
+                continue
+            if self.scope and not self.scope.allows(entity):
+                self._drop_out_of_scope(entity, result)
                 continue
             # Solo el tope de entidades impide guardar: lo que un módulo terminó a
             # tiempo se conserva aunque se haya agotado el tiempo o las peticiones.
@@ -170,11 +198,27 @@ class Engine:
                 self.on_entity(entity)
             self._emit("entity", entity=entity.model_dump(mode="json"))
 
+    def _drop_out_of_scope(self, entity: Entity, result: ScanResult) -> None:
+        """Descarta la entidad y deja constancia una sola vez por clave."""
+        if entity.key in self._out_of_scope:
+            return
+        self._out_of_scope.add(entity.key)
+        result.events.append(
+            ScanEvent(
+                kind="skipped",
+                module="engine",
+                entity=entity.key,
+                message=f"fuera de alcance: {entity.key}",
+            )
+        )
+        log.info("scan.out_of_scope", extra={"fields": {"entity": entity.key}})
+
     @staticmethod
     def _truncate(result: ScanResult, reason: str) -> None:
         if not result.truncated:
             result.truncated = True
             result.events.append(ScanEvent(kind="budget", module="engine", message=reason))
+            log.warning("scan.truncated", extra={"fields": {"reason": reason}})
 
     @staticmethod
     def _mark_cancelled(result: ScanResult) -> None:
@@ -182,19 +226,36 @@ class Engine:
             result.events.append(
                 ScanEvent(kind="cancelled", module="engine", message="scan cancelado")
             )
+            log.warning("scan.cancelled")
 
     async def run(self, seed: Entity) -> ScanResult:
         result = ScanResult(target=seed, depth=self.depth, events=list(self.skipped))
+        result.scope = self.scope.to_dict() if self.scope else None
+        result.purpose = self.purpose
         result.runs = [
             ModuleRun(module=ev.module, status="skipped", message=ev.message) for ev in self.skipped
         ]
         self.budget.start()
+        log.info(
+            "scan.start",
+            extra={
+                "fields": {
+                    "target": seed.key,
+                    "depth": self.depth,
+                    "modules": [m.name for m in self.modules],
+                    "skipped": [ev.module for ev in self.skipped],
+                    "proxy": logs.redact_url(proxy) if (proxy := self._proxy) else None,
+                }
+            },
+        )
         self._emit(
             "scan.start",
             target={"type": seed.type.value, "value": seed.value},
             depth=self.depth,
             modules=[m.name for m in self.modules],
             skipped=[{"module": ev.module, "message": ev.message} for ev in self.skipped],
+            scope=result.scope,
+            purpose=result.purpose,
             budget={
                 "max_entities": self.budget.max_entities,
                 "max_requests": self.budget.max_requests,
@@ -224,6 +285,19 @@ class Engine:
             if not layer or result.truncated or result.cancelled:
                 break
         result.finished_at = datetime.now(UTC)
+        authoritative = {m.name for m in self.modules if m.authority == "authoritative"}
+        for entity in result.entities:
+            entity.confidence = assess(entity, authoritative, result.finished_at)
+        log.info(
+            "scan.end",
+            extra={
+                "fields": {
+                    "status": result.status,
+                    "entities": len(result.entities),
+                    "requests": self.budget.requests,
+                }
+            },
+        )
         return result
 
     async def _run_one(self, module: Module, entity: Entity, result: ScanResult) -> list[Entity]:
@@ -231,7 +305,7 @@ class Engine:
             if reason := self.budget.exhausted(len(result.entities)):
                 self._truncate(result, reason)
                 return []
-            stats = RunStats()
+            stats = RunStats(evidence=[] if self.evidence else None)
             current_stats.set(stats)  # esta ejecución corre en su propia tarea
             self._emit("module.start", module=module.name, entity=entity.key)
             started = time.monotonic()
@@ -290,5 +364,11 @@ class Engine:
             message=message,
         )
         result.runs.append(run)
+        for item in stats.evidence or []:
+            result.evidence.append(
+                item.model_copy(update={"module": module.name, "entity": entity.key})
+            )
+        level = logging.WARNING if status in ("error", "quota") else logging.INFO
+        log.log(level, "module.end", extra={"fields": run.model_dump()})
         self._jobs_done += 1
         self._emit("module.end", **run.model_dump())

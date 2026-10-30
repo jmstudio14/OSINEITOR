@@ -24,6 +24,7 @@ def _vcard(entity: dict[str, Any]) -> dict[str, str]:
 
 class Rdap(Module):
     name = "rdap"
+    authority = "authoritative"
     description = "Registrador, fechas, estado y nameservers vía RDAP (rdap.org)"
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.RECORD, EntityType.EMAIL})
