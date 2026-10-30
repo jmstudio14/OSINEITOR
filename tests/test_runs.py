@@ -226,7 +226,6 @@ def test_migrates_a_v010_database_without_losing_data(tmp_path):
 
 
 def test_observations_are_added_by_migration_3_without_touching_older_ones():
-    assert len(MIGRATIONS) == 3
     assert "observations" in MIGRATIONS[2] and "observations" not in MIGRATIONS[0]
     assert "observations" not in MIGRATIONS[1]
 

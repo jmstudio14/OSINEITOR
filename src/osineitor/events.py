@@ -19,6 +19,7 @@ EXIT_INTERNAL = 1  # excepción no prevista (el código que Python da por defect
 EXIT_USAGE = 2  # entrada inválida (el que usa click)
 EXIT_MODULE_ERRORS = 3  # terminó, pero algún módulo falló
 EXIT_TRUNCATED = 4  # se agotó el presupuesto: el resultado es incompleto
+EXIT_TAMPERED = 5  # `verify`: alguna evidencia no coincide con su huella
 EXIT_CANCELLED = 130  # cancelado por el usuario (convención de Ctrl+C)
 
 

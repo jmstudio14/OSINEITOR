@@ -17,6 +17,7 @@ dependencies = [
     "dnspython>=2.6",
     "platformdirs>=4",
     "idna>=3",
+    "pyyaml>=6",
 ]
 
 [project.optional-dependencies]

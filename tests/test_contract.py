@@ -96,6 +96,23 @@ def test_entity_carries_its_observations_in_ndjson_and_in_json(modules, tmp_path
     assert saved["observations"][0]["at"]
 
 
+def test_scope_is_in_scan_start_and_in_the_saved_result(modules, tmp_path):
+    scope = tmp_path / "scope.yml"
+    scope.write_text("domains: [example.com]\nips: [9.9.9.0/24]\n", encoding="utf-8")
+    db = str(tmp_path / "s.db")
+    out = runner.invoke(
+        app,
+        ["domain", "example.com", "--ndjson", "--scope", str(scope), "--purpose", "auditoría"]
+        + ["--db", db],
+    ).stdout
+    start = next(e for e in parse_events(out) if e["type"] == "scan.start")
+    assert start["scope"] == {"domains": ["example.com"], "ips": ["9.9.9.0/24"]}
+    assert start["purpose"] == "auditoría"
+    shown = json.loads(runner.invoke(app, ["show", "1", "--db", db, "--json"]).stdout)
+    validate("scan_result", shown)
+    assert (shown["scope"], shown["purpose"]) == (start["scope"], "auditoría")
+
+
 def test_ndjson_stdout_is_ascii_even_with_non_ascii_data(modules):
     result = runner.invoke(app, ["scan", "example.com", "--ndjson", "--no-save"])
     assert result.stdout.isascii()  # no depende de la codificación de la tubería

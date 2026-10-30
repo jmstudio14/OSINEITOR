@@ -53,6 +53,26 @@
             },
             "additionalProperties": true
           }
+        },
+        "first_seen": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_seen": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "bajo",
+            "medio",
+            "alto",
+            null
+          ]
         }
       },
       "additionalProperties": true
@@ -192,6 +212,54 @@
             "truncated",
             "cancelled"
           ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "evidence_digest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "purpose": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "scope": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "domains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ips": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": true
@@ -261,6 +329,15 @@
             },
             "additionalProperties": true
           }
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "purpose": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "budget": {
           "type": "object",
@@ -512,6 +589,9 @@
         },
         "message": {
           "type": "string"
+        },
+        "evidence_digest": {
+          "type": "string"
         }
       },
       "additionalProperties": true
@@ -733,6 +813,134 @@
         },
         "configured": {
           "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "module",
+        "kind",
+        "url",
+        "method",
+        "at",
+        "sha256",
+        "size",
+        "truncated"
+      ],
+      "properties": {
+        "module": {
+          "type": "string"
+        },
+        "entity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "http",
+            "dns"
+          ]
+        },
+        "url": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "status": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "at": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "verify_output": {
+      "type": "object",
+      "required": [
+        "scan_id",
+        "checked",
+        "ok",
+        "mismatches",
+        "evidence_digest",
+        "digest_match"
+      ],
+      "properties": {
+        "scan_id": {
+          "type": "integer"
+        },
+        "checked": {
+          "type": "integer"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "mismatches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "number",
+              "module",
+              "url",
+              "expected",
+              "actual"
+            ],
+            "properties": {
+              "number": {
+                "type": "integer"
+              },
+              "module": {
+                "type": "string"
+              },
+              "entity": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "url": {
+                "type": "string"
+              },
+              "expected": {
+                "type": "string"
+              },
+              "actual": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "evidence_digest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "digest_match": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "additionalProperties": true

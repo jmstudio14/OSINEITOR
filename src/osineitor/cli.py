@@ -21,7 +21,7 @@ from rich.markup import escape
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from osineitor import __version__, events, logs, registry, report
+from osineitor import __version__, events, evidence, logs, registry, report
 from osineitor.budget import (
     DEFAULT_MAX_ENTITIES,
     DEFAULT_MAX_REQUESTS,
@@ -38,13 +38,18 @@ from osineitor.events import (
     EXIT_INTERNAL,
     EXIT_MODULE_ERRORS,
     EXIT_OK,
+    EXIT_TAMPERED,
     EXIT_TRUNCATED,
     NdjsonSink,
 )
 from osineitor.http import HttpClient, validate_proxy
 from osineitor.models import Entity, EntityType, ScanResult, detect_type
 from osineitor.modules.base import Context
+from osineitor.scope import Scope, ScopeError
 from osineitor.storage import Storage, StorageError
+
+MAX_PURPOSE = 500
+PURPOSE_REQUIRED_FOR = (EntityType.EMAIL, EntityType.USERNAME)
 
 LEGAL_NOTICE = (
     "OSINEITOR solo consulta fuentes abiertas. Úsalo sobre objetivos propios o con autorización "
@@ -107,6 +112,32 @@ NoCache = Annotated[
 Refresh = Annotated[
     bool, typer.Option("--refresh", help="Ignora lo cacheado y vuelve a consultar las fuentes.")
 ]
+SaveEvidence = Annotated[
+    bool,
+    typer.Option(
+        "--evidence",
+        help="Guarda la respuesta original de cada fuente con su SHA-256 (sin caché). "
+        "Se comprueba con `osineitor verify`.",
+    ),
+]
+Purpose = Annotated[
+    str | None,
+    typer.Option(
+        "--purpose",
+        envvar="OSINEITOR_PURPOSE",
+        help="Para qué haces el scan (queda guardado con él). Obligatorio en emails y usernames "
+        "si `require_purpose` está activo.",
+    ),
+]
+ScopeFile = Annotated[
+    Path | None,
+    typer.Option(
+        "--scope",
+        envvar="OSINEITOR_SCOPE",
+        help="Fichero YAML con el alcance (`domains`, `ips`, `exclude`): lo que caiga fuera "
+        "no entra en el resultado ni se investiga.",
+    ),
+]
 
 
 Ndjson = Annotated[
@@ -149,6 +180,30 @@ class ScanOptions:
     quiet: bool = False
     control_stdin: bool = False
     proxy: str | None = None
+    evidence: bool = False
+    scope: Scope | None = None
+    purpose: str | None = None
+
+
+def _purpose(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    if not value or len(value) > MAX_PURPOSE or any(ch in value for ch in "\r\n\x00"):
+        raise typer.BadParameter(
+            f"debe tener entre 1 y {MAX_PURPOSE} caracteres, sin saltos de línea",
+            param_hint="--purpose",
+        )
+    return value
+
+
+def _scope(path: Path | None) -> Scope | None:
+    if path is None:
+        return None
+    try:
+        return Scope.from_file(path)
+    except ScopeError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--scope") from exc
 
 
 def _force_utf8() -> None:
@@ -272,7 +327,8 @@ async def _scan(
 ) -> ScanResult:
     config = Config.load()
     budget = Budget.from_limits(opts.max_entities, opts.max_requests, opts.max_time)
-    cache = None if opts.no_cache else ResponseCache()
+    # Una evidencia es una captura fresca: una respuesta cacheada no tiene fecha original.
+    cache = None if opts.no_cache or opts.evidence else ResponseCache()
     async with HttpClient(
         config,
         allow_private=opts.allow_private,
@@ -292,6 +348,9 @@ async def _scan(
                 on_entity=functools.partial(_print_entity, out=out) if live else None,
                 budget=budget,
                 on_event=(lambda event: [h(event) for h in handlers]) if handlers else None,
+                evidence=opts.evidence,
+                scope=opts.scope,
+                purpose=opts.purpose,
             )
             if opts.control_stdin:
                 watch_stdin(engine.cancel)
@@ -350,9 +409,17 @@ def render(result: ScanResult) -> None:
         table = Table(title=f"{etype} ({len(entities)})", title_justify="left", expand=True)
         table.add_column("Valor", overflow="fold", ratio=2)
         table.add_column("Fuente", ratio=1)
+        table.add_column("Confianza", no_wrap=True)
         table.add_column("Detalles", overflow="fold", ratio=4)
         for e in entities:
-            table.add_row(e.value, ", ".join(e.sources), _summarize(e))
+            level = e.confidence or ""
+            style = _CONFIDENCE_STYLE.get(level, "")
+            table.add_row(
+                e.value,
+                ", ".join(e.sources),
+                f"{style}{level}[/]" if style else level,
+                _summarize(e),
+            )
         console.print(table)
     if not result.entities:
         console.print("[dim]Sin resultados.[/]")
@@ -364,6 +431,17 @@ def render(result: ScanResult) -> None:
     if result.truncated:
         console.print(
             "[yellow]Resultado incompleto: el scan se detuvo al agotar su presupuesto.[/]"
+        )
+    if result.purpose:
+        console.print(f"Propósito: {escape(result.purpose)}", soft_wrap=True)
+    if result.scope:
+        declared = "; ".join(f"{k}: {', '.join(v)}" for k, v in result.scope.items())
+        console.print(f"Alcance: {escape(declared)}", soft_wrap=True)
+    if result.evidence:
+        console.print(
+            f"Evidencias:{len(result.evidence)} · huella {result.evidence_digest}\n"
+            "[dim]Anótala fuera de la base de datos y compárala con `verify --digest`.[/]",
+            soft_wrap=True,
         )
 
 
@@ -394,6 +472,8 @@ def _render_runs(result: ScanResult) -> None:
         )
     console.print(table)
 
+
+_CONFIDENCE_STYLE = {"alto": "[green]", "medio": "[yellow]", "bajo": "[red]"}
 
 _STATUS_STYLE = {
     "ok": "[green]",
@@ -428,6 +508,15 @@ def _run_target(
     if opts.ndjson and as_json:
         raise typer.BadParameter("--ndjson y --json son excluyentes")
     seed = _make_seed(etype, value)
+    if opts.scope and not opts.scope.allows(seed):
+        raise typer.BadParameter(f"el objetivo {seed.key} está fuera del alcance declarado")
+    if etype in PURPOSE_REQUIRED_FOR and not opts.purpose and Config.load().purpose_required():
+        raise typer.BadParameter(
+            f"los scans de {etype} exigen --purpose (require_purpose está activo)",
+            param_hint="--purpose",
+        )
+    if opts.evidence and no_save:
+        err_console.print("[yellow]Aviso: con --no-save las evidencias no se guardan.[/]")
     sink = NdjsonSink() if opts.ndjson else None
     human = not (as_json or opts.ndjson or opts.quiet)
     if human:
@@ -465,6 +554,7 @@ def _run_target(
                 exit_code=code,
                 entities=len(result.entities),
                 finished_at=result.finished_at.isoformat() if result.finished_at else None,
+                **({"evidence_digest": result.evidence_digest} if result.evidence else {}),
             )
         )
     elif as_json:
@@ -494,6 +584,9 @@ def domain(
     ndjson: Ndjson = False,
     quiet: Quiet = False,
     control_stdin: ControlStdin = False,
+    save_evidence: SaveEvidence = False,
+    scope: ScopeFile = None,
+    purpose: Purpose = None,
 ) -> None:
     """Investiga un dominio: RDAP/WHOIS, DNS, subdominios, histórico web."""
     opts = ScanOptions(
@@ -510,6 +603,9 @@ def domain(
         quiet,
         control_stdin,
         _proxy(proxy),
+        save_evidence,
+        _scope(scope),
+        _purpose(purpose),
     )
     _run_target(EntityType.DOMAIN, target, opts, no_save, json_out, db)
 
@@ -533,6 +629,9 @@ def ip(
     ndjson: Ndjson = False,
     quiet: Quiet = False,
     control_stdin: ControlStdin = False,
+    save_evidence: SaveEvidence = False,
+    scope: ScopeFile = None,
+    purpose: Purpose = None,
 ) -> None:
     """Investiga una IP: geolocalización, puertos/servicios, reputación."""
     opts = ScanOptions(
@@ -549,6 +648,9 @@ def ip(
         quiet,
         control_stdin,
         _proxy(proxy),
+        save_evidence,
+        _scope(scope),
+        _purpose(purpose),
     )
     _run_target(EntityType.IP, target, opts, no_save, json_out, db)
 
@@ -572,6 +674,9 @@ def email(
     ndjson: Ndjson = False,
     quiet: Quiet = False,
     control_stdin: ControlStdin = False,
+    save_evidence: SaveEvidence = False,
+    scope: ScopeFile = None,
+    purpose: Purpose = None,
 ) -> None:
     """Investiga un email: validez, perfiles asociados, filtraciones."""
     opts = ScanOptions(
@@ -588,6 +693,9 @@ def email(
         quiet,
         control_stdin,
         _proxy(proxy),
+        save_evidence,
+        _scope(scope),
+        _purpose(purpose),
     )
     _run_target(EntityType.EMAIL, target, opts, no_save, json_out, db)
 
@@ -611,6 +719,9 @@ def username(
     ndjson: Ndjson = False,
     quiet: Quiet = False,
     control_stdin: ControlStdin = False,
+    save_evidence: SaveEvidence = False,
+    scope: ScopeFile = None,
+    purpose: Purpose = None,
 ) -> None:
     """Busca un nombre de usuario en cientos de sitios."""
     opts = ScanOptions(
@@ -627,6 +738,9 @@ def username(
         quiet,
         control_stdin,
         _proxy(proxy),
+        save_evidence,
+        _scope(scope),
+        _purpose(purpose),
     )
     _run_target(EntityType.USERNAME, target, opts, no_save, json_out, db)
 
@@ -650,6 +764,9 @@ def scan(
     ndjson: Ndjson = False,
     quiet: Quiet = False,
     control_stdin: ControlStdin = False,
+    save_evidence: SaveEvidence = False,
+    scope: ScopeFile = None,
+    purpose: Purpose = None,
 ) -> None:
     """Detecta el tipo de objetivo y pivota entre frentes (profundidad 2 por defecto)."""
     opts = ScanOptions(
@@ -666,6 +783,9 @@ def scan(
         quiet,
         control_stdin,
         _proxy(proxy),
+        save_evidence,
+        _scope(scope),
+        _purpose(purpose),
     )
     _run_target(detect_type(target), target, opts, no_save, json_out, db)
 
@@ -745,6 +865,52 @@ def show(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> None:
         print(result.model_dump_json(indent=2))
     else:
         render(result)
+
+
+@app.command()
+def verify(
+    scan_id: int,
+    digest: Annotated[
+        str | None,
+        typer.Option("--digest", help="Huella de evidencias anotada al hacer el scan."),
+    ] = None,
+    db: DbPath = None,
+    json_out: AsJson = False,
+) -> None:
+    """Recalcula las huellas de las evidencias de un scan y detecta si se han manipulado."""
+    with _open_storage(db) as storage:
+        result = storage.load(scan_id)
+    if result is None:
+        raise typer.BadParameter(f"no existe el scan {scan_id}")
+    check = evidence.verify(result, digest)
+    code = EXIT_OK if check.ok else EXIT_TAMPERED
+    if json_out:
+        _print_json(
+            {
+                "scan_id": scan_id,
+                "checked": check.checked,
+                "ok": check.ok,
+                "mismatches": check.mismatches,
+                "evidence_digest": check.evidence_digest,
+                "digest_match": check.digest_match,
+            }
+        )
+        raise typer.Exit(code)
+    if not check.checked:
+        console.print("[dim]Este scan no guardó evidencias (se hace con --evidence).[/]")
+    elif check.mismatches:
+        for m in check.mismatches:
+            console.print(
+                f"[red]Alterada[/] #{m['number']} {m['module']} {escape(m['url'])}\n"
+                f"  esperada {m['expected']}\n  actual   {m['actual']}"
+            )
+    else:
+        console.print(f"[green]Íntegras[/]: {check.checked} evidencias coinciden con su huella.")
+    if check.evidence_digest:
+        console.print(f"Huella de evidencias: {check.evidence_digest}", soft_wrap=True)
+    if check.digest_match is False:
+        console.print("[red]La huella no coincide con la indicada en --digest.[/]")
+    raise typer.Exit(code)
 
 
 @app.command()

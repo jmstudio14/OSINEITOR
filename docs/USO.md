@@ -31,6 +31,7 @@ osineitor history --limit 50          # scans guardados (20 por defecto)
 osineitor show 3                      # volver a ver el scan 3
 osineitor export 3 -f html            # informe en reports/ (json | md | html)
 osineitor export 3 -f md -o informe.md  # en el fichero indicado
+osineitor verify 3                    # comprueba las evidencias del scan 3 (ver Evidencia)
 
 osineitor modules                     # módulos disponibles y estado de sus API keys
 osineitor doctor                      # prueba cada módulo contra su fuente real
@@ -60,7 +61,83 @@ también las entidades descubiertas (p. ej. las IPs a las que resuelve un domini
 multiplica las peticiones: úsalo con criterio. Una entidad ya vista no se vuelve a investigar y los
 datos de varias fuentes sobre la misma entidad se fusionan; si discrepan, gana el módulo que va
 antes en el orden alfabético. La columna «Fuente» lista todos los módulos que vieron cada entidad;
-`--json` y `show --json` añaden en `observations` quién la vio, sobre qué entidad y cuándo.
+`--json` y `show --json` añaden en `observations` quién la vio, sobre qué entidad y cuándo, y
+`first_seen`/`last_seen` con la primera y la última vez; los informes muestran la última en «Visto».
+Las fechas de los terceros (p. ej. `last_update` de Shodan) siguen en los detalles de cada entidad.
+
+La columna «Confianza» (`bajo`, `medio`, `alto`) resume cuánto respalda el dato lo visto: sube con el
+número de fuentes distintas y si una es autoritativa (`dns`, `rdap`, `http_fingerprint`,
+`email_validate`) y baja un nivel si el dato tiene más de 90 días según el tercero. Sirve para
+decidir qué revisar primero, no demuestra que el dato sea cierto.
+
+## Evidencia
+
+Con `--evidence` cada respuesta de las fuentes se guarda tal cual con su **SHA-256**, la URL
+consultada (sin API keys), la fecha UTC y el módulo y la entidad que la provocaron. Las consultas DNS
+(`dns`, `email_validate`) también constan, incluidas las respuestas negativas (`NXDOMAIN`,
+`NOANSWER`). Así un dato del informe se puede rastrear hasta la consulta exacta y comprobar después.
+Con `--evidence` no se usa la caché (una copia vieja no es una captura con fecha) y el scan hace más
+peticiones; con `--no-save` las evidencias no se guardan.
+
+```bash
+osineitor domain example.com --evidence        # al final imprime la huella de evidencias
+osineitor verify 3                             # recalcula los hashes: sale con 5 si algo no coincide
+osineitor verify 3 --digest HUELLA             # además compara con la huella que anotaste
+```
+
+La huella de evidencias resume todas las respuestas. **Anótala fuera de la base de datos**: quien
+pueda reescribir a la vez un cuerpo y su hash en la base no se detectaría solo con `verify`, pero sí
+con una huella guardada aparte. Los informes HTML y Markdown de un scan con `--evidence` acaban con un
+anexo de evidencias (módulo, URL, fecha, estado, tamaño y SHA-256 de cada respuesta, más la huella del
+conjunto). Detalles y límites en [EVIDENCIA.md](EVIDENCIA.md).
+
+## Alcance
+
+`--scope scope.yml` (o `OSINEITOR_SCOPE`) limita el scan a lo que tienes autorizado investigar:
+
+```yaml
+domains: [example.com]              # el dominio y sus subdominios
+ips: [203.0.113.0/24, 198.51.100.7] # IPs sueltas o redes CIDR
+exclude: [admin.example.com, 203.0.113.9]
+```
+
+Lo que cae fuera no entra en el resultado, no se investiga más y no sale por `--ndjson`; en
+`events` consta una línea «fuera de alcance: …» por cada entidad descartada. Un dominio cuenta si es
+igual o subdominio de uno declarado (`example.com.evil.test` y `notexample.com` quedan fuera). En
+emails se mira el dominio, en URLs el host y en servicios (`IP:puerto`) la IP. `exclude` gana siempre.
+Una lista que no declaras no restringe ese tipo: con solo `domains`, las IPs a las que resuelven
+siguen entrando; declara `ips` para limitarlas. Hace falta `domains` o `ips`. Un fichero inválido o
+un objetivo fuera del alcance es un error de uso (código 2). El alcance queda guardado con el scan y
+aparece en `show`, en los informes y en `scan.start`.
+
+El alcance filtra lo que se **descubre**; no controla a dónde redirige un servidor una petición.
+
+```bash
+osineitor domain example.com --depth 2 --scope scope.yml
+```
+
+## Propósito
+
+`--purpose "TEXTO"` (o `OSINEITOR_PURPOSE`) anota para qué haces el scan: hasta 500 caracteres, sin
+saltos de línea. Queda guardado con el scan y aparece en `show`, en los informes y en `scan.start`.
+
+```bash
+osineitor email ana@example.com --purpose "Auditoría autorizada de Acme, ticket 42"
+```
+
+Para obligarte a indicarlo en los scans sobre personas, activa `require_purpose` en la sección
+`[settings]` de `config.toml` (`osineitor config show` muestra la ruta) o define
+`OSINEITOR_REQUIRE_PURPOSE=1` (la variable manda sobre el fichero; `0` lo desactiva):
+
+```toml
+[settings]
+require_purpose = true
+```
+
+Con eso, `email`, `username` y los `scan` que resulten de uno de ellos sin `--purpose` terminan con
+código 2 antes de consultar nada. Los de dominio e IP no se ven afectados. La aplicación de
+escritorio aún no pasa `--purpose`: con `require_purpose` activo sus scans de email y username
+fallarán.
 
 ## Opciones de los scans
 
@@ -75,6 +152,9 @@ Valen para `scan`, `domain`, `ip`, `email` y `username`.
 | `--no-cache`, `--refresh` | [Caché](#caché) |
 | `--allow-private` | Permite conectar con redes privadas (ver [Red y entradas](#red-y-entradas)) |
 | `--proxy` | Envía todo el tráfico por un proxy (ver [Proxy y Tor](#proxy-y-tor)); también `OSINEITOR_PROXY` |
+| `--evidence` | Guarda la respuesta original de cada fuente con su SHA-256 (ver [Evidencia](#evidencia)) |
+| `--scope` | Limita el scan a los dominios y redes de un YAML (ver [Alcance](#alcance)); también `OSINEITOR_SCOPE` |
+| `--purpose` | Anota para qué haces el scan; se puede exigir en emails y usernames (ver [Propósito](#propósito)); también `OSINEITOR_PURPOSE` |
 | `--no-save` | No guarda el scan en el historial |
 | `--db` | Ruta de la base de datos SQLite |
 | `--json` / `--ndjson` | Salida para otros programas (ver más abajo) |

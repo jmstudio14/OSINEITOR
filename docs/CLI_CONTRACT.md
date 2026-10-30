@@ -30,7 +30,7 @@ por evento, con `flush` inmediato. Todos llevan `v` (1), `ts` (ISO 8601 UTC) y `
 | `scan.start` | Antes de ejecutar nada | `target{type,value}`, `depth`, `modules[]`, `skipped[{module,message}]`, `budget{max_entities,max_requests,max_seconds}` (`null` = sin límite) |
 | `module.start` | Un módulo empieza sobre una entidad | `module`, `entity` (clave `tipo:valor`) |
 | `module.end` | Ese módulo termina | `module`, `entity`, `status`, `entities`, `requests`, `cache_hits`, `duration_ms`, `message` |
-| `entity` | Entidad nueva (ya deduplicada y normalizada) | `entity{type,value,data,source,parent,observations[{module,query,at}]}` |
+| `entity` | Entidad nueva (ya deduplicada y normalizada) | `entity{type,value,data,source,parent,observations[{module,query,at}],first_seen,last_seen,confidence}` |
 | `progress` | Tras cada `module.end` | `done`, `total` (ejecuciones conocidas hasta ahora; crece al pivotear), `entities`, `requests` |
 | `scan.end` | Siempre el último | `status`, `scan_id` (`null` con `--no-save`), `exit_code`; salvo con `failed`, también `entities` y `finished_at`; con `failed`, en su lugar `message` |
 
@@ -45,6 +45,18 @@ por evento, con `flush` inmediato. Todos llevan `v` (1), `ts` (ISO 8601 UTC) y `
   que un módulo la vio: `module`, `query` (clave de la entidad sobre la que corrió) y `at` (ISO 8601
   UTC). El evento `entity` se emite al **descubrirla**, así que trae solo la primera observación;
   las que lleguen después de otros módulos constan en la salida `--json` (`entities[]`) y en la BD.
+- `scan.end` añade `evidence_digest` si el scan guardó evidencias (`--evidence`).
+- `entity.first_seen` y `entity.last_seen` (ISO 8601 UTC, o `null` en datos antiguos) son la primera y
+  la última observación de la entidad en el scan, no la fecha del dato de un tercero. En el evento
+  `entity` coinciden (solo hay una observación).
+- `entity.confidence` (`bajo`, `medio`, `alto` o `null`) se calcula **al terminar el scan**: el evento
+  `entity` lo lleva siempre a `null`; el valor está en `--json` y en `show`.
+- `scope` (`{"domains": [...], "ips": [...], "exclude": [...]}`, o ausente/`null` sin `--scope`) va en
+  `scan.start` y en `scan_result`. Lo que cae fuera del alcance no genera evento `entity`: consta
+  como `events[]` con `kind: "skipped"`, `module: "engine"` y `message: "fuera de alcance: <clave>"`.
+- `purpose` (texto, o ausente/`null` sin `--purpose`) va en `scan.start` y en `scan_result`. Con
+  `require_purpose` activo, un scan de email o username sin `--purpose` termina con código 2 antes de
+  empezar (no emite `scan.start`).
 - `--quiet` suprime la salida legible (no afecta a `--ndjson` ni a `--json`).
 
 ## Cancelar: `--control-stdin`
@@ -78,6 +90,7 @@ integrarse usa `--ndjson` y `--json`. `--verbose` escribe en `stderr`, así que 
 | `2` | Uso incorrecto o entrada inválida (convención de `click`) |
 | `3` | Terminó, pero algún módulo falló (también `doctor` si alguna fuente falla) |
 | `4` | Terminó **incompleto** por agotar el presupuesto (`--max-entities/--max-requests/--max-time`) |
+| `5` | Solo `verify`: alguna evidencia no coincide con su huella (o con `--digest`) |
 | `130` | Cancelado |
 
 Si coinciden varios motivos gana el más grave: `130` > `4` > `3`. Un módulo `skipped` no cuenta
@@ -89,7 +102,7 @@ Un único documento JSON por stdout.
 
 | Orden | Esquema (`$defs`) | Contenido |
 |---|---|---|
-| `scan`, `domain`, `ip`, `email`, `username`, `show` | `scan_result` | Resultado completo: `target`, `entities`, `events`, `runs` (estado por módulo), `truncated`, `status` |
+| `scan`, `domain`, `ip`, `email`, `username`, `show` | `scan_result` | Resultado completo: `target`, `entities`, `events`, `runs` (estado por módulo), `evidence` (metadatos y SHA-256 de cada respuesta guardada con `--evidence`, sin el cuerpo), `evidence_digest` (huella del conjunto o `null`), `truncated`, `status` |
 | `modules` | `modules_output` | Módulos: `name`, `description`, `consumes`, `produces`, `passive`, `requires_key`, `key_configured`, `timeout` |
 | `history` | `history_output` | Scans guardados |
 | `doctor` | `doctor_output` | `module`, `verdict` (`ok`, `empty`, `fail`, `skipped`, `unchecked`), `detail`, `duration_ms`, `requests` |
@@ -97,6 +110,7 @@ Un único documento JSON por stdout.
 | `config set`, `config unset` | `config_key_output` | `name` y `configured`. `config set NOMBRE --stdin` lee el valor de stdin (así la key no aparece en la línea de comandos); también acepta el valor como argumento |
 | `version` | `version_output` | `{"version": "0.2.0"}` |
 | `export` | `export_output` | `scan_id`, `format`, `path` del informe generado |
+| `verify` | `verify_output` | `scan_id`, `checked`, `ok`, `mismatches` (evidencias alteradas), `evidence_digest` recalculada, `digest_match` (`null` si no se pasó `--digest`). Sale con `5` si algo no coincide |
 
 ## Ejemplo
 

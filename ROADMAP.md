@@ -277,7 +277,7 @@ Estado a 29-10-2026 (v0.2.0), contrastado con el código. Leyenda: **✅ Hecho**
 |---|---|---|---|---|---|
 | 0 | 0.1.1 | 2 | 1 | 3 | 2 / 6 |
 | 1 | 0.2.0 | 16 | 1 | 1 | 11 / 12 |
-| 2 | 0.3.0 | 1 | 0 | 6 | 1 / 4 |
+| 2 | 0.3.0 | 7 | 0 | 0 | 4 / 4 |
 | 3 | 0.4.0 | 0 | 0 | 7 | 0 / 3 |
 | 4 | 0.5.0–0.5.1 | 0 | 0 | 24 | 0 / 5 |
 | 5 | 0.6.0 | 0 | 0 | 15 | 0 / 1 |
@@ -288,9 +288,9 @@ Estado a 29-10-2026 (v0.2.0), contrastado con el código. Leyenda: **✅ Hecho**
 | 10 | 0.11.0 | 0 | 0 | 7 | 0 / 3 |
 | 11 | 1.0.0 | 0 | 0 | 5 | 0 / 3 |
 | G | 0.2.0–0.2.2 | 1 | 6 | 2 | 1 / 8 |
-| **Total (fases 0–11)** | | **20** | **2** | **111** | **15 / 50** |
+| **Total (fases 0–11)** | | **26** | **2** | **105** | **18 / 50** |
 
-Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **14 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
+Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **17 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
 
 ### Corte recomendado
 
@@ -465,21 +465,45 @@ preservación del Protocolo de Berkeley.
 | ID | P | Estado | Entregable | Detalle |
 |---|---|---|---|---|
 | F2.1 | M | ✅ Hecho | Observaciones múltiples | Una entidad guarda todas las fuentes que la vieron (`observations`: módulo, fecha, consulta realizada) en lugar de solo la primera |
-| F2.2 | M | ⬜ Pendiente | Evidencia con hash | Opción `--evidence` que guarda la respuesta original de cada fuente con su SHA-256, URL consultada y fecha UTC |
-| F2.3 | M | ⬜ Pendiente | Puntuación de confianza | Nivel `bajo/medio/alto` según número de fuentes independientes, tipo de fuente (autoritativa como DNS o RDAP frente a agregada) y antigüedad del dato |
-| F2.4 | S | ⬜ Pendiente | Frescura | Campos `first_seen` y `last_seen` por entidad; los datos de terceros conservan su propia fecha (p. ej. último escaneo de Shodan) |
-| F2.5 | M | ⬜ Pendiente | Alcance declarado | Fichero de alcance (`--scope scope.yml`) con dominios, rangos y exclusiones; el engine no pivota fuera de él (modelo inspirado en BBOT [R2]) |
-| F2.6 | S | ⬜ Pendiente | Propósito del scan | Campo `--purpose` registrado en los metadatos; obligatorio en scans sobre emails o usernames si así se configura |
-| F2.7 | S | ⬜ Pendiente | Informe con anexo de evidencias | El informe HTML incluye una tabla de evidencias con hashes verificables |
+| F2.2 | M | ✅ Hecho | Evidencia con hash | Opción `--evidence` que guarda la respuesta original de cada fuente con su SHA-256, URL consultada y fecha UTC |
+| F2.3 | M | ✅ Hecho | Puntuación de confianza | Nivel `bajo/medio/alto` según número de fuentes independientes, tipo de fuente (autoritativa como DNS o RDAP frente a agregada) y antigüedad del dato |
+| F2.4 | S | ✅ Hecho | Frescura | Campos `first_seen` y `last_seen` por entidad; los datos de terceros conservan su propia fecha (p. ej. último escaneo de Shodan) |
+| F2.5 | M | ✅ Hecho | Alcance declarado | Fichero de alcance (`--scope scope.yml`) con dominios, rangos y exclusiones; el engine no pivota fuera de él (modelo inspirado en BBOT [R2]) |
+| F2.6 | S | ✅ Hecho | Propósito del scan | Campo `--purpose` registrado en los metadatos; obligatorio en scans sobre emails o usernames si así se configura |
+| F2.7 | S | ✅ Hecho | Informe con anexo de evidencias | El informe HTML incluye una tabla de evidencias con hashes verificables |
 
-**Estado (30-10-2026):** 1 de 7 hecho (F2.1, *M*). `Entity.observations` guarda cada vez que un
-módulo vio la entidad (módulo, entidad consultada, hora UTC), deduplicadas por módulo y consulta;
-persiste en la BD (versión 3) y la CLI y los informes listan todas las fuentes. La «consulta
-realizada» es hoy la entidad sobre la que corrió el módulo: la URL exacta y el hash llegan con
-F2.2. Siguen sin existir `first_seen`/`last_seen` (F2.4), la evidencia (F2.2) y la confianza (F2.3);
-algunos módulos guardan fechas de terceros dentro de `data`. El evento NDJSON `entity` lleva solo
-la primera observación (se emite al descubrirla); la lista completa va en `--json`. La GUI sigue
-mostrando `source`.
+**Estado (30-10-2026):** 7 de 7 hechos (F2.1 a F2.7). Fase terminada.
+- F2.1: `Entity.observations` guarda cada vez que un módulo vio la entidad (módulo, entidad
+  consultada, hora UTC), deduplicadas por módulo y consulta; persiste en la BD (versión 3) y la CLI
+  y los informes listan todas las fuentes. El evento NDJSON `entity` lleva solo la primera
+  observación (se emite al descubrirla); la lista completa va en `--json`. La GUI sigue mostrando
+  `source`.
+- F2.2: `--evidence` guarda la respuesta original de cada fuente (HTTP y DNS) con su SHA-256, la URL
+  sin API keys y la fecha UTC en la tabla `evidence` (BD versión 4). Cada evidencia se une a las
+  observaciones por módulo y entidad consultada. `osineitor verify N` recalcula los hashes (código 5
+  si no coinciden); la huella de evidencias se anota fuera de la BD para detectar también el
+  reescrito conjunto de cuerpo y hash. No hay firma criptográfica ni extracción de cuerpos a fichero.
+- F2.4: `Entity.first_seen`/`last_seen` se derivan de las observaciones (sin migración) y los informes
+  muestran la última en «Visto». Las fechas de terceros siguen en `data` con su propio nombre.
+- F2.3: `Entity.confidence` (`bajo`/`medio`/`alto`) por fuentes distintas, autoridad del módulo
+  (`Module.authority`) y antigüedad del dato (>90 días baja un nivel); BD versión 5. Es una heurística
+  de priorización, no una probabilidad.
+- F2.5: `--scope scope.yml` (YAML con `domains`, `ips`/CIDR y `exclude`; dependencia `pyyaml`). El motor
+  descarta antes de admitirla toda entidad fuera del alcance (no se guarda, no se pivota, no sale por
+  NDJSON) y deja un evento por clave; la semilla fuera de alcance es un error de uso. El alcance se
+  guarda con el scan (BD versión 6) y va en `scan.start`. Límite: no controla las redirecciones HTTP
+  a hosts ajenos (eso sigue siendo la guardia de red). La GUI aún no expone la opción.
+- F2.6: `--purpose` (máx. 500 caracteres) se guarda con el scan (BD versión 7) y sale en `show`, los
+  informes y `scan.start`. `require_purpose` (`config.toml` u `OSINEITOR_REQUIRE_PURPOSE`) lo exige en
+  scans de email y username (código 2 si falta). Riesgo conocido: la GUI aún no pasa `--purpose`, así
+  que con `require_purpose` activo sus scans de email y username fallan.
+- F2.7: los informes HTML y Markdown acaban con la sección «Evidencias» (módulo, consulta, URL,
+  fecha, estado, bytes, SHA-256 completo y huella del conjunto); el hash del informe coincide con el
+  de `osineitor verify`. Los cuerpos no van en el informe.
+- Criterios de aceptación: rastreo entidad → consulta (observaciones + evidencias unidas por módulo y
+  entidad), `verify` detecta manipulación (código 5) y un scan con alcance no produce entidades
+  fuera de él (test con dominios trampa, `tests/test_scope.py`). Pendiente fuera de esta fase: la
+  GUI no expone `--evidence`, `--scope` ni `--purpose`.
 
 **Criterios de aceptación**
 - Cualquier entidad de un informe se puede rastrear hasta la consulta exacta que la produjo.

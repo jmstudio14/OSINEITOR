@@ -33,7 +33,14 @@ Fuera de la UE aplica la legislación local (p. ej. la Ley 25.326 en Argentina).
 
 ## Buenas prácticas
 
-- Documenta el alcance y la autorización antes de empezar.
+- Documenta el alcance y la autorización antes de empezar. Con `--scope scope.yml` el alcance
+  deja de ser solo una nota: lo que caiga fuera de tus dominios y redes no entra en el resultado ni
+  se investiga, y el alcance queda guardado con el scan (ver [USO.md](USO.md#alcance)).
+- Anota el motivo con `--purpose` y, si investigas a personas, activa `require_purpose` para que
+  la herramienta no te deje escanear emails o usernames sin él (ver [USO.md](USO.md#propósito)).
+- Si el resultado puede acabar en un informe o un procedimiento, escanea con `--evidence` y anota
+  la huella: conserva la respuesta original de cada fuente y permite comprobar que no se ha tocado
+  (ver [EVIDENCIA.md](EVIDENCIA.md)).
 - Guarda los resultados cifrados o en un equipo controlado; la base de datos y los informes se
   guardan sin cifrar (ver [SECURITY.md](../SECURITY.md)).
 - Borra los scans cuando termine la investigación.

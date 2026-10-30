@@ -6,7 +6,7 @@ import asyncio
 import time
 from collections import defaultdict
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -15,6 +15,8 @@ from osineitor import logs, netguard
 from osineitor.budget import Budget
 from osineitor.cache import ResponseCache, cache_key
 from osineitor.config import Config
+from osineitor.evidence import capture
+from osineitor.models import Evidence
 
 log = logs.get("http")
 
@@ -37,6 +39,8 @@ class RunStats:
 
     requests: int = 0
     cache_hits: int = 0
+    # Con `--evidence` es una lista (el motor la crea); `None` = no se guarda ninguna respuesta.
+    evidence: list[Evidence] | None = field(default=None)
 
 
 # Cada ejecución de módulo corre en su propia tarea: así cada una tiene sus contadores.
@@ -111,6 +115,7 @@ class HttpClient:
         self._refresh = refresh  # ignora lo cacheado pero sigue guardando lo nuevo
         self._last_call: dict[str, float] = {}
         self._source_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._secrets: list[str] | None = None  # se leen la primera vez que hacen falta
 
     def bind(self, source: str, *, cache_ttl: int = 0, min_interval: float = 0.0) -> SourceHttp:
         return SourceHttp(self, source, cache_ttl=cache_ttl, min_interval=min_interval)
@@ -133,6 +138,24 @@ class HttpClient:
         await netguard.ensure_public(url, resolve=not self.proxy)
         self._safe_hosts[host] = now + GUARD_TTL
 
+    def _capture(self, method: str, response: httpx.Response) -> None:
+        """Guarda la respuesta definitiva de un salto cuando el scan pide evidencias."""
+        stats = current_stats.get()
+        if stats is None or stats.evidence is None:
+            return
+        if self._secrets is None:
+            self._secrets = logs.known_secrets()
+        stats.evidence.append(
+            capture(
+                "http",
+                str(response.url),
+                response.content,
+                method=method.upper(),
+                status=response.status_code,
+                secrets=self._secrets,
+            )
+        )
+
     async def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         host = httpx.URL(url).host
         source = kwargs.pop("source", None)
@@ -154,6 +177,7 @@ class HttpClient:
                 fields["ms"] = round((time.monotonic() - started) * 1000)
                 log.debug("http", extra={"fields": fields})
                 if response.status_code not in RETRY_STATUS or attempt >= self._retries:
+                    self._capture(method, response)
                     return response
             except httpx.TransportError as exc:
                 fields |= {"error": type(exc).__name__, "attempt": attempt}

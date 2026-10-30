@@ -42,6 +42,7 @@ TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
 class HttpFingerprint(Module):
     name = "http_fingerprint"
+    authority = "authoritative"
     description = "Servidor, tecnologías y cabeceras de seguridad (contacta al objetivo)"
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.RECORD})

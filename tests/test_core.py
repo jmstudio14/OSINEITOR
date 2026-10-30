@@ -91,6 +91,33 @@ def test_sources_lists_each_module_once_in_arrival_order():
     assert entity.sources == ["dns", "crtsh"]
 
 
+def test_first_and_last_seen_are_the_extremes_of_the_observations():
+    t1, t2, t3 = (datetime(2026, 10, 30, h, tzinfo=UTC) for h in (8, 9, 10))
+    entity = Entity(
+        type=EntityType.IP,
+        value="1.2.3.4",
+        observations=[
+            Observation(module="dns", query="domain:a.example", at=t2),
+            Observation(module="crtsh", query="domain:a.example", at=t3),
+            Observation(module="dns", query="domain:b.example", at=t1),
+        ],
+    )
+    assert (entity.first_seen, entity.last_seen) == (t1, t3)
+    dumped = entity.model_dump(mode="json")
+    assert dumped["first_seen"].startswith("2026-10-30T08:00") and dumped["last_seen"]
+
+
+def test_data_without_observations_has_no_seen_dates_and_keeps_third_party_dates():
+    legacy = Entity(
+        type=EntityType.URL,
+        value="https://example.com/",
+        source="wayback",
+        data={"first_seen": "20100101000000", "last_seen": "20200101000000"},
+    )
+    assert (legacy.first_seen, legacy.last_seen) == (None, None)
+    assert legacy.data["first_seen"] == "20100101000000"  # la fecha del tercero no se toca
+
+
 def test_emit_records_who_saw_it_and_on_what():
     class Probe(Module):
         name = "probe"
