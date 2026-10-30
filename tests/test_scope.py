@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 
 import pytest
@@ -16,6 +17,7 @@ from osineitor.scope import Scope, ScopeError
 from tests.test_cli import use_modules
 
 runner = CliRunner()
+ANSI = re.compile(r"\x1b\[[0-9;]*m")  # en CI Rich colorea el panel de error y parte los textos
 SEED = Entity(type=EntityType.DOMAIN, value="example.com")
 
 # Dominios que parecen del objetivo y no lo son, y lo que sí es suyo.
@@ -255,4 +257,4 @@ def test_a_target_outside_the_scope_is_a_usage_error(monkeypatch, scope_file):
     use_modules(monkeypatch, [trap_module()])
     run = runner.invoke(app, ["domain", "evil.test", "--scope", str(scope_file), "--no-save"])
     assert run.exit_code == 2
-    assert "fuera del alcance" in run.output
+    assert "fuera del alcance" in " ".join(ANSI.sub("", run.output).split())
