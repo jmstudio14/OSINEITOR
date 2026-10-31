@@ -1,0 +1,4 @@
+description: Revisión de un email y de su dominio de correo (MX, SPF, DMARC, filtraciones).
+depth: 2
+modules: [email_validate, gravatar, hibp, hunter_verify, dns, rdap]
+allow_active: false

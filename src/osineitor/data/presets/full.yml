@@ -1,0 +1,3 @@
+description: Todos los módulos y tres niveles; admite módulos activos con --active.
+depth: 3
+allow_active: true

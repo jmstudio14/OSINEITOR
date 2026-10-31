@@ -39,7 +39,7 @@ osineitor = "osineitor.cli:app"
 where = ["src"]
 
 [tool.setuptools.package-data]
-osineitor = ["modules/username/data/*.json"]
+osineitor = ["modules/username/data/*.json", "data/presets/*.yml"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

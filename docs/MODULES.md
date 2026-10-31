@@ -7,6 +7,15 @@ prueba cada uno contra su fuente (valor de prueba: `example.com`, `1.1.1.1` o `t
 prueba de salud). Todos los módulos pasivos y sin key cachean sus respuestas 6 horas, salvo
 `username_sites`.
 
+Hay dos tipos especiales de módulo, sin ejemplos todavía: los **analizadores** (`analyzer = True`)
+leen lo ya recogido en un pase final, sin red, y los adaptadores de **herramientas externas**
+(`ExternalToolModule`) ejecutan un binario instalado por el usuario y quedan `omitido` si falta.
+Ver [Arquitectura](ARCHITECTURE.md).
+
+Pesan más en la [confianza](ARCHITECTURE.md) de un dato los módulos **autoritativos**, cuya respuesta
+viene de quien administra el dato: `dns`, `rdap`, `http_fingerprint` y `email_validate`. El resto
+son bases de terceros (`aggregated`).
+
 ## Dominio
 
 ### `rdap`
@@ -121,7 +130,9 @@ prueba de salud). Todos los módulos pasivos y sin key cachean sus respuestas 6 
 ### `username_sites`
 - **Consume:** username. **Produce:** `profile`.
 - **Fuente:** ~460 sitios con las firmas de [Sherlock](https://github.com/sherlock-project/sherlock)
-  (`modules/username/data/sites.json`, sin los marcados como NSFW).
+  (`modules/username/data/sites.json`, sin los marcados como NSFW). `osineitor update-data` las
+  actualiza en tu directorio de datos y el módulo usa esa copia si su hash coincide con el
+  registrado.
 - **Detección:** según la firma, por código de estado 2xx, por ausencia de un mensaje de error en
   la página o por ausencia de redirección.
 - **Verificación:** cada positivo se vuelve a consultar con un username aleatorio inexistente

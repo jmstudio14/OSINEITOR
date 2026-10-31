@@ -21,7 +21,7 @@ from rich.markup import escape
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from osineitor import __version__, events, evidence, logs, registry, report
+from osineitor import __version__, datasets, events, evidence, logs, presets, registry, report
 from osineitor.budget import (
     DEFAULT_MAX_ENTITIES,
     DEFAULT_MAX_REQUESTS,
@@ -33,6 +33,7 @@ from osineitor.config import Config, config_dir, config_path
 from osineitor.control import watch_stdin
 from osineitor.doctor import run_doctor
 from osineitor.engine import Engine
+from osineitor.errors import InvalidEntityValue
 from osineitor.events import (
     EXIT_CANCELLED,
     EXIT_INTERNAL,
@@ -43,7 +44,7 @@ from osineitor.events import (
     NdjsonSink,
 )
 from osineitor.http import HttpClient, validate_proxy
-from osineitor.models import Entity, EntityType, ScanResult, detect_type
+from osineitor.models import Entity, EntityType, ScanResult, decompose, detect_type
 from osineitor.modules.base import Context
 from osineitor.scope import Scope, ScopeError
 from osineitor.storage import Storage, StorageError
@@ -138,6 +139,27 @@ ScopeFile = Annotated[
         "no entra en el resultado ni se investiga.",
     ),
 ]
+PresetOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--preset",
+        help="Perfil de escaneo (módulos, profundidad, presupuesto). Lo que indiques tú manda. "
+        "Mira `osineitor presets`.",
+    ),
+]
+OnlyTypes = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--only-types",
+        help="Muestra solo estos tipos de entidad (repetible o separados por comas).",
+    ),
+]
+ExcludeTypes = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--exclude", help="Oculta estos tipos de entidad (repetible o separados por comas)."
+    ),
+]
 
 
 Ndjson = Annotated[
@@ -183,6 +205,63 @@ class ScanOptions:
     evidence: bool = False
     scope: Scope | None = None
     purpose: str | None = None
+    only_types: frozenset[EntityType] | None = None
+    exclude_types: frozenset[EntityType] | None = None
+
+
+def _types(values: list[str] | None, hint: str) -> frozenset[EntityType] | None:
+    if not values:
+        return None
+    names = {part.strip().lower() for value in values for part in value.split(",") if part.strip()}
+    if unknown := names - {t.value for t in EntityType}:
+        raise typer.BadParameter(
+            f"tipos desconocidos: {', '.join(sorted(unknown))}", param_hint=hint
+        )
+    return frozenset(EntityType(n) for n in names)
+
+
+def _filtered(
+    result: ScanResult, only: frozenset[EntityType] | None, exclude: frozenset[EntityType] | None
+) -> ScanResult:
+    """Recorta lo que se muestra o exporta; lo guardado y las evidencias no se tocan."""
+    if not only and not exclude:
+        return result
+    keep = [
+        e for e in result.entities if (not only or e.type in only) and e.type not in (exclude or ())
+    ]
+    return result.model_copy(update={"entities": keep})
+
+
+def _preset_values(ctx: typer.Context, name: str | None, active: bool) -> dict[str, Any]:
+    """Valores del preset para lo que el usuario no indicó en la línea de órdenes."""
+    if name is None:
+        return {}
+    try:
+        preset = presets.get(name)
+    except presets.PresetError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--preset") from exc
+    if active and not preset.allow_active:
+        raise typer.BadParameter(
+            f"el preset {name} no admite módulos activos", param_hint="--active"
+        )
+    known = {m.name for m in registry.discover()}
+    if unknown := set(preset.modules or ()) - known:
+        raise typer.BadParameter(
+            f"el preset {name} usa módulos desconocidos: {', '.join(sorted(unknown))}",
+            param_hint="--preset",
+        )
+    values = {
+        "depth": preset.depth,
+        "module": list(preset.modules) if preset.modules else None,
+        "max_entities": preset.max_entities,
+        "max_requests": preset.max_requests,
+        "max_time": preset.max_time,
+    }
+    return {
+        k: v
+        for k, v in values.items()
+        if v is not None and ctx.get_parameter_source(k).name == "DEFAULT"
+    }
 
 
 def _purpose(value: str | None) -> str | None:
@@ -491,10 +570,14 @@ def _print_json(data: object) -> None:
 def _make_seed(etype: EntityType, value: str) -> Entity:
     """Crea la entidad semilla; un valor no válido es un error de uso, no un traceback."""
     try:
-        return Entity(type=etype, value=value.strip())
+        seed = Entity(type=etype, value=value.strip())
+        decompose(seed)  # de una URL se investiga su host: que sea válido
     except ValidationError as exc:
         reason = exc.errors()[0]["msg"].removeprefix("Value error, ")
         raise typer.BadParameter(reason) from exc
+    except InvalidEntityValue as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    return seed
 
 
 def _run_target(
@@ -557,16 +640,19 @@ def _run_target(
                 **({"evidence_digest": result.evidence_digest} if result.evidence else {}),
             )
         )
-    elif as_json:
-        print(result.model_dump_json(indent=2))
-    elif not opts.quiet:
-        render(result)
+    else:
+        shown = _filtered(result, opts.only_types, opts.exclude_types)
+        if as_json:
+            print(shown.model_dump_json(indent=2))
+        elif not opts.quiet:
+            render(shown)
     if code:
         raise typer.Exit(code)
 
 
 @app.command()
 def domain(
+    ctx: typer.Context,
     target: str,
     depth: Depth = 1,
     active: Active = False,
@@ -587,15 +673,19 @@ def domain(
     save_evidence: SaveEvidence = False,
     scope: ScopeFile = None,
     purpose: Purpose = None,
+    preset: PresetOpt = None,
+    only_types: OnlyTypes = None,
+    exclude_types: ExcludeTypes = None,
 ) -> None:
     """Investiga un dominio: RDAP/WHOIS, DNS, subdominios, histórico web."""
+    from_preset = _preset_values(ctx, preset, active)
     opts = ScanOptions(
-        depth,
+        from_preset.get("depth", depth),
         active,
-        module,
-        max_entities,
-        max_requests,
-        max_time,
+        from_preset.get("module", module),
+        from_preset.get("max_entities", max_entities),
+        from_preset.get("max_requests", max_requests),
+        from_preset.get("max_time", max_time),
         allow_private,
         no_cache,
         refresh,
@@ -606,12 +696,15 @@ def domain(
         save_evidence,
         _scope(scope),
         _purpose(purpose),
+        _types(only_types, "--only-types"),
+        _types(exclude_types, "--exclude"),
     )
     _run_target(EntityType.DOMAIN, target, opts, no_save, json_out, db)
 
 
 @app.command()
 def ip(
+    ctx: typer.Context,
     target: str,
     depth: Depth = 1,
     active: Active = False,
@@ -632,15 +725,19 @@ def ip(
     save_evidence: SaveEvidence = False,
     scope: ScopeFile = None,
     purpose: Purpose = None,
+    preset: PresetOpt = None,
+    only_types: OnlyTypes = None,
+    exclude_types: ExcludeTypes = None,
 ) -> None:
     """Investiga una IP: geolocalización, puertos/servicios, reputación."""
+    from_preset = _preset_values(ctx, preset, active)
     opts = ScanOptions(
-        depth,
+        from_preset.get("depth", depth),
         active,
-        module,
-        max_entities,
-        max_requests,
-        max_time,
+        from_preset.get("module", module),
+        from_preset.get("max_entities", max_entities),
+        from_preset.get("max_requests", max_requests),
+        from_preset.get("max_time", max_time),
         allow_private,
         no_cache,
         refresh,
@@ -651,12 +748,15 @@ def ip(
         save_evidence,
         _scope(scope),
         _purpose(purpose),
+        _types(only_types, "--only-types"),
+        _types(exclude_types, "--exclude"),
     )
     _run_target(EntityType.IP, target, opts, no_save, json_out, db)
 
 
 @app.command()
 def email(
+    ctx: typer.Context,
     target: str,
     depth: Depth = 1,
     active: Active = False,
@@ -677,15 +777,19 @@ def email(
     save_evidence: SaveEvidence = False,
     scope: ScopeFile = None,
     purpose: Purpose = None,
+    preset: PresetOpt = None,
+    only_types: OnlyTypes = None,
+    exclude_types: ExcludeTypes = None,
 ) -> None:
     """Investiga un email: validez, perfiles asociados, filtraciones."""
+    from_preset = _preset_values(ctx, preset, active)
     opts = ScanOptions(
-        depth,
+        from_preset.get("depth", depth),
         active,
-        module,
-        max_entities,
-        max_requests,
-        max_time,
+        from_preset.get("module", module),
+        from_preset.get("max_entities", max_entities),
+        from_preset.get("max_requests", max_requests),
+        from_preset.get("max_time", max_time),
         allow_private,
         no_cache,
         refresh,
@@ -696,12 +800,15 @@ def email(
         save_evidence,
         _scope(scope),
         _purpose(purpose),
+        _types(only_types, "--only-types"),
+        _types(exclude_types, "--exclude"),
     )
     _run_target(EntityType.EMAIL, target, opts, no_save, json_out, db)
 
 
 @app.command()
 def username(
+    ctx: typer.Context,
     target: str,
     depth: Depth = 1,
     active: Active = False,
@@ -722,15 +829,19 @@ def username(
     save_evidence: SaveEvidence = False,
     scope: ScopeFile = None,
     purpose: Purpose = None,
+    preset: PresetOpt = None,
+    only_types: OnlyTypes = None,
+    exclude_types: ExcludeTypes = None,
 ) -> None:
     """Busca un nombre de usuario en cientos de sitios."""
+    from_preset = _preset_values(ctx, preset, active)
     opts = ScanOptions(
-        depth,
+        from_preset.get("depth", depth),
         active,
-        module,
-        max_entities,
-        max_requests,
-        max_time,
+        from_preset.get("module", module),
+        from_preset.get("max_entities", max_entities),
+        from_preset.get("max_requests", max_requests),
+        from_preset.get("max_time", max_time),
         allow_private,
         no_cache,
         refresh,
@@ -741,12 +852,15 @@ def username(
         save_evidence,
         _scope(scope),
         _purpose(purpose),
+        _types(only_types, "--only-types"),
+        _types(exclude_types, "--exclude"),
     )
     _run_target(EntityType.USERNAME, target, opts, no_save, json_out, db)
 
 
 @app.command()
 def scan(
+    ctx: typer.Context,
     target: str,
     depth: Depth = 2,
     active: Active = False,
@@ -767,15 +881,20 @@ def scan(
     save_evidence: SaveEvidence = False,
     scope: ScopeFile = None,
     purpose: Purpose = None,
+    preset: PresetOpt = None,
+    only_types: OnlyTypes = None,
+    exclude_types: ExcludeTypes = None,
 ) -> None:
-    """Detecta el tipo de objetivo y pivota entre frentes (profundidad 2 por defecto)."""
+    """Detecta el tipo de objetivo (IP, red CIDR, ASN, URL, email, dominio o username) y pivota
+    entre frentes (profundidad 2 por defecto). De una URL se investiga su host."""
+    from_preset = _preset_values(ctx, preset, active)
     opts = ScanOptions(
-        depth,
+        from_preset.get("depth", depth),
         active,
-        module,
-        max_entities,
-        max_requests,
-        max_time,
+        from_preset.get("module", module),
+        from_preset.get("max_entities", max_entities),
+        from_preset.get("max_requests", max_requests),
+        from_preset.get("max_time", max_time),
         allow_private,
         no_cache,
         refresh,
@@ -786,6 +905,8 @@ def scan(
         save_evidence,
         _scope(scope),
         _purpose(purpose),
+        _types(only_types, "--only-types"),
+        _types(exclude_types, "--exclude"),
     )
     _run_target(detect_type(target), target, opts, no_save, json_out, db)
 
@@ -803,6 +924,7 @@ def list_modules(json_out: AsJson = False) -> None:
                     "consumes": sorted(m.consumes),
                     "produces": sorted(m.produces),
                     "passive": m.passive,
+                    "analyzer": m.analyzer,
                     "requires_key": m.requires_key,
                     "key_configured": bool(m.requires_key and config.key(m.requires_key)),
                     "timeout": m.timeout,
@@ -828,11 +950,43 @@ def list_modules(json_out: AsJson = False) -> None:
             m.name,
             ", ".join(sorted(m.consumes)),
             ", ".join(sorted(m.produces)),
-            "pasivo" if m.passive else "[yellow]activo[/]",
+            "analizador" if m.analyzer else "pasivo" if m.passive else "[yellow]activo[/]",
             key,
             m.description,
         )
     console.print(table)
+
+
+@app.command("presets")
+def list_presets(json_out: AsJson = False) -> None:
+    """Lista los presets de escaneo: los incluidos y los de tu carpeta de configuración."""
+    found, errors = presets.load_all()
+    if json_out:
+        _print_json(
+            {
+                "presets": [dataclasses.asdict(p) for p in found.values()],
+                "errors": list(errors.values()),
+            }
+        )
+    else:
+        table = Table()
+        table.add_column("Preset", no_wrap=True)
+        for col in ("Origen", "Prof.", "Módulos", "Activos", "Descripción"):
+            table.add_column(col, overflow="fold")
+        for p in found.values():
+            table.add_row(
+                p.name,
+                p.source,
+                str(p.depth or "-"),
+                ", ".join(p.modules) if p.modules else "todos",
+                "admite --active" if p.allow_active else "no",
+                p.description,
+            )
+        console.print(table)
+        for message in errors.values():
+            err_console.print(f"[red]Preset no válido: {escape(message)}[/]")
+    if errors:
+        raise typer.Exit(events.EXIT_USAGE)
 
 
 @app.command()
@@ -855,12 +1009,20 @@ def history(limit: int = 20, db: DbPath = None, json_out: AsJson = False) -> Non
 
 
 @app.command()
-def show(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> None:
+def show(
+    scan_id: int,
+    db: DbPath = None,
+    json_out: AsJson = False,
+    only_types: OnlyTypes = None,
+    exclude_types: ExcludeTypes = None,
+) -> None:
     """Muestra un scan guardado."""
+    only, exclude = _types(only_types, "--only-types"), _types(exclude_types, "--exclude")
     with _open_storage(db) as storage:
         result = storage.load(scan_id)
     if result is None:
         raise typer.BadParameter(f"no existe el scan {scan_id}")
+    result = _filtered(result, only, exclude)
     if json_out:
         print(result.model_dump_json(indent=2))
     else:
@@ -922,14 +1084,18 @@ def export(
     ] = None,
     db: DbPath = None,
     json_out: AsJson = False,
+    only_types: OnlyTypes = None,
+    exclude_types: ExcludeTypes = None,
 ) -> None:
     """Exporta un scan guardado a JSON, Markdown o HTML."""
     if fmt not in report.FORMATS:
         raise typer.BadParameter(f"formato no soportado: {fmt}")
+    only, exclude = _types(only_types, "--only-types"), _types(exclude_types, "--exclude")
     with _open_storage(db) as storage:
         result = storage.load(scan_id)
     if result is None:
         raise typer.BadParameter(f"no existe el scan {scan_id}")
+    result = _filtered(result, only, exclude)
     ext = report.FORMATS[fmt][0]
     output = output or Path("reports") / f"osineitor-{scan_id}-{result.target.value}.{ext}"
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -1067,6 +1233,42 @@ def cache_info() -> None:
     with ResponseCache() as cache:
         count, size = cache.info()
         console.print(f"{count} respuestas vigentes ({size / 1024:.0f} KiB) en {cache.path}")
+
+
+@app.command("update-data")
+def update_data(
+    names: Annotated[
+        list[str] | None, typer.Argument(help="Datasets a actualizar (por defecto, todos).")
+    ] = None,
+    allow_private: AllowPrivate = False,
+    proxy: Proxy = None,
+    json_out: AsJson = False,
+) -> None:
+    """Descarga los datasets de terceros a tu carpeta de datos y anota versión, hash y licencia."""
+    known = {d.name for d in datasets.CATALOG}
+    if unknown := set(names or ()) - known:
+        raise typer.BadParameter(
+            f"datasets desconocidos: {', '.join(sorted(unknown))} (disponibles: "
+            f"{', '.join(sorted(known))})"
+        )
+
+    async def download() -> list[datasets.Result]:
+        async with HttpClient(Config.load(), allow_private=allow_private, proxy=_proxy(proxy)) as h:
+            return await datasets.update(h, names)
+
+    results = asyncio.run(download())
+    if json_out:
+        _print_json([dataclasses.asdict(r) for r in results])
+    else:
+        table = Table()
+        for col in ("Dataset", "Estado", "Licencia", "Versión", "SHA-256", "Detalle"):
+            table.add_column(col, overflow="fold")
+        for r in results:
+            table.add_row(r.name, r.status, r.license, r.version, r.sha256, escape(r.detail))
+        console.print(table)
+        console.print(f"Carpeta: {datasets.datasets_dir()}")
+    if any(r.status in ("error", "rechazado") for r in results):
+        raise typer.Exit(EXIT_MODULE_ERRORS)
 
 
 @app.command()

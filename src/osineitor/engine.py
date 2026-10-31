@@ -15,8 +15,8 @@ from osineitor.budget import Budget
 from osineitor.confidence import assess
 from osineitor.errors import BudgetExceeded, ModuleError, ModuleQuota, ModuleSkipped
 from osineitor.http import RunStats, current_stats
-from osineitor.models import Entity, ModuleRun, ScanEvent, ScanResult
-from osineitor.modules.base import Context, Module
+from osineitor.models import Entity, ModuleRun, ScanEvent, ScanResult, decompose
+from osineitor.modules.base import Context, Module, Offline
 from osineitor.scope import Scope
 
 log = logs.get("engine")
@@ -60,7 +60,9 @@ class Engine:
             elif cls.requires_key and not ctx.config.key(cls.requires_key):
                 self._skip(cls, f"falta la API key '{cls.requires_key}'")
             elif cls.direct_dns and self._proxy:
-                self._skip(cls, "consulta DNS directa: no se enruta por --proxy")
+                self._skip(cls, "conexión directa: no se enruta por --proxy")
+            elif reason := cls.unavailable():
+                self._skip(cls, reason)
             else:
                 self.modules.append(cls(self._bind(ctx, cls)))
 
@@ -70,6 +72,8 @@ class Engine:
     @staticmethod
     def _bind(ctx: Context, cls: type[Module]) -> Context:
         """Contexto propio del módulo: su fuente tiene caché y límite de uso independientes."""
+        if cls.analyzer:
+            return dataclasses.replace(ctx, http=Offline(), resolver=Offline())
         bind = getattr(ctx.http, "bind", None)
         if bind is None:
             return ctx
@@ -264,6 +268,7 @@ class Engine:
         )
         index: dict[str, Entity] = {seed.key: seed}
         layer = [seed]
+        self._absorb(decompose(seed), 0, index, result, layer)  # de una URL, su host
         for _ in range(self.depth):
             if self._cancel.is_set():
                 self._mark_cancelled(result)
@@ -271,7 +276,7 @@ class Engine:
             if reason := self.budget.exhausted(len(result.entities)):
                 self._truncate(result, reason)
                 break
-            jobs = [(m, e) for e in layer for m in self.modules if m.accepts(e)]
+            jobs = [(m, e) for e in layer for m in self.modules if not m.analyzer and m.accepts(e)]
             if not jobs:
                 break
             self._jobs_total += len(jobs)
@@ -284,6 +289,7 @@ class Engine:
                 self._mark_cancelled(result)
             if not layer or result.truncated or result.cancelled:
                 break
+        await self._analyze(seed, index, result)
         result.finished_at = datetime.now(UTC)
         authoritative = {m.name for m in self.modules if m.authority == "authoritative"}
         for entity in result.entities:
@@ -300,9 +306,23 @@ class Engine:
         )
         return result
 
+    async def _analyze(self, seed: Entity, index: dict[str, Entity], result: ScanResult) -> None:
+        """Pase final de los analizadores sobre lo ya recogido. No pivota ni gasta peticiones."""
+        analyzers = [m for m in self.modules if m.analyzer]
+        if not analyzers or self._cancel.is_set():
+            return
+        collected = [seed, *result.entities]
+        jobs = [(m, e) for m in analyzers for e in collected if m.accepts(e)]
+        self._jobs_total += len(jobs)
+        found = await asyncio.gather(*(self._run_one(m, e, result) for m, e in jobs))
+        for rank, items in enumerate(found):
+            self._absorb(items, rank, index, result, [])
+            self._emit_progress(result)
+
     async def _run_one(self, module: Module, entity: Entity, result: ScanResult) -> list[Entity]:
         async with self._sem:
-            if reason := self.budget.exhausted(len(result.entities)):
+            # Un analizador no usa red: agotar el tiempo o las peticiones no le impide correr.
+            if not module.analyzer and (reason := self.budget.exhausted(len(result.entities))):
                 self._truncate(result, reason)
                 return []
             stats = RunStats(evidence=[] if self.evidence else None)

@@ -46,7 +46,9 @@ Versión **0.2.0**, en desarrollo. Lo que hay y lo que no:
 | Área | Estado |
 |---|---|
 | CLI con 16 módulos en 4 frentes | Disponible |
-| Tests y CI en Windows y Linux (Python 3.11 y 3.13) | En verde (más de 300 tests, sin red) |
+| Procedencia y confianza (observaciones, evidencia con hash, confianza, alcance, propósito) | Hecho, sin publicar (próxima release) |
+| Modelo ampliado, presets, analizadores offline, adaptadores de herramientas externas, `update-data` y filtros de salida | Hecho, sin publicar (próxima release) |
+| Tests y CI en Windows y Linux (Python 3.11 y 3.13) | En verde (más de 500 tests, sin red) |
 | Funcionamiento contra las fuentes reales | **Sin verificar en conjunto**: los tests simulan las respuestas. Falta la prueba en vivo desde Windows ([detalle](docs/PRUEBAS_WINDOWS.md)); `osineitor doctor` la hace por ti |
 | Aplicación de escritorio para Windows | En curso: [capa interna lista](docs/GUI.md), vistas pendientes |
 | Instalador de Windows y paquete en PyPI | No disponibles todavía |
@@ -132,6 +134,8 @@ módulo.
 |---|---|
 | Investigar un objetivo, deduciendo su tipo | `osineitor scan OBJETIVO` |
 | Investigar un tipo concreto | `osineitor domain`, `ip`, `email` o `username` |
+| Usar un perfil de escaneo | `osineitor domain example.com --preset quick` · `osineitor presets` |
+| Actualizar los datasets de terceros | `osineitor update-data` |
 | Ver o recuperar scans anteriores | `osineitor history` · `show N` · `export N -f json\|md\|html` |
 | Comprobar que las evidencias no se han alterado | `osineitor verify N` |
 | Ver los módulos y mis API keys | `osineitor modules` · `config show` |
@@ -150,6 +154,8 @@ Opciones que más se usan en los scans:
 | `--evidence` | Guarda la respuesta original de cada fuente con su SHA-256 (`osineitor verify`) |
 | `--scope scope.yml` | Limita el scan a los dominios y redes declarados (lo de fuera se descarta) |
 | `--purpose "TEXTO"` | Anota para qué haces el scan (exigible en emails y usernames) |
+| `--preset NOMBRE` | Aplica un perfil: módulos, profundidad y presupuesto (`osineitor presets`) |
+| `--only-types` · `--exclude` | Muestran u ocultan tipos de entidad en la salida |
 | `--json` · `--ndjson` | Salida para otros programas |
 
 Todas las órdenes y su comportamiento (estado de cada módulo, presupuesto, caché, red, entradas)

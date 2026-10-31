@@ -241,6 +241,7 @@ def test_json_outputs_of_every_command_match_the_schema(modules, tmp_path):
             "--json",
         ],
         "doctor_output": ["doctor", "--json"],
+        "presets_output": ["presets", "--json"],
         "config_key_output": ["config", "unset", "shodan", "--json"],
     }
     for schema_name, args in cases.items():

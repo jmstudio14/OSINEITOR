@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 
 import pytest
@@ -15,6 +16,7 @@ from osineitor.report import to_html, to_markdown
 from tests.test_cli import fake_module, use_modules
 
 runner = CliRunner()
+ANSI = re.compile(r"\x1b\[[0-9;]*m")  # en CI Rich colorea el panel de error y parte los textos
 SEED = Entity(type=EntityType.DOMAIN, value="example.com")
 PURPOSE = "Auditoría autorizada de la web de Acme (ticket 42)"
 
@@ -91,7 +93,7 @@ def test_the_purpose_is_saved_shown_and_sent_in_scan_start(modules, tmp_path):
     shown = json.loads(runner.invoke(app, ["show", "1", "--db", db, "--json"]).stdout)
     assert shown["purpose"] == PURPOSE
     human = runner.invoke(app, ["show", "1", "--db", db], terminal_width=200).stdout
-    assert PURPOSE in human
+    assert PURPOSE in ANSI.sub("", human)
 
 
 def test_without_the_option_the_purpose_is_empty(modules, tmp_path):
@@ -123,7 +125,7 @@ def test_email_and_username_scans_need_a_purpose_when_it_is_required(modules, mo
     require(monkeypatch)
     run = runner.invoke(app, [*args, "--no-save"])
     assert run.exit_code == 2
-    assert "--purpose" in run.output
+    assert "--purpose" in ANSI.sub("", run.output)
     ok = runner.invoke(app, [*args, "--purpose", PURPOSE, "--no-save", "--quiet"])
     assert ok.exit_code == 0, ok.output
 

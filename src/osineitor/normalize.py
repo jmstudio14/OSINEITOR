@@ -19,6 +19,12 @@ from osineitor.sanitize import clean_username
 # Etiqueta DNS: se admite `_` (registros como `_dmarc`) pero no empezar ni acabar en `-`.
 LABEL_RE = re.compile(r"^(?!-)[a-z0-9_-]{1,63}(?<!-)$")
 DEFAULT_PORTS = {"http": 80, "https": 443}
+ASN_RE = re.compile(r"^(?:as)?(\d{1,10})$", re.IGNORECASE)
+MAX_ASN = 2**32 - 1
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+PHONE_RE = re.compile(r"^\+[1-9]\d{7,14}$")
+CRYPTO_RE = re.compile(r"^[A-Za-z0-9]{14,128}$")
+MAX_TEXT = 512
 
 
 def canonical_hostname(value: str) -> str:
@@ -80,6 +86,58 @@ def _is_ip(host: str) -> bool:
     return True
 
 
+def canonical_asn(value: str) -> str:
+    """`as13335`, `AS13335` y `13335` son el mismo sistema autónomo: `AS13335`."""
+    match = ASN_RE.fullmatch(value.strip())
+    if not match or not 1 <= int(match[1]) <= MAX_ASN:
+        raise InvalidEntityValue(f"ASN no válido: {value!r}")
+    return f"AS{int(match[1])}"
+
+
+def canonical_netblock(value: str) -> str:
+    """Red en notación CIDR con los bits de host a cero (`10.0.0.5/24` → `10.0.0.0/24`)."""
+    try:
+        return str(ipaddress.ip_network(value.strip(), strict=False))
+    except ValueError as exc:
+        raise InvalidEntityValue(f"bloque de red no válido: {value!r}") from exc
+
+
+def canonical_fingerprint(value: str) -> str:
+    """Huella SHA-256 de un certificado: 64 hexadecimales en minúsculas, sin `:` ni espacios."""
+    fingerprint = re.sub(r"[:\s]", "", value).lower()
+    if not SHA256_RE.fullmatch(fingerprint):
+        raise InvalidEntityValue(f"huella SHA-256 no válida: {value!r}")
+    return fingerprint
+
+
+def canonical_phone(value: str) -> str:
+    """Teléfono en formato E.164 (`+34 600-123-456` → `+34600123456`); `00` equivale a `+`."""
+    phone = re.sub(r"[\s().\-]", "", value)
+    if phone.startswith("00"):
+        phone = "+" + phone[2:]
+    if not PHONE_RE.fullmatch(phone):
+        raise InvalidEntityValue(f"teléfono no válido: {value!r} (usa el prefijo internacional)")
+    return phone
+
+
+def canonical_crypto_address(value: str) -> str:
+    """Dirección de criptomoneda tal cual (distingue mayúsculas); solo se comprueba su forma."""
+    address = value.strip()
+    if not CRYPTO_RE.fullmatch(address):
+        raise InvalidEntityValue(f"dirección de criptomoneda no válida: {value!r}")
+    return address
+
+
+def canonical_text(entity_type: str, value: str) -> str:
+    """Texto libre (organización, persona...) con los espacios colapsados."""
+    text = " ".join(value.split())
+    if not text or len(text) > MAX_TEXT or not text.isprintable():
+        raise InvalidEntityValue(
+            f"{entity_type} no válido: debe tener entre 1 y {MAX_TEXT} caracteres imprimibles"
+        )
+    return text
+
+
 def canonical(entity_type: str, value: str) -> str:
     """Forma canónica de `value` según el tipo; los tipos sin regla se devuelven igual."""
     match str(entity_type):
@@ -93,5 +151,17 @@ def canonical(entity_type: str, value: str) -> str:
             return canonical_url(value)
         case "username":
             return clean_username(value)
+        case "asn":
+            return canonical_asn(value)
+        case "netblock":
+            return canonical_netblock(value)
+        case "certificate":
+            return canonical_fingerprint(value)
+        case "phone":
+            return canonical_phone(value)
+        case "crypto_address":
+            return canonical_crypto_address(value)
+        case "technology" | "organization" | "person" | "file" | "location" | "finding":
+            return canonical_text(str(entity_type), value)
         case _:
             return value

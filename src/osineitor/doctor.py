@@ -44,6 +44,8 @@ async def check_module(
         return Check(cls.name, "skipped", "módulo activo (usa --active)")
     if cls.requires_key and not config.key(cls.requires_key):
         return Check(cls.name, "skipped", f"falta la API key '{cls.requires_key}'")
+    if reason := cls.unavailable():
+        return Check(cls.name, "skipped", reason)
     if cls.canary is None:
         if cls.probe_url:
             return await _probe(http, cls)
