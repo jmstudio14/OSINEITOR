@@ -6,33 +6,30 @@ Todos los cambios relevantes del proyecto. Formato basado en
 
 ## [Sin publicar]
 
-### Corregido
-
-- **`dns`:** si el resolvedor contesta `REFUSED`, el error lo dice («el resolvedor DNS rechazó la
-  consulta de <dominio> (REFUSED)») en vez de «tiempo agotado o sin servidores». Afecta también a
-  `osineitor doctor`.
-
-## [0.2.0] - 2026-10-29
-
-Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI (v0.2.0).
-
 ### Añadido
 
-- **Contrato CLI↔GUI (Hito G1, F1.17, F8.4):** [`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md) y
-  [`docs/cli-contract.schema.json`](docs/cli-contract.schema.json), validado en los tests contra la
-  salida real de la CLI.
-  - `--ndjson` (eventos `scan.start`, `module.start/end`, `entity`, `progress`, `notice`,
-    `scan.end`), `--quiet`, `--control-stdin` y `--no-color`.
-  - `--json` también en `modules`, `history`, `show`, `doctor`, `config show`, `version` y
-    `export`. `config show --json` solo lista nombres de keys.
-  - **Cancelación ordenada:** `{"cmd": "cancel"}` por stdin, el cierre de stdin y Ctrl+C detienen
-    el scan, guardan lo ya obtenido y terminan con código 130. Probado con un proceso hijo real.
-  - **Códigos de salida:** `0` ok, `1` error interno, `2` uso incorrecto, `3` algún módulo falló,
-    `4` resultado incompleto por presupuesto, `130` cancelado. `ScanResult.status`
-    (`complete`/`truncated`/`cancelled`) acompaña a cada resultado en JSON.
-- ROADMAP: **Hito G · Aplicación de escritorio para Windows** (G1–G9), con la excepción al
-  principio 8; F11.1 «interfaz web local» queda obsoleto.
-
+- **Tipos de entidad ampliados (F3.1):** `asn`, `netblock`, `certificate`, `technology`,
+  `organization`, `person`, `phone`, `crypto_address`, `file`, `location` y `finding` (este último
+  reservado para F7.8), cada uno con su normalización (ASN `AS13335`, CIDR sin bits de host,
+  teléfono E.164, huella SHA-256 en minúsculas...). No requiere migración de la BD.
+- **Presets de escaneo (F3.2):** `--preset NOMBRE` en `domain`, `ip`, `email`, `username` y `scan`, y
+  la orden `osineitor presets`. Siete incluidos (`passive`, `quick`, `domain-recon`,
+  `attack-surface`, `person`, `email-audit`, `full`) y YAML propios en el directorio de
+  configuración, que sustituyen a un incluido del mismo nombre. Lo escrito en la línea de órdenes
+  manda sobre el preset; `allow_active` solo admite los módulos activos, no los activa.
+- **Analizadores offline (F3.3):** `Module.analyzer = True`. Corren en un pase final sobre lo
+  recogido, con un contexto sin red (usar `http` o `resolver` es un `ModuleError`) y sin gastar
+  presupuesto. `osineitor modules` los marca (campo `analyzer` en `--json`).
+- **Adaptadores de herramientas externas (F3.4):** `ExternalToolModule` (`modules/_external.py`):
+  ejecución sin shell, versión mínima, timeout, salida JSON o NDJSON. Sin el binario el módulo
+  queda `omitido` y `osineitor doctor` lo indica.
+- **`osineitor update-data` (F3.5):** descarga datasets de terceros (hoy, las firmas de Sherlock)
+  y registra versión, SHA-256 y licencia en `manifest.json`; rechaza las licencias incompatibles
+  con MIT. `username_sites` usa la copia descargada solo si su hash coincide.
+- **Objetivos URL, CIDR y ASN en `scan` (F3.6):** una URL se descompone en su host (dominio o IP);
+  un CIDR o un ASN se aceptan como semilla, aunque aún ningún módulo los consume.
+- **Filtros de salida (F3.7):** `--only-types` y `--exclude` en los escaneos, `show` y `export`.
+  Solo recortan lo que se imprime o exporta; la BD, `--ndjson` y el código de salida no cambian.
 - **Anexo de evidencias en los informes (F2.7):** los informes HTML y Markdown terminan con una
   sección «Evidencias»: módulo, entidad consultada, URL, fecha UTC, estado, bytes y SHA-256 completo
   de cada respuesta guardada con `--evidence`, más la huella del conjunto y cómo comprobarla con
@@ -78,6 +75,41 @@ Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI 
   `source`). Contrato CLI↔GUI: `entity.observations` es un campo nuevo y opcional; el evento NDJSON
   `entity` trae solo la primera observación (se emite al descubrirla) y la lista completa va en
   `--json`. `source` no cambia.
+
+### Cambiado
+
+- Con `--proxy`, los módulos de conexión directa se omiten con el mensaje «conexión directa: no se
+  enruta por --proxy» (antes mencionaba solo DNS).
+- En `scan`, un username con la forma `AS1234` se interpreta como ASN; para tratarlo como username
+  hay que usar `osineitor username`.
+
+### Corregido
+
+- **`dns`:** si el resolvedor contesta `REFUSED`, el error lo dice («el resolvedor DNS rechazó la
+  consulta de <dominio> (REFUSED)») en vez de «tiempo agotado o sin servidores». Afecta también a
+  `osineitor doctor`.
+
+## [0.2.0] - 2026-10-29
+
+Fases 1a (seguridad y datos) y 1b (fiabilidad) del roadmap y contrato CLI↔GUI (v0.2.0).
+
+### Añadido
+
+- **Contrato CLI↔GUI (Hito G1, F1.17, F8.4):** [`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md) y
+  [`docs/cli-contract.schema.json`](docs/cli-contract.schema.json), validado en los tests contra la
+  salida real de la CLI.
+  - `--ndjson` (eventos `scan.start`, `module.start/end`, `entity`, `progress`, `notice`,
+    `scan.end`), `--quiet`, `--control-stdin` y `--no-color`.
+  - `--json` también en `modules`, `history`, `show`, `doctor`, `config show`, `version` y
+    `export`. `config show --json` solo lista nombres de keys.
+  - **Cancelación ordenada:** `{"cmd": "cancel"}` por stdin, el cierre de stdin y Ctrl+C detienen
+    el scan, guardan lo ya obtenido y terminan con código 130. Probado con un proceso hijo real.
+  - **Códigos de salida:** `0` ok, `1` error interno, `2` uso incorrecto, `3` algún módulo falló,
+    `4` resultado incompleto por presupuesto, `130` cancelado. `ScanResult.status`
+    (`complete`/`truncated`/`cancelled`) acompaña a cada resultado en JSON.
+- ROADMAP: **Hito G · Aplicación de escritorio para Windows** (G1–G9), con la excepción al
+  principio 8; F11.1 «interfaz web local» queda obsoleto.
+
 - **Proxy y Tor (F1.8):** `--proxy` (o `OSINEITOR_PROXY`) en `scan`, `domain`, `ip`, `email`,
   `username` y `doctor` envía todas las peticiones por un proxy `socks5(h)://` o `http(s)://`
   (nueva dependencia `httpx[socks]`). Con proxy los nombres los resuelve el proxy: la guardia de red

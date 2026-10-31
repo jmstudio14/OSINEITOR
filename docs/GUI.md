@@ -207,5 +207,6 @@ no hace falta lanzar la CLI.
 - La latencia de lanzar un proceso de la CLI por cada orden en Windows (con antivirus) no está
   medida. Si el historial o la lista de módulos tardan, cachear en la GUI.
 - `CREATE_NO_WINDOW` evita la ventana de consola, pero que no parpadee solo se comprueba a ojo.
+- La GUI aún no pasa `--purpose`, `--scope` ni `--evidence`, y `CliApi` no expone `osineitor verify`.
 - Fuera de alcance por ahora: grafo, hallazgos, procedencia en la interfaz, internacionalización y
   actualizaciones automáticas.

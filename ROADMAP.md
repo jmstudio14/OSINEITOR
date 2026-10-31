@@ -1,6 +1,6 @@
 # Roadmap de OSINEITOR
 
-> **Estado:** vigente · **Versión actual:** 0.2.0 · **Última revisión:** 29 de octubre de 2026
+> **Estado:** vigente · **Versión actual:** 0.2.0 · **Última revisión:** 31 de octubre de 2026
 >
 > Este documento define la dirección del proyecto después del MVP: qué se construirá, en qué
 > orden, por qué y cómo se sabrá que cada fase está terminada. No compromete fechas: el orden,
@@ -167,7 +167,7 @@ JSON/Markdown/HTML, 41 tests sin red y CI en Python 3.11 y 3.13.
 timeouts y presupuestos de escaneo, guardia de red, normalización y saneado de entradas, RDAP que
 distingue «TLD sin RDAP», rutas de Windows (`platformdirs`), contrato CLI↔GUI (`--ndjson`,
 `--json`, cancelación y códigos de salida) y la capa sin Qt de la aplicación de escritorio
-(`osineitor_gui`). 346 tests sin red; CI en Windows y Linux (Python 3.11 y 3.13).
+(`osineitor_gui`). 522 tests sin red; CI en Windows y Linux (Python 3.11 y 3.13).
 El detalle está en el [progreso por fase](#progreso-de-implementación).
 
 ### 3.2 Deuda técnica conocida
@@ -271,14 +271,14 @@ entre sí y pueden reordenarse.
 
 ### Progreso de implementación
 
-Estado a 29-10-2026 (v0.2.0), contrastado con el código. Leyenda: **✅ Hecho** · **🟡 Parcial** (falta parte del entregable o de su criterio de aceptación) · **⬜ Pendiente** · **➖ Obsoleto**. La columna *Estado* de cada tabla de la sección 6 es la fuente.
+Estado a 31-10-2026 (v0.2.0 publicada; las fases 2 y 3 están hechas y sin publicar), contrastado con el código. Leyenda: **✅ Hecho** · **🟡 Parcial** (falta parte del entregable o de su criterio de aceptación) · **⬜ Pendiente** · **➖ Obsoleto**. La columna *Estado* de cada tabla de la sección 6 es la fuente.
 
 | Fase | Versión | Hechos | Parciales | Pendientes | *M* hechos |
 |---|---|---|---|---|---|
 | 0 | 0.1.1 | 2 | 1 | 3 | 2 / 6 |
 | 1 | 0.2.0 | 16 | 1 | 1 | 11 / 12 |
 | 2 | 0.3.0 | 7 | 0 | 0 | 4 / 4 |
-| 3 | 0.4.0 | 0 | 0 | 7 | 0 / 3 |
+| 3 | 0.4.0 | 7 | 0 | 0 | 3 / 3 |
 | 4 | 0.5.0–0.5.1 | 0 | 0 | 24 | 0 / 5 |
 | 5 | 0.6.0 | 0 | 0 | 15 | 0 / 1 |
 | 6 | 0.7.0 | 0 | 0 | 18 | 0 / 3 |
@@ -288,9 +288,9 @@ Estado a 29-10-2026 (v0.2.0), contrastado con el código. Leyenda: **✅ Hecho**
 | 10 | 0.11.0 | 0 | 0 | 7 | 0 / 3 |
 | 11 | 1.0.0 | 0 | 0 | 5 | 0 / 3 |
 | G | 0.2.0–0.2.2 | 1 | 6 | 2 | 1 / 8 |
-| **Total (fases 0–11)** | | **26** | **2** | **105** | **18 / 50** |
+| **Total (fases 0–11)** | | **33** | **2** | **98** | **21 / 50** |
 
-Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **17 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
+Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **20 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
 
 ### Corte recomendado
 
@@ -472,7 +472,7 @@ preservación del Protocolo de Berkeley.
 | F2.6 | S | ✅ Hecho | Propósito del scan | Campo `--purpose` registrado en los metadatos; obligatorio en scans sobre emails o usernames si así se configura |
 | F2.7 | S | ✅ Hecho | Informe con anexo de evidencias | El informe HTML incluye una tabla de evidencias con hashes verificables |
 
-**Estado (30-10-2026):** 7 de 7 hechos (F2.1 a F2.7). Fase terminada.
+**Estado (30-10-2026):** 7 de 7 hechos (F2.1 a F2.7). Fase terminada; pendiente de la release 0.3.0 (el código y el CHANGELOG siguen en 0.2.0 con la fase 2 en «Sin publicar»).
 - F2.1: `Entity.observations` guarda cada vez que un módulo vio la entidad (módulo, entidad
   consultada, hora UTC), deduplicadas por módulo y consulta; persiste en la BD (versión 3) y la CLI
   y los informes listan todas las fuentes. El evento NDJSON `entity` lleva solo la primera
@@ -520,16 +520,45 @@ externas.
 
 | ID | P | Estado | Entregable | Detalle |
 |---|---|---|---|---|
-| F3.1 | M | ⬜ Pendiente | Nuevos tipos de entidad | `asn`, `netblock`, `certificate`, `technology`, `organization`, `person`, `phone`, `crypto_address`, `file`, `location` y `finding` (este último reservado a F7.8), con su normalización (F1.12) y migración (F1.4). Resuelve D13 |
-| F3.2 | M | ⬜ Pendiente | Presets de escaneo | `--preset` y `osineitor presets`. Definidos en YAML y editables en el directorio de configuración: fijan módulos, profundidad, presupuesto y si admiten módulos activos. Incluidos: `passive`, `quick`, `domain-recon`, `attack-surface`, `person`, `email-audit` y `full` [R2] |
-| F3.3 | M | ⬜ Pendiente | Analizadores offline | Módulos de tipo *analyzer* que consumen entidades ya recogidas (p. ej. el `record` de DNS) sin hacer peticiones; se ejecutan en un pase final y no consumen presupuesto de red |
-| F3.4 | S | ⬜ Pendiente | Adaptadores de herramientas externas | Clase base `ExternalToolModule`: detección con `shutil.which`, ejecución **sin shell**, timeout, versión mínima y parseo de JSON. No se empaquetan binarios; `doctor` informa de cuáles están instalados |
-| F3.5 | S | ⬜ Pendiente | `osineitor update-data` | Descarga y actualiza los datasets de terceros en el directorio de datos del usuario, registrando versión, hash y licencia; los de licencia incompatible con MIT nunca entran en el paquete |
-| F3.6 | S | ⬜ Pendiente | Semillas ampliadas | `scan` reconoce URL (la descompone en dominio y URL), CIDR y ASN (`AS13335`). Teléfono, cripto y ficheros se añaden en la fase 6 junto a sus módulos |
-| F3.7 | C | ⬜ Pendiente | Filtros de salida | `--only-types` y `--exclude` para recortar resultados e informes |
+| F3.1 | M | ✅ Hecho | Nuevos tipos de entidad | `asn`, `netblock`, `certificate`, `technology`, `organization`, `person`, `phone`, `crypto_address`, `file`, `location` y `finding` (este último reservado a F7.8), con su normalización (F1.12) y migración (F1.4). Resuelve D13 |
+| F3.2 | M | ✅ Hecho | Presets de escaneo | `--preset` y `osineitor presets`. Definidos en YAML y editables en el directorio de configuración: fijan módulos, profundidad, presupuesto y si admiten módulos activos. Incluidos: `passive`, `quick`, `domain-recon`, `attack-surface`, `person`, `email-audit` y `full` [R2] |
+| F3.3 | M | ✅ Hecho | Analizadores offline | Módulos de tipo *analyzer* que consumen entidades ya recogidas (p. ej. el `record` de DNS) sin hacer peticiones; se ejecutan en un pase final y no consumen presupuesto de red |
+| F3.4 | S | ✅ Hecho | Adaptadores de herramientas externas | Clase base `ExternalToolModule`: detección con `shutil.which`, ejecución **sin shell**, timeout, versión mínima y parseo de JSON. No se empaquetan binarios; `doctor` informa de cuáles están instalados |
+| F3.5 | S | ✅ Hecho | `osineitor update-data` | Descarga y actualiza los datasets de terceros en el directorio de datos del usuario, registrando versión, hash y licencia; los de licencia incompatible con MIT nunca entran en el paquete |
+| F3.6 | S | ✅ Hecho | Semillas ampliadas | `scan` reconoce URL (la descompone en dominio y URL), CIDR y ASN (`AS13335`). Teléfono, cripto y ficheros se añaden en la fase 6 junto a sus módulos |
+| F3.7 | C | ✅ Hecho | Filtros de salida | `--only-types` y `--exclude` para recortar resultados e informes |
 
-**Estado (29-10-2026):** ninguno hecho; siguen los 10 tipos de entidad originales (D13) y
-`detect_type` solo reconoce IP, email, dominio y username.
+**Estado (31-10-2026):** 7 de 7 hechos (F3.1 a F3.7). Fase terminada; pendiente de la release 0.4.0.
+- F3.1: `EntityType` pasa de 10 a 21 tipos (D13 resuelto). Cada uno se normaliza al crearse
+  (`normalize.canonical`): `asn` (`AS13335`), `netblock` (CIDR con bits de host a cero),
+  `certificate` (huella SHA-256 en minúsculas), `phone` (E.164), `crypto_address` (solo se valida la
+  forma) y texto con espacios colapsados para `technology`, `organization`, `person`, `file`,
+  `location` y `finding`. No hace falta migración: `entities.type` es texto libre. Ningún módulo
+  produce aún los tipos nuevos, y la normalización de `file` y `finding` se afinará con F6 y F7.8.
+- F3.2: `--preset NOMBRE` en los cinco scans y `osineitor presets`. Los siete incluidos son YAML en
+  `src/osineitor/data/presets/`; los del usuario van en `<config>/presets/` y sustituyen a un
+  incluido del mismo nombre. Lo escrito en la línea de órdenes manda sobre el preset. **Decisión:**
+  `allow_active: true` solo *admite* los módulos activos, sigue haciendo falta `--active`; con un
+  preset que no los admite, `--active` es un error de uso. El preset usado no se guarda con el scan.
+- F3.3: `Module.analyzer = True`. Pase final tras los niveles, sobre la semilla y lo recogido, con un
+  contexto `Offline` (usar `http` o `resolver` es un `ModuleError`) y sin gastar presupuesto de
+  peticiones; lo que emiten no se pivota. Aún no hay analizadores concretos (F4.13, F4.14, F4.17).
+- F3.4: `ExternalToolModule` (`modules/_external.py`): `shutil.which`, ejecución sin shell, versión
+  mínima, timeout con muerte del proceso, JSON o NDJSON y sin las variables `OSINEITOR_*` en el
+  entorno. Sin el binario el módulo queda `omitido`. Su tráfico no pasa por `ctx.http`: con
+  `--proxy` se omite y no deja evidencia. Aún no hay adaptadores concretos (F4.24).
+- F3.5: `osineitor update-data` descarga el catálogo (hoy solo `sherlock-sites`, MIT) a
+  `<datos>/datasets/` y anota versión (`Last-Modified`, `ETag` o la fecha), SHA-256, licencia y URL
+  en `manifest.json`. Una licencia fuera de la lista de compatibles se rechaza sin descargar;
+  `username_sites` usa la copia del usuario solo si su hash coincide. **Consecuencia para F4.18:**
+  un dataset GPL como `webappanalyzer` no se podrá instalar con esta orden (hace falta firmas propias
+  o decidir otra vía).
+- F3.6: `scan` reconoce URL (se investiga su host), CIDR y ASN. Un CIDR o un ASN se aceptan como
+  objetivo pero no hay módulos que los consuman hasta la fase 4. Un username con la forma `AS1234`
+  se toma por ASN: hay que usar `osineitor username`.
+- F3.7: `--only-types` y `--exclude` en los scans, `show` y `export`. Solo recortan lo que se
+  imprime o exporta: la BD, las evidencias, el stream `--ndjson` y el código de salida no cambian.
+- La GUI aún no expone `--preset`, `--only-types` ni `--exclude`.
 
 **Criterios de aceptación**
 - Los siete presets se listan, se ejecutan y se pueden sobrescribir desde el directorio del
@@ -944,6 +973,8 @@ justificación.
 | 28-10-2026 | Versión inicial: fases 0 a 9 |
 | 29-10-2026 | Análisis de carencias: deuda D8–D14, fase 3 nueva, las antiguas fases 3 a 9 pasan a 4–11, prioridades M/S/C, corte recomendado y nuevos entregables |
 | 29-10-2026 | Estado de implementación: columna *Estado* en las tablas de entregables, tabla de progreso por fase y versión actual 0.2.0; recuento corregido a 50 *M*, 60 *S* y 23 *C* |
+| 30-10-2026 | Fase 2 terminada (F2.1–F2.7), pendiente de release 0.3.0; recuento de tests y fechas de estado al día |
+| 31-10-2026 | Fase 3 terminada (F3.1–F3.7), pendiente de release 0.4.0; D13 resuelto |
 
 ### Correspondencia con la numeración anterior
 

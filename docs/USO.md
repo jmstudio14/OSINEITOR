@@ -9,6 +9,9 @@ para documentación.
 - [Órdenes](#órdenes)
 - [Qué se investiga y cómo se pivota](#qué-se-investiga-y-cómo-se-pivota)
 - [Opciones de los scans](#opciones-de-los-scans)
+- [Presets](#presets)
+- [Filtros de salida](#filtros-de-salida)
+- [Datasets](#datasets)
 - [Estado de cada módulo](#estado-de-cada-módulo)
 - [Presupuesto](#presupuesto)
 - [Caché](#caché)
@@ -26,6 +29,10 @@ osineitor domain example.com          # solo el dominio (profundidad 1)
 osineitor ip 1.1.1.1
 osineitor email alguien@example.com --depth 2
 osineitor username johndoe
+osineitor scan https://example.com/login   # una URL: se investiga su host
+osineitor scan 1.1.1.0/24                  # red CIDR (el tipo se reconoce; los módulos llegan en la fase 4)
+osineitor scan AS13335                     # sistema autónomo (ídem)
+osineitor domain example.com --preset quick   # con un preset (ver Presets)
 
 osineitor history --limit 50          # scans guardados (20 por defecto)
 osineitor show 3                      # volver a ver el scan 3
@@ -34,6 +41,8 @@ osineitor export 3 -f md -o informe.md  # en el fichero indicado
 osineitor verify 3                    # comprueba las evidencias del scan 3 (ver Evidencia)
 
 osineitor modules                     # módulos disponibles y estado de sus API keys
+osineitor presets                     # perfiles de escaneo disponibles
+osineitor update-data                 # descarga los datasets de terceros (ver Datasets)
 osineitor doctor                      # prueba cada módulo contra su fuente real
 osineitor doctor -m dns --json        # solo esos módulos (-m, repetible); --active y --allow-private como en los scans
 osineitor cache info                  # respuestas cacheadas (cache clear las borra)
@@ -42,7 +51,12 @@ osineitor version
 ```
 
 `scan` deduce el tipo de la entrada. Una cadena como `john.doe` es ambigua (parece un dominio);
-en ese caso usa la orden explícita: `osineitor username john.doe`.
+en ese caso usa la orden explícita: `osineitor username john.doe`. Lo mismo con un username que
+empiece por `AS` y números (`AS1234`), que `scan` toma por un ASN.
+
+`scan` reconoce IP, red CIDR, ASN, URL, email, dominio y username. De una URL se investiga su host
+(dominio o IP); una red CIDR o un ASN se aceptan como objetivo, pero aún no hay módulos que los
+consuman (llegan con la fase 4), así que el resultado queda vacío.
 
 ## Qué se investiga y cómo se pivota
 
@@ -155,6 +169,8 @@ Valen para `scan`, `domain`, `ip`, `email` y `username`.
 | `--evidence` | Guarda la respuesta original de cada fuente con su SHA-256 (ver [Evidencia](#evidencia)) |
 | `--scope` | Limita el scan a los dominios y redes de un YAML (ver [Alcance](#alcance)); también `OSINEITOR_SCOPE` |
 | `--purpose` | Anota para qué haces el scan; se puede exigir en emails y usernames (ver [Propósito](#propósito)); también `OSINEITOR_PURPOSE` |
+| `--preset` | Aplica un perfil de escaneo (ver [Presets](#presets)) |
+| `--only-types`, `--exclude` | Recortan los tipos de entidad que se muestran (ver [Filtros de salida](#filtros-de-salida)) |
 | `--no-save` | No guarda el scan en el historial |
 | `--db` | Ruta de la base de datos SQLite |
 | `--json` / `--ndjson` | Salida para otros programas (ver más abajo) |
@@ -179,6 +195,74 @@ osineitor --log-file=osineitor.jsonl domain example.com
 sustituye por `***` cualquier key configurada, también si aparece dentro de un mensaje de error.
 **Sí contiene** los objetivos y los hosts que se consultan, así que trata el fichero como parte de la
 investigación. No se rota ni se restringen sus permisos.
+
+## Presets
+
+Un preset fija de una vez los módulos, la profundidad y el presupuesto de un tipo de scan.
+`osineitor presets` los lista.
+
+| Preset | Qué hace |
+|---|---|
+| `passive` | Todos los módulos pasivos, 2 niveles |
+| `quick` | DNS, RDAP y datos de IP y email, 1 nivel, tope de 100 peticiones y 60 s |
+| `domain-recon` | `crtsh`, `dns`, `rdap` y `wayback`, 2 niveles |
+| `attack-surface` | Dominio e IP con `http_fingerprint` y los de IP, 3 niveles; admite `--active` |
+| `person` | Email y username: perfiles y filtraciones, 2 niveles |
+| `email-audit` | Email y su dominio de correo (MX, SPF, DMARC), 2 niveles |
+| `full` | Todos los módulos, 3 niveles; admite `--active` |
+
+```bash
+osineitor domain example.com --preset domain-recon
+osineitor domain example.com --preset domain-recon --depth 3   # lo que escribes manda sobre el preset
+```
+
+- **Lo que indiques tú manda** sobre el preset (`--depth`, `-m`, `--max-*`).
+- **Un preset nunca activa los módulos activos.** `attack-surface` y `full` los *admiten*, pero
+  sigue haciendo falta `--active`; con un preset que no los admite, `--active` es un error de uso.
+- **Los tuyos** van en `presets/<nombre>.yml` dentro de tu directorio de configuración
+  (`%APPDATA%\osineitor` en Windows). Uno con el nombre de un preset incluido lo sustituye. Un
+  fichero erróneo no se ignora: `osineitor presets` lo señala (código 2) y `--preset` con ese
+  nombre falla.
+
+```yaml
+description: Mi reconocimiento
+depth: 2                    # 1 a 4
+modules: [crtsh, dns, rdap] # sin esta clave, todos
+allow_active: false         # true admite los módulos activos (sigue haciendo falta --active)
+max_entities: 500           # presupuesto; 0 = sin límite
+max_requests: 300
+max_time: 120
+```
+
+## Filtros de salida
+
+`--only-types` y `--exclude` recortan qué tipos de entidad se muestran. Valen en los scans, en
+`show` y en `export`; se repiten o se separan con comas:
+
+```bash
+osineitor domain example.com --only-types domain,ip
+osineitor show 3 --exclude record
+osineitor export 3 -f md --exclude service,vulnerability
+```
+
+Solo afectan a lo que se imprime o exporta: el scan se guarda entero, las evidencias no se filtran,
+el stream `--ndjson` emite todas las entidades y el código de salida no cambia. Con los dos,
+`--exclude` gana.
+
+## Datasets
+
+`osineitor update-data` descarga los datasets de terceros a la carpeta `datasets/` de tu directorio
+de datos y anota en `manifest.json` la versión, el SHA-256 y la licencia de cada uno. Hoy solo
+hay uno, `sherlock-sites` (las firmas de `username_sites`, licencia MIT): si lo actualizas, el módulo
+usa tu copia en lugar de la del paquete, siempre que su hash coincida con el registrado.
+
+```bash
+osineitor update-data
+osineitor update-data sherlock-sites --json
+```
+
+Solo se instalan datasets con licencia compatible con MIT; los demás se rechazan sin descargarlos
+(código de salida `3`). Si una descarga no es válida se conserva la copia anterior.
 
 ## Estado de cada módulo
 
@@ -245,9 +329,10 @@ osineitor domain example.com --proxy=socks5://127.0.0.1:9050
 - **Los nombres los resuelve el proxy**, no tu equipo. Por eso la guardia de red deja de resolver
   los hostnames en local; las IP privadas, loopback y de metadatos escritas como IP siguen
   bloqueadas.
-- **`dns` y `email_validate` se omiten** (`omitido: consulta DNS directa`). Consultan DNS por UDP, que
+- **`dns` y `email_validate` se omiten** (`omitido: conexión directa`). Consultan DNS por UDP, que
   un proxy SOCKS no enruta, y harían llegar tus consultas a tu resolvedor local. Pierdes los
-  registros DNS y el MX del email mientras uses proxy.
+  registros DNS y el MX del email mientras uses proxy. Lo mismo vale para cualquier módulo que
+  ejecute una herramienta externa.
 - Si el proxy no responde, el módulo falla: **nunca se vuelve a conectar sin proxy**.
 - Con credenciales en la URL (`socks5://usuario:clave@host:puerto`) mejor usa `OSINEITOR_PROXY`
   para que no queden en la línea de comandos; el registro nunca las incluye.

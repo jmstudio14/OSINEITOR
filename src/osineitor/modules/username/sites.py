@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 
+from osineitor import datasets
 from osineitor.errors import BudgetExceeded, NetworkGuardError
 from osineitor.models import Entity, EntityType
 from osineitor.modules.base import Module
@@ -23,7 +24,11 @@ TIMEOUT = 15
 
 @cache
 def load_sites(include_nsfw: bool = False) -> dict[str, dict[str, Any]]:
-    raw = resources.files(__package__).joinpath("data/sites.json").read_text(encoding="utf-8")
+    # Un `update-data` con hash correcto manda sobre las firmas que vienen en el paquete.
+    updated = datasets.installed_path("sherlock-sites")
+    raw = (updated or resources.files(__package__).joinpath("data/sites.json")).read_text(
+        encoding="utf-8"
+    )
     sites = json.loads(raw)
     return {k: v for k, v in sites.items() if include_nsfw or not v.get("isNSFW")}
 

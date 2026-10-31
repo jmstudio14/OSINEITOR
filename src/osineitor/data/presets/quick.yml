@@ -1,0 +1,6 @@
+description: Resumen rápido en un nivel con DNS, RDAP y datos de IP y email.
+depth: 1
+modules: [dns, rdap, ipinfo, internetdb, email_validate]
+allow_active: false
+max_requests: 100
+max_time: 60

@@ -16,7 +16,15 @@ from osineitor.evidence import capture
 from osineitor.http import HttpClient, SourceHttp, current_stats
 from osineitor.models import Entity, EntityType, Observation
 
-__all__ = ["Context", "Module", "ModuleError", "ModuleQuota", "ModuleSkipped", "status_error"]
+__all__ = [
+    "Context",
+    "Module",
+    "ModuleError",
+    "ModuleQuota",
+    "ModuleSkipped",
+    "Offline",
+    "status_error",
+]
 
 
 def status_error(service: str, response: httpx.Response) -> ModuleError:
@@ -24,6 +32,15 @@ def status_error(service: str, response: httpx.Response) -> ModuleError:
     if response.status_code == 429:
         return ModuleQuota(f"{service} rechazó la petición por límite de uso (429)")
     return ModuleError(f"{service} respondió {response.status_code}")
+
+
+class Offline:
+    """Sustituye a la red en el contexto de un analizador: cualquier uso es un fallo del módulo."""
+
+    def __getattr__(self, name: str) -> object:
+        if name.startswith("__"):
+            raise AttributeError(name)
+        raise ModuleError("un analizador no puede usar la red")
 
 
 @dataclass
@@ -42,9 +59,12 @@ class Module(ABC):
     requires_key: ClassVar[str | None] = None
     # Pasivo = no envía tráfico al objetivo, solo a terceros.
     passive: ClassVar[bool] = True
-    # Consulta DNS por UDP (`ctx.resolver`) fuera de `ctx.http`: no pasa por --proxy, así que con
-    # proxy se omite en lugar de filtrar las consultas al resolvedor local.
+    # Sale a la red fuera de `ctx.http` (DNS por UDP con `ctx.resolver`, una herramienta externa):
+    # no pasa por --proxy, así que con proxy se omite en lugar de filtrar el tráfico.
     direct_dns: ClassVar[bool] = False
+    # Analizador: lee las entidades ya recogidas en un pase final, sin red (su contexto es
+    # `Offline`) y sin gastar el presupuesto de peticiones. Lo que emite no se pivota.
+    analyzer: ClassVar[bool] = False
     # «authoritative»: la respuesta viene de quien administra el dato (DNS, RDAP, el propio
     # objetivo). «aggregated»: una base de terceros que lo recopiló. Pesa en la confianza.
     authority: ClassVar[Literal["authoritative", "aggregated"]] = "aggregated"
@@ -61,6 +81,12 @@ class Module(ABC):
 
     def __init__(self, ctx: Context) -> None:
         self.ctx = ctx
+
+    @classmethod
+    def unavailable(cls) -> str | None:
+        """Motivo por el que el módulo no puede correr en este equipo (p. ej. falta una
+        herramienta externa), o `None` si puede."""
+        return None
 
     @property
     def api_key(self) -> str | None:

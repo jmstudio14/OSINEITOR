@@ -1,0 +1,4 @@
+description: Superficie expuesta de un dominio y sus IP; admite módulos activos con --active.
+depth: 3
+modules: [crtsh, dns, rdap, http_fingerprint, ipinfo, internetdb, shodan, greynoise]
+allow_active: true

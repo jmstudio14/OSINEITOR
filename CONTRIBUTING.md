@@ -48,6 +48,15 @@ python -m pytest -q
 - **Pasivo por defecto.** Si el módulo envía tráfico al objetivo, marca `passive = False`.
 - **Todo por `ctx.http`.** Si consulta DNS con `self.ctx.resolver` (UDP, no pasa por `--proxy`),
   marca `direct_dns = True`: con proxy se omite en lugar de filtrar la consulta. Un test lo exige.
+- **Autoridad de la fuente.** Declara `authority = "authoritative"` solo si la respuesta viene de
+  quien administra el dato (DNS, RDAP, el propio objetivo); el valor por defecto `"aggregated"` es
+  para bases de terceros y pesa en la [confianza](docs/ARCHITECTURE.md). Si consultas DNS fuera de
+  `ctx.http`, llama a `self.record_evidence(...)` para que `--evidence` la guarde.
+- **Analizadores.** Un módulo que solo lee entidades ya recogidas (sin red) marca
+  `analyzer = True`: corre en un pase final con un contexto sin red y lo que emite no se pivota.
+- **Herramientas externas.** Hereda de `ExternalToolModule` (`modules/_external.py`): declara
+  `binary` y, si hace falta, `min_version`, y pasa el objetivo como valor de una opción o tras `--`.
+  No se empaquetan binarios y su tráfico no pasa por `ctx.http`.
 - **Sin dependencias nuevas** salvo que estén justificadas en el PR.
 - Documenta el módulo en [docs/MODULES.md](docs/MODULES.md) y en la tabla de módulos del README.
 - Añade una entrada en la sección `Sin publicar` de [CHANGELOG.md](CHANGELOG.md).

@@ -103,7 +103,9 @@ Un único documento JSON por stdout.
 | Orden | Esquema (`$defs`) | Contenido |
 |---|---|---|
 | `scan`, `domain`, `ip`, `email`, `username`, `show` | `scan_result` | Resultado completo: `target`, `entities`, `events`, `runs` (estado por módulo), `evidence` (metadatos y SHA-256 de cada respuesta guardada con `--evidence`, sin el cuerpo), `evidence_digest` (huella del conjunto o `null`), `truncated`, `status` |
-| `modules` | `modules_output` | Módulos: `name`, `description`, `consumes`, `produces`, `passive`, `requires_key`, `key_configured`, `timeout` |
+| `modules` | `modules_output` | Módulos: `name`, `description`, `consumes`, `produces`, `passive`, `analyzer`, `requires_key`, `key_configured`, `timeout` |
+| `presets` | `presets_output` | `presets[]` (`name`, `source`, `description`, `depth`, `modules`, `allow_active`, `max_*`) y `errors[]` (ficheros de preset no válidos; con alguno, código 2) |
+| `update-data` | `update_data_output` | Por dataset: `name`, `status` (`actualizado`, `sin cambios`, `rechazado`, `error`), `detail`, `license`, `version`, `sha256`. Código 3 si alguno falla o se rechaza |
 | `history` | `history_output` | Scans guardados |
 | `doctor` | `doctor_output` | `module`, `verdict` (`ok`, `empty`, `fail`, `skipped`, `unchecked`), `detail`, `duration_ms`, `requests` |
 | `config show` | `config_show_output` | Ruta y **nombres** de las keys configuradas (nunca valores, ni enmascarados) |

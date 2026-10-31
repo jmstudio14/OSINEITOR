@@ -1,0 +1,4 @@
+description: Reconocimiento pasivo de un dominio (subdominios, DNS, RDAP, histórico).
+depth: 2
+modules: [crtsh, dns, rdap, wayback]
+allow_active: false
