@@ -1,6 +1,6 @@
 # Roadmap de OSINEITOR
 
-> **Estado:** vigente · **Versión actual:** 0.4.0 · **Última revisión:** 31 de octubre de 2026
+> **Estado:** vigente · **Versión actual:** 0.5.0 · **Última revisión:** 31 de octubre de 2026
 >
 > Este documento define la dirección del proyecto después del MVP: qué se construirá, en qué
 > orden, por qué y cómo se sabrá que cada fase está terminada. No compromete fechas: el orden,
@@ -271,7 +271,7 @@ entre sí y pueden reordenarse.
 
 ### Progreso de implementación
 
-Estado a 31-10-2026 (v0.4.0 publicada; las fases 2 y 3 están hechas y publicadas), contrastado con el código. Leyenda: **✅ Hecho** · **🟡 Parcial** (falta parte del entregable o de su criterio de aceptación) · **⬜ Pendiente** · **➖ Obsoleto**. La columna *Estado* de cada tabla de la sección 6 es la fuente.
+Estado a 31-10-2026 (v0.5.0 publicada; las fases 2 y 3 y los *M* de la fase 4 están hechos y publicados), contrastado con el código. Leyenda: **✅ Hecho** · **🟡 Parcial** (falta parte del entregable o de su criterio de aceptación) · **⬜ Pendiente** · **➖ Obsoleto**. La columna *Estado* de cada tabla de la sección 6 es la fuente.
 
 | Fase | Versión | Hechos | Parciales | Pendientes | *M* hechos |
 |---|---|---|---|---|---|
@@ -621,7 +621,7 @@ priorizando fuentes gratuitas con API oficial. **v0.5.0** entrega los *M*; **v0.
 | F4.24 | C | ⬜ Pendiente | `ext_subfinder`, `ext_amass` | Adaptadores (F3.4) de Subfinder y de Amass **solo en modo pasivo**; el binario lo instala el usuario | No | Pasivo |
 
 **Estado (31-10-2026):** 5 de 24 hechos, todos los *M* de la v0.5.0 (F4.4, F4.11, F4.12, F4.13 y
-F4.14); los 19 *S* y *C* de la v0.5.1 siguen pendientes.
+F4.14), publicados en la 0.5.0; los 19 *S* y *C* de la v0.5.1 siguen pendientes.
 - F4.4: `mail_security` consulta por DNS `_mta-sts`, `_smtp._tls`, `default._bimi` y 15 selectores
   DKIM comunes, y deja un `record`. No descarga la política MTA-STS por HTTPS: sería activo.
 - F4.11: `whois` usa un socket al puerto 43 (`direct_dns`: con `--proxy` se omite; la evidencia
@@ -998,6 +998,7 @@ justificación.
 | 30-10-2026 | Fase 2 terminada (F2.1–F2.7), pendiente de release 0.3.0; recuento de tests y fechas de estado al día |
 | 31-10-2026 | Fase 3 terminada (F3.1–F3.7), pendiente de release 0.4.0; D13 resuelto |
 | 31-10-2026 | Release 0.4.0 (incluye las fases 2 y 3); versión actual 0.4.0 |
+| 31-10-2026 | Release 0.5.0 (los cinco *M* de la fase 4: F4.4, F4.11, F4.12, F4.13 y F4.14); versión actual 0.5.0 |
 
 ### Correspondencia con la numeración anterior
 

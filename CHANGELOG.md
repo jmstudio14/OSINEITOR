@@ -6,6 +6,8 @@ Todos los cambios relevantes del proyecto. Formato basado en
 
 ## [Sin publicar]
 
+## [0.5.0] - 2026-10-31
+
 Fase 4 del roadmap (dominio e infraestructura), parte de la v0.5.0: los cinco entregables de
 prioridad M. Los módulos de la v0.5.1 siguen pendientes.
 
@@ -287,7 +289,8 @@ Primera versión.
 - Informes exportables a JSON, Markdown y HTML.
 - CI con ruff y pytest en Python 3.11 y 3.13.
 
-[Sin publicar]: https://github.com/jmstudio14/OSINEITOR/compare/v0.4.0...HEAD
+[Sin publicar]: https://github.com/jmstudio14/OSINEITOR/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/jmstudio14/OSINEITOR/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jmstudio14/OSINEITOR/compare/v0.2.0...v0.4.0
 [0.2.0]: https://github.com/jmstudio14/OSINEITOR/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/jmstudio14/OSINEITOR/compare/v0.1.0...v0.1.1
