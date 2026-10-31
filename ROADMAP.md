@@ -1,6 +1,6 @@
 # Roadmap de OSINEITOR
 
-> **Estado:** vigente · **Versión actual:** 0.2.0 · **Última revisión:** 31 de octubre de 2026
+> **Estado:** vigente · **Versión actual:** 0.4.0 · **Última revisión:** 31 de octubre de 2026
 >
 > Este documento define la dirección del proyecto después del MVP: qué se construirá, en qué
 > orden, por qué y cómo se sabrá que cada fase está terminada. No compromete fechas: el orden,
@@ -271,7 +271,7 @@ entre sí y pueden reordenarse.
 
 ### Progreso de implementación
 
-Estado a 31-10-2026 (v0.2.0 publicada; las fases 2 y 3 están hechas y sin publicar), contrastado con el código. Leyenda: **✅ Hecho** · **🟡 Parcial** (falta parte del entregable o de su criterio de aceptación) · **⬜ Pendiente** · **➖ Obsoleto**. La columna *Estado* de cada tabla de la sección 6 es la fuente.
+Estado a 31-10-2026 (v0.4.0 publicada; las fases 2 y 3 están hechas y publicadas), contrastado con el código. Leyenda: **✅ Hecho** · **🟡 Parcial** (falta parte del entregable o de su criterio de aceptación) · **⬜ Pendiente** · **➖ Obsoleto**. La columna *Estado* de cada tabla de la sección 6 es la fuente.
 
 | Fase | Versión | Hechos | Parciales | Pendientes | *M* hechos |
 |---|---|---|---|---|---|
@@ -472,7 +472,7 @@ preservación del Protocolo de Berkeley.
 | F2.6 | S | ✅ Hecho | Propósito del scan | Campo `--purpose` registrado en los metadatos; obligatorio en scans sobre emails o usernames si así se configura |
 | F2.7 | S | ✅ Hecho | Informe con anexo de evidencias | El informe HTML incluye una tabla de evidencias con hashes verificables |
 
-**Estado (30-10-2026):** 7 de 7 hechos (F2.1 a F2.7). Fase terminada; pendiente de la release 0.3.0 (el código y el CHANGELOG siguen en 0.2.0 con la fase 2 en «Sin publicar»).
+**Estado (30-10-2026):** 7 de 7 hechos (F2.1 a F2.7). Fase terminada; publicada en la 0.4.0 (no hubo release 0.3.0 por separado).
 - F2.1: `Entity.observations` guarda cada vez que un módulo vio la entidad (módulo, entidad
   consultada, hora UTC), deduplicadas por módulo y consulta; persiste en la BD (versión 3) y la CLI
   y los informes listan todas las fuentes. El evento NDJSON `entity` lleva solo la primera
@@ -528,7 +528,7 @@ externas.
 | F3.6 | S | ✅ Hecho | Semillas ampliadas | `scan` reconoce URL (la descompone en dominio y URL), CIDR y ASN (`AS13335`). Teléfono, cripto y ficheros se añaden en la fase 6 junto a sus módulos |
 | F3.7 | C | ✅ Hecho | Filtros de salida | `--only-types` y `--exclude` para recortar resultados e informes |
 
-**Estado (31-10-2026):** 7 de 7 hechos (F3.1 a F3.7). Fase terminada; pendiente de la release 0.4.0.
+**Estado (31-10-2026):** 7 de 7 hechos (F3.1 a F3.7). Fase terminada; publicada en la 0.4.0.
 - F3.1: `EntityType` pasa de 10 a 21 tipos (D13 resuelto). Cada uno se normaliza al crearse
   (`normalize.canonical`): `asn` (`AS13335`), `netblock` (CIDR con bits de host a cero),
   `certificate` (huella SHA-256 en minúsculas), `phone` (E.164), `crypto_address` (solo se valida la
@@ -975,6 +975,7 @@ justificación.
 | 29-10-2026 | Estado de implementación: columna *Estado* en las tablas de entregables, tabla de progreso por fase y versión actual 0.2.0; recuento corregido a 50 *M*, 60 *S* y 23 *C* |
 | 30-10-2026 | Fase 2 terminada (F2.1–F2.7), pendiente de release 0.3.0; recuento de tests y fechas de estado al día |
 | 31-10-2026 | Fase 3 terminada (F3.1–F3.7), pendiente de release 0.4.0; D13 resuelto |
+| 31-10-2026 | Release 0.4.0 (incluye las fases 2 y 3); versión actual 0.4.0 |
 
 ### Correspondencia con la numeración anterior
 

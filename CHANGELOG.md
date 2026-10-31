@@ -6,6 +6,11 @@ Todos los cambios relevantes del proyecto. Formato basado en
 
 ## [Sin publicar]
 
+## [0.4.0] - 2026-10-31
+
+Fases 2 (procedencia y confianza) y 3 (modelo ampliado, presets y adaptadores) del roadmap.
+Incluye lo que habría sido la 0.3.0, que no se publicó por separado.
+
 ### Añadido
 
 - **Tipos de entidad ampliados (F3.1):** `asn`, `netblock`, `certificate`, `technology`,
@@ -251,7 +256,8 @@ Primera versión.
 - Informes exportables a JSON, Markdown y HTML.
 - CI con ruff y pytest en Python 3.11 y 3.13.
 
-[Sin publicar]: https://github.com/jmstudio14/OSINEITOR/compare/v0.2.0...HEAD
+[Sin publicar]: https://github.com/jmstudio14/OSINEITOR/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jmstudio14/OSINEITOR/compare/v0.2.0...v0.4.0
 [0.2.0]: https://github.com/jmstudio14/OSINEITOR/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/jmstudio14/OSINEITOR/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jmstudio14/OSINEITOR/releases/tag/v0.1.0
