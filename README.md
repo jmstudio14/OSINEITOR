@@ -45,7 +45,7 @@ Versión **0.2.0**, en desarrollo. Lo que hay y lo que no:
 
 | Área | Estado |
 |---|---|
-| CLI con 16 módulos en 4 frentes | Disponible |
+| CLI con 21 módulos en 4 frentes | Disponible |
 | Procedencia y confianza (observaciones, evidencia con hash, confianza, alcance, propósito) | Hecho, sin publicar (próxima release) |
 | Modelo ampliado, presets, analizadores offline, adaptadores de herramientas externas, `update-data` y filtros de salida | Hecho, sin publicar (próxima release) |
 | Tests y CI en Windows y Linux (Python 3.11 y 3.13) | En verde (más de 500 tests, sin red) |
@@ -57,7 +57,7 @@ Plataforma principal: **Windows 10/11**. Linux se prueba en la CI, pero no es el
 
 ## Características
 
-- **Cuatro frentes, 16 módulos:** dominios e infraestructura, IPs y servicios, emails y
+- **Cuatro frentes, 21 módulos:** dominios e infraestructura, IPs y servicios, emails y
   filtraciones, usernames. Los módulos son ficheros independientes que se descubren solos.
 - **Pivoteo configurable** (`--depth`) con deduplicación y fusión de lo que cada fuente aporta.
 - **Fiable y honesto con los fallos:** cada módulo informa de si respondió con datos, sin datos, con
@@ -171,8 +171,13 @@ están en la **[guía de uso](docs/USO.md)**.
 | Dominio | `wayback` | URLs archivadas; destaca rutas sensibles (`.env`, `.sql`, `/admin`…) | — |
 | Dominio | `http_fingerprint` | Servidor, tecnologías, cabeceras de seguridad (**activo**) | — |
 | Dominio | `hunter_domain` | Emails públicos del dominio y su patrón | `hunter` |
+| Dominio | `mail_security` | MTA-STS, TLS-RPT, BIMI y selectores DKIM comunes (solo DNS) | — |
+| Dominio | `whois` | WHOIS (puerto 43) de los TLD sin RDAP: registrador, fechas, estado | — |
+| Dominio | `saas_footprint` | Proveedores de correo, DNS, identidad y colaboración deducidos del DNS | — |
+| Dominio | `cert_details` | Certificados en CT: huella SHA-256, emisor, validez, SAN y aviso de caducidad | — |
 | IP | `ipinfo` | Geolocalización, ASN, hostname | opcional `ipinfo` |
 | IP | `internetdb` | Puertos, CPEs y CVEs (Shodan InternetDB) | — |
+| IP | `cve_enrich` | CVSS (NVD), EPSS y marca KEV de cada CVE | opcional `nvd` |
 | IP | `shodan` | Servicios con producto/versión, SO, CVEs | `shodan` |
 | IP | `abuseipdb` | Puntuación y reportes de abuso | `abuseipdb` |
 | IP | `greynoise` | ¿Escáner masivo o servicio legítimo conocido? | `greynoise` |

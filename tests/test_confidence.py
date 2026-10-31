@@ -83,6 +83,8 @@ def test_every_module_declares_a_valid_authority():
         "rdap",
         "http_fingerprint",
         "email_validate",
+        "mail_security",
+        "whois",
     }
 
 

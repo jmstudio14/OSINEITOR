@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "servers": {
+    "be": {"server": "whois.dns.be"},
+    "co": {"server": "whois.registry.co"},
+    "de": {"server": "whois.denic.de", "query": "-T dn,ace {domain}"},
+    "es": {
+      "unavailable": "el WHOIS del .es (puerto 43) es un servicio de pago de Red.es con acceso restringido por IP, y el .es no tiene RDAP"
+    },
+    "eu": {"server": "whois.eu"},
+    "io": {"server": "whois.nic.io"},
+    "it": {"server": "whois.nic.it"},
+    "me": {"server": "whois.nic.me"},
+    "mx": {"server": "whois.mx"},
+    "pt": {"server": "whois.dns.pt"}
+  }
+}
