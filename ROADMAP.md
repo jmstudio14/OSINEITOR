@@ -279,7 +279,7 @@ Estado a 31-10-2026 (v0.4.0 publicada; las fases 2 y 3 están hechas y publicada
 | 1 | 0.2.0 | 16 | 1 | 1 | 11 / 12 |
 | 2 | 0.3.0 | 7 | 0 | 0 | 4 / 4 |
 | 3 | 0.4.0 | 7 | 0 | 0 | 3 / 3 |
-| 4 | 0.5.0–0.5.1 | 0 | 0 | 24 | 0 / 5 |
+| 4 | 0.5.0–0.5.1 | 5 | 0 | 19 | 5 / 5 |
 | 5 | 0.6.0 | 0 | 0 | 15 | 0 / 1 |
 | 6 | 0.7.0 | 0 | 0 | 18 | 0 / 3 |
 | 7 | 0.8.0 | 0 | 0 | 12 | 0 / 4 |
@@ -288,9 +288,9 @@ Estado a 31-10-2026 (v0.4.0 publicada; las fases 2 y 3 están hechas y publicada
 | 10 | 0.11.0 | 0 | 0 | 7 | 0 / 3 |
 | 11 | 1.0.0 | 0 | 0 | 5 | 0 / 3 |
 | G | 0.2.0–0.2.2 | 1 | 6 | 2 | 1 / 8 |
-| **Total (fases 0–11)** | | **33** | **2** | **98** | **21 / 50** |
+| **Total (fases 0–11)** | | **38** | **2** | **93** | **26 / 50** |
 
-Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **20 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
+Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **25 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
 
 ### Corte recomendado
 
@@ -542,7 +542,7 @@ externas.
   preset que no los admite, `--active` es un error de uso. El preset usado no se guarda con el scan.
 - F3.3: `Module.analyzer = True`. Pase final tras los niveles, sobre la semilla y lo recogido, con un
   contexto `Offline` (usar `http` o `resolver` es un `ModuleError`) y sin gastar presupuesto de
-  peticiones; lo que emiten no se pivota. Aún no hay analizadores concretos (F4.13, F4.14, F4.17).
+  peticiones; lo que emiten no se pivota. El primer analizador concreto es `saas_footprint` (F4.13); F4.14 acabó siendo un módulo normal y F4.17 sigue pendiente.
 - F3.4: `ExternalToolModule` (`modules/_external.py`): `shutil.which`, ejecución sin shell, versión
   mínima, timeout con muerte del proceso, JSON o NDJSON y sin las variables `OSINEITOR_*` en el
   entorno. Sin el binario el módulo queda `omitido`. Su tráfico no pasa por `ctx.http`: con
@@ -580,9 +580,9 @@ priorizando fuentes gratuitas con API oficial. **v0.5.0** entrega los *M*; **v0.
 
 | ID | P | Estado | Módulo | Fuente o función | Key | Tipo |
 |---|---|---|---|---|---|---|
-| F4.4 | M | ⬜ Pendiente | `mail_security` | MTA-STS, TLS-RPT, BIMI y selectores DKIM comunes | No | Pasivo (DNS) |
-| F4.11 | M | ⬜ Pendiente | `whois` | WHOIS por puerto 43 para los TLD sin RDAP (`.es`, `.io`, `.de`, `.mx`, `.it`, `.co`, `.me`… [R15]); parseo por TLD, límite de consultas y respeto de la privacidad de los datos | No | Pasivo |
-| F4.13 | M | ⬜ Pendiente | `saas_footprint` | Analizador que deduce proveedores de correo, DNS, identidad y colaboración desde MX, NS, `include:` de SPF y TXT de verificación; tabla de firmas versionada | No | Pasivo (offline) |
+| F4.4 | M | ✅ Hecho | `mail_security` | MTA-STS, TLS-RPT, BIMI y selectores DKIM comunes | No | Pasivo (DNS) |
+| F4.11 | M | ✅ Hecho | `whois` | WHOIS por puerto 43 para los TLD sin RDAP (`.es`, `.io`, `.de`, `.mx`, `.it`, `.co`, `.me`… [R15]); parseo por TLD, límite de consultas y respeto de la privacidad de los datos | No | Pasivo |
+| F4.13 | M | ✅ Hecho | `saas_footprint` | Analizador que deduce proveedores de correo, DNS, identidad y colaboración desde MX, NS, `include:` de SPF y TXT de verificación; tabla de firmas versionada | No | Pasivo (offline) |
 | F4.1 | S | ⬜ Pendiente | `urlscan` | urlscan.io: escaneos históricos, tecnologías, IPs | Opcional | Pasivo |
 | F4.2 | S | ⬜ Pendiente | `otx` | AlienVault OTX: pulses, DNS pasivo, malware asociado | Sí (gratis) | Pasivo |
 | F4.3 | S | ⬜ Pendiente | `virustotal` | VirusTotal: reputación, subdominios, resoluciones | Sí (gratis, cuota baja) | Pasivo |
@@ -594,8 +594,8 @@ priorizando fuentes gratuitas con API oficial. **v0.5.0** entrega los *M*; **v0.
 
 | ID | P | Estado | Módulo | Fuente o función | Key | Tipo |
 |---|---|---|---|---|---|---|
-| F4.12 | M | ⬜ Pendiente | `cert_details` | crt.sh (y Censys si hay key): emisor, validez, SAN y huella SHA-256 como entidad `certificate`; pivote por SAN y huella a otros dominios; aviso de caducidad | No | Pasivo |
-| F4.14 | M | ⬜ Pendiente | `cve_enrich` | Analizador sobre entidades `vulnerability`: CVSS (NVD), probabilidad EPSS y marca KEV [R17]. Límites de NVD *(spike)* | Opcional (NVD) | Pasivo |
+| F4.12 | M | ✅ Hecho | `cert_details` | crt.sh (y Censys si hay key): emisor, validez, SAN y huella SHA-256 como entidad `certificate`; pivote por SAN y huella a otros dominios; aviso de caducidad | No | Pasivo |
+| F4.14 | M | ✅ Hecho | `cve_enrich` | Analizador sobre entidades `vulnerability`: CVSS (NVD), probabilidad EPSS y marca KEV [R17]. Límites de NVD *(spike)* | Opcional (NVD) | Pasivo |
 | F4.15 | S | ⬜ Pendiente | `censys` | Censys Platform: hosts y certificados; segunda base de escaneo que complementa a Shodan [R1] | Sí (gratis con créditos) | Pasivo |
 
 **IP y red**
@@ -620,11 +620,33 @@ priorizando fuentes gratuitas con API oficial. **v0.5.0** entrega los *M*; **v0.
 | F4.21 | C | ⬜ Pendiente | `analytics_ids` | IDs de Google Analytics, GTM y AdSense de la página y dominios relacionados donde una fuente lo permita *(spike)* | Según fuente | **Activo** |
 | F4.24 | C | ⬜ Pendiente | `ext_subfinder`, `ext_amass` | Adaptadores (F3.4) de Subfinder y de Amass **solo en modo pasivo**; el binario lo instala el usuario | No | Pasivo |
 
-**Estado (29-10-2026):** ninguno hecho. Precursores sin el entregable: `dns` ya consulta SPF y
-`_dmarc` (F4.4); `rdap` omite con aviso los TLD sin RDAP (F4.11); `dns` deja MX, NS y TXT en el
-`record` que leería `saas_footprint` (F4.13); `crtsh` solo extrae nombres (F4.12); `internetdb`
-emite CVE sin CVSS, EPSS ni KEV (F4.14); `ipinfo` y Shodan traen el ASN como dato suelto, sin
-entidad `asn` (F4.8, F4.16); `http_fingerprint` tiene las 17 firmas que sustituiría F4.18.
+**Estado (31-10-2026):** 5 de 24 hechos, todos los *M* de la v0.5.0 (F4.4, F4.11, F4.12, F4.13 y
+F4.14); los 19 *S* y *C* de la v0.5.1 siguen pendientes.
+- F4.4: `mail_security` consulta por DNS `_mta-sts`, `_smtp._tls`, `default._bimi` y 15 selectores
+  DKIM comunes, y deja un `record`. No descarga la política MTA-STS por HTTPS: sería activo.
+- F4.11: `whois` usa un socket al puerto 43 (`direct_dns`: con `--proxy` se omite; la evidencia
+  lleva `method` `WHOIS` con `kind` `dns`, sin cambiar el esquema del contrato). Tabla propia de
+  servidores (`be, co, de, eu, io, it, me, mx, pt`), sin seguir la delegación de IANA. Solo se leen
+  registrador, fechas, estado, nameservers y DNSSEC: el titular y los contactos se descartan.
+  **Hallazgo:** el WHOIS del `.es` (puerto 43) es un servicio de pago de Red.es con acceso por IP,
+  así que el criterio «un `.es` obtiene datos por WHOIS» se cumple por su segunda mitad: un aviso
+  explícito de que no están disponibles. `rdap` remite ahora a `whois`.
+- F4.12: `cert_details` descarga el PEM de cada uno de los 20 certificados más recientes de crt.sh
+  y calcula el SHA-256 sobre el DER con la biblioteca estándar (no se añade `cryptography`). Censys
+  queda en F4.15. Un precertificado y su certificado final salen como dos entidades.
+- F4.13: `saas_footprint` es el primer analizador. Firmas propias en JSON versionado (no hay
+  problema de licencia, a diferencia del dataset de F4.18).
+- F4.14: **decisión:** `cve_enrich` es un módulo normal con red, no un analizador, porque `Offline`
+  prohíbe HTTP y NVD no tiene un dataset instalable con licencia compatible con MIT (KEV es CC0,
+  EPSS es de uso libre pero no tiene un id SPDX en `COMPATIBLE_LICENSES`). Consulta NVD (CVSS 4.0,
+  3.1, 3.0 o 2.0), la API de EPSS y el catálogo KEV, y funde los campos en la `vulnerability` ya
+  recogida. Solo corre si la profundidad llega a la capa tras `internetdb` o `shodan`. El spike de
+  límites de NVD queda resuelto con espaciado propio (6,5 s sin key, 0,7 s con key) y un tope de 30
+  CVE por escaneo.
+- Precursores aún sin su entregable (v0.5.1): `crtsh` solo extrae nombres (se mantiene);
+  `ipinfo` y Shodan traen el ASN como dato suelto, sin entidad `asn` (F4.8, F4.16);
+  `http_fingerprint` tiene las 17 firmas que sustituiría F4.18.
+- Los módulos nuevos se han añadido a los presets `domain-recon`, `attack-surface` y `email-audit`.
 
 **Criterios de aceptación**
 - Un dominio `.es` obtiene datos de registro por WHOIS, o un aviso explícito de que no están

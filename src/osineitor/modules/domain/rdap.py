@@ -39,7 +39,7 @@ class Rdap(Module):
         if tlds is not None and tld not in tlds:
             raise ModuleSkipped(
                 f"el TLD .{tld} no tiene servidor RDAP según IANA "
-                "(ver docs/RDAP_COBERTURA.md; el WHOIS de respaldo llegará con F4.11)"
+                "(ver docs/RDAP_COBERTURA.md; algunos los cubre el módulo whois)"
             )
         response = await self.ctx.http.get(f"https://rdap.org/domain/{entity.value}")
         if response.status_code == 404:

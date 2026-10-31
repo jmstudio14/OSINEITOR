@@ -6,6 +6,37 @@ Todos los cambios relevantes del proyecto. Formato basado en
 
 ## [Sin publicar]
 
+Fase 4 del roadmap (dominio e infraestructura), parte de la v0.5.0: los cinco entregables de
+prioridad M. Los módulos de la v0.5.1 siguen pendientes.
+
+### Añadido
+
+- **`mail_security` (F4.4):** MTA-STS, TLS-RPT, BIMI y selectores DKIM comunes, solo con consultas
+  DNS (no descarga la política MTA-STS). Deja un `record` `mail_security:<dominio>`.
+- **`whois` (F4.11):** WHOIS por el puerto 43 para `.be`, `.co`, `.de`, `.eu`, `.io`, `.it`, `.me`,
+  `.mx` y `.pt`, que no tienen RDAP. Registrador, fechas, estado y nameservers; descarta siempre
+  los datos del titular y no emite emails. Un TLD sin servidor configurado queda `omitido` con un
+  aviso. **El `.es` no se puede consultar:** su WHOIS es un servicio de pago de Red.es con acceso
+  restringido por IP, y el módulo lo indica en lugar de fallar en silencio. El socket va fuera de
+  `ctx.http`, así que con `--proxy` se omite (`direct_dns`).
+- **`saas_footprint` (F4.13):** primer analizador offline. Deduce proveedores de correo, DNS,
+  identidad y colaboración desde MX, NS, `include:` del SPF y TXT de verificación, con una tabla de
+  firmas propia y versionada (`modules/domain/data/saas_signatures.json`). Emite `technology`.
+- **`cert_details` (F4.12):** certificados de Certificate Transparency (crt.sh) como entidad
+  `certificate` (huella SHA-256 calculada sobre el DER, sin dependencias nuevas), con emisor,
+  validez, SAN y aviso de caducidad (`valido`, `caduca_pronto`, `caducado`). Los SAN pasan como
+  `domain` y permiten pivotar a otros dominios. Censys queda para F4.15.
+- **`cve_enrich` (F4.14):** CVSS (NVD), EPSS (FIRST) y marca KEV (CISA) sobre las entidades
+  `vulnerability`, fusionados en la propia entidad. Clave `nvd` opcional. **Se aparta del roadmap:**
+  es un módulo normal con red, no un analizador, porque un analizador no puede usar la red y no hay
+  un dataset de CVSS con licencia compatible con MIT.
+- Los presets `domain-recon`, `attack-surface` y `email-audit` incluyen los módulos nuevos que les
+  corresponden.
+
+### Cambiado
+
+- El aviso de `rdap` para un TLD sin RDAP ya no promete un WHOIS futuro: remite al módulo `whois`.
+
 ## [0.4.0] - 2026-10-31
 
 Fases 2 (procedencia y confianza) y 3 (modelo ampliado, presets y adaptadores) del roadmap.
