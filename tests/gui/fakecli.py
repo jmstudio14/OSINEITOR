@@ -51,3 +51,16 @@ def driver_env(modules: str) -> dict[str, str]:
 def use_modules(monkeypatch, modules: str) -> None:
     monkeypatch.setenv("DRIVER_MODULES", modules)
     assert os.environ["DRIVER_MODULES"] == modules
+
+
+def save_scan(monkeypatch, modules: str = "fast", target: str = "example.com") -> int:
+    """Lanza un scan que se guarda en el historial (aislado por el conftest) y devuelve su id."""
+    from osineitor_gui.process import CliProcess
+    from osineitor_gui.scan_request import ScanRequest
+
+    use_modules(monkeypatch, modules)
+    args = ScanRequest(target=target, kind="domain").to_args()
+    proc = CliProcess(args, cli=CLI)
+    proc.start()
+    proc.wait(60)
+    return 1

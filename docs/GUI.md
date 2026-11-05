@@ -7,7 +7,7 @@ trabajo:
 | Parte | Qué es | Dónde | Estado |
 |---|---|---|---|
 | **PR-E1** | Capa **no visual**, en Python puro y sin Qt | `src/osineitor_gui/` | **Hecha** y cubierta por tests |
-| **PR-E2** | **Vistas y aspecto** con PySide6 | `src/osineitor_gui/ui/`, `app.py` | Pendiente: se hace en Windows, con la ventana delante |
+| **PR-E2** | **Vistas y aspecto** con PySide6 | `src/osineitor_gui/ui/`, `app.py` | **En curso**: ventana principal (G2), scan en vivo (G3) y historial, detalle y exportación (G4) hechos; faltan las vistas de G5 a G7 |
 | PR-F | Instalador (PyInstaller + Inno Setup) | `packaging/windows/` | Después de PR-E2 |
 
 Stack: Python 3.13, **PySide6** (Qt 6, widgets), PyInstaller en modo carpeta e Inno Setup.
@@ -173,6 +173,16 @@ ui/
 
 más el lanzador `osineitor-gui = osineitor_gui.app:main` en `pyproject.toml` (`[project.gui-scripts]`).
 
+**Hecho (G2):** `app.py`, `ui/theme.py`, `ui/main_window.py` y `ui/legal_dialog.py`, y el lanzador. La ventana tiene los menús Archivo (Salir), Ver ▸ Tema y Ayuda (Uso responsable, Acerca de), la barra de herramientas y la barra de estado con la CLI localizada; solo incluye acciones que ya funcionan. «Acerca de» es un `QMessageBox.about`, sin fichero propio. **Hecho (G3):** `ui/runner.py` (`ScanRunner`), `ui/models.py` (`EntityTableModel`, `ModuleActivityModel`), `ui/scan_view.py` y `ui/new_scan_dialog.py`. «Nuevo scan» (`Ctrl+N`) abre una pestaña por scan con la tabla de entidades (filtro por tipo con recuentos y búsqueda), la actividad por módulo y el aviso de resultado incompleto; la barra de estado muestra entidades, peticiones, estado y progreso. Cancelar detiene la CLI de forma ordenada; cerrar una pestaña o la ventana con un scan en marcha pide confirmación, cancela y, si la CLI no sale en 5 s, la mata. El diálogo es **mínimo y solo pasivo**: objetivo (con el tipo detectado), tipo, profundidad, presupuesto, «no guardar», «sin caché» y «refrescar».
+
+*Desviación del diseño:* la actividad por módulo va dentro de cada pestaña (un `QSplitter` bajo la tabla de entidades) y no en un dock global, porque cada pestaña es un scan distinto. La vista se repinta como mucho cada 100 ms, no por evento.
+
+**Hecho (G4):** `ui/worker.py` (`run_in_thread`: las llamadas síncronas de `CliApi` van al pool de hilos y el resultado vuelve al hilo de la interfaz por un único relé en cola), `ui/history_panel.py` y `ui/entity_detail.py`. El dock Historial lista `CliApi.history()` (se carga al arrancar y cuando termina un scan en vivo que se guardó; botón Actualizar); el doble clic abre el scan con `CliApi.show()` y `ScanView.from_result()` en una pestaña con el mismo aspecto que uno en vivo, o activa la que ya lo muestra. Archivo ▸ Abrir scan guardado… muestra el dock y lo recarga. Archivo ▸ Exportar scan… (activo solo con un scan guardado y terminado) pregunta el fichero y el formato (JSON, Markdown, HTML) y llama a `CliApi.export()`. Un fallo de la CLI se muestra en un diálogo.
+
+*Desviación del diseño:* el panel de detalle va a la derecha de la tabla de entidades (un `QSplitter` horizontal) y no debajo, para no apretar tres paneles en vertical. Muestra fuente, origen y los campos de `data`; la confianza y las observaciones quedan fuera.
+
+**Pendiente:** `modules_view.py` (G5), `settings_dialog.py` (G6), el selector de módulos del diálogo y las confirmaciones de `--active` / `--allow-private` (G7), el aviso legal de primer arranque, la instancia única y `--purpose` / `--scope` / `--evidence`.
+
 **Criterios de aceptación**
 
 1. `osineitor-gui` abre la ventana sin consola y muestra el aviso legal la primera vez.
@@ -202,8 +212,7 @@ no hace falta lanzar la CLI.
 
 ## Qué no está verificado
 
-- **Nada de esto se ha visto en una ventana.** La capa no visual se prueba contra la CLI real en la
-  CI de Windows y Linux; Qt no entra en esa CI hasta PR-E2.
+- **Solo la ventana principal (G2) se ha visto**, en capturas con la plataforma nativa de Windows en tema claro y oscuro; el scan en vivo (G3), el historial, el detalle y la exportación (G4) están probados con la CLI real y módulos falsos sin pantalla, pero no se han visto ni se ha hecho un scan a un dominio real desde la ventana, ni abierto en un navegador un informe HTML exportado; el resto de vistas no existen y la lista manual de abajo no se ha ejecutado. La capa no visual se prueba contra la CLI real en la CI de Windows y Linux. Los tests de Qt (`tests/gui/test_main_window.py`) corren sin pantalla y no entran en la CI mientras no instale el extra `gui`. La plataforma `offscreen` ignora el esquema de color, así que el cambio real de tema solo se ha comprobado en Windows y a mano.
 - La latencia de lanzar un proceso de la CLI por cada orden en Windows (con antivirus) no está
   medida. Si el historial o la lista de módulos tardan, cachear en la GUI.
 - `CREATE_NO_WINDOW` evita la ventana de consola, pero que no parpadee solo se comprueba a ojo.
