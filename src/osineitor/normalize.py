@@ -25,6 +25,7 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 PHONE_RE = re.compile(r"^\+[1-9]\d{7,14}$")
 CRYPTO_RE = re.compile(r"^[A-Za-z0-9]{14,128}$")
 MAX_TEXT = 512
+COORDS_RE = re.compile(r"^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$")
 
 
 def canonical_hostname(value: str) -> str:
@@ -138,6 +139,27 @@ def canonical_text(entity_type: str, value: str) -> str:
     return text
 
 
+def canonical_location(value: str) -> str:
+    """Coordenadas `lat,lon` con 6 decimales (unos 10 cm); otro texto, como texto libre."""
+    match = COORDS_RE.fullmatch(value.strip())
+    if not match:
+        return canonical_text("location", value)
+    lat, lon = float(match[1]), float(match[2])
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        raise InvalidEntityValue(f"coordenadas fuera de rango: {value!r}")
+    return f"{lat:.6f},{lon:.6f}"
+
+
+def canonical_file(value: str) -> str:
+    """Ruta de un fichero tal cual (los espacios dobles de un nombre son legítimos)."""
+    path = value.strip()
+    if not path or len(path) > MAX_TEXT or not path.isprintable():
+        raise InvalidEntityValue(
+            f"file no válido: debe tener entre 1 y {MAX_TEXT} caracteres imprimibles"
+        )
+    return path
+
+
 def canonical(entity_type: str, value: str) -> str:
     """Forma canónica de `value` según el tipo; los tipos sin regla se devuelven igual."""
     match str(entity_type):
@@ -161,7 +183,11 @@ def canonical(entity_type: str, value: str) -> str:
             return canonical_phone(value)
         case "crypto_address":
             return canonical_crypto_address(value)
-        case "technology" | "organization" | "person" | "file" | "location" | "finding":
+        case "location":
+            return canonical_location(value)
+        case "file":
+            return canonical_file(value)
+        case "technology" | "organization" | "person" | "finding":
             return canonical_text(str(entity_type), value)
         case _:
             return value

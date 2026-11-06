@@ -1,4 +1,6 @@
-description: Presencia en línea de un email o username (perfiles, filtraciones).
+description: Presencia en línea de un email o username (perfiles, repositorios, filtraciones).
 depth: 2
-modules: [email_validate, gravatar, hibp, hunter_verify, username_sites]
+modules: [email_validate, gravatar, hibp, hibp_pastes, hunter_verify, github_email, github_user,
+  dev_registries, discord_snowflake, username_variants, email_candidates, username_sites,
+  username_wmn]
 allow_active: false

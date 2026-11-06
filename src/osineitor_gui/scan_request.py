@@ -9,6 +9,7 @@ from osineitor.models import detect_type
 
 KINDS = ("auto", "domain", "ip", "email", "username")
 MODULE_RE = re.compile(r"^[a-z0-9_]+$")
+MAX_PURPOSE = 500  # igual que la CLI (`--purpose`)
 
 
 class InvalidRequest(ValueError):
@@ -43,6 +44,9 @@ class ScanRequest:
     no_cache: bool = False
     refresh: bool = False
     no_save: bool = False
+    # Para qué se hace el scan. Opcional aquí: la CLI lo exige (código 2) si `require_purpose`
+    # está activo, y esa configuración no la conoce la GUI.
+    purpose: str | None = None
 
     def validate(self) -> None:
         if not self.target.strip():
@@ -61,6 +65,12 @@ class ScanRequest:
         ):
             if value is not None and value < 0:
                 raise InvalidRequest(f"el máximo de {label} no puede ser negativo")
+        purpose = (self.purpose or "").strip()
+        if self.purpose is not None and purpose:
+            if len(purpose) > MAX_PURPOSE:
+                raise InvalidRequest(f"el propósito admite hasta {MAX_PURPOSE} caracteres")
+            if any(ch in purpose for ch in "\r\n\x00"):
+                raise InvalidRequest("el propósito no puede tener saltos de línea")
         if self.no_cache and self.refresh:
             raise InvalidRequest("«sin caché» y «refrescar» son contradictorios")
         if self.active and not self.confirm_active:
@@ -97,5 +107,7 @@ class ScanRequest:
             args.append("--refresh")
         if self.no_save:
             args.append("--no-save")
+        if self.purpose and self.purpose.strip():
+            args += ["--purpose", self.purpose.strip()]
         # `--` antes del objetivo: uno que empiece por «-» no se interpreta como opción.
         return [*args, "--", self.target.strip()]

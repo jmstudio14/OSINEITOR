@@ -1,0 +1,44 @@
+# Reglas de alerta de `osineitor watch`: se evalúan solo sobre entidades NUEVAS desde la última
+# ejecución. Mismo formato que default.yml (ver src/osineitor/findings.py). Un hallazgo nuevo
+# (finding) alerta por sí solo con su propia severidad, sin regla aquí.
+rules:
+  - id: new-subdomain
+    title: Subdominio nuevo
+    severity: low
+    type: domain
+    when:
+      - {field: subdomain, op: eq, value: true}
+    recommendation: >
+      Comprueba que el subdominio es tuyo y está inventariado; un subdominio inesperado puede ser
+      un activo olvidado o una toma de subdominio.
+
+  - id: new-ip
+    title: IP nueva asociada al objetivo
+    severity: low
+    type: ip
+    recommendation: >
+      Comprueba que la dirección pertenece a tu infraestructura y que debe estar expuesta.
+
+  - id: new-exposed-service
+    title: Servicio nuevo expuesto
+    severity: medium
+    type: service
+    evidence: [port, product, version]
+    recommendation: >
+      Confirma que el puerto debe estar abierto a Internet; si no, ciérralo o restringe el acceso.
+
+  - id: new-vulnerability
+    title: Vulnerabilidad nueva (CVE)
+    severity: medium
+    type: vulnerability
+    evidence: [cvss, epss, kev]
+    recommendation: >
+      Evalúa si el servicio afectado está realmente expuesto y aplica el parche del proveedor.
+
+  - id: new-breach
+    title: Aparición en una filtración nueva
+    severity: high
+    type: breach
+    recommendation: >
+      Revisa qué cuentas están afectadas, fuerza el cambio de contraseña y activa la
+      autenticación en dos pasos.

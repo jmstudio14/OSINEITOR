@@ -7,8 +7,8 @@ trabajo:
 | Parte | Qué es | Dónde | Estado |
 |---|---|---|---|
 | **PR-E1** | Capa **no visual**, en Python puro y sin Qt | `src/osineitor_gui/` | **Hecha** y cubierta por tests |
-| **PR-E2** | **Vistas y aspecto** con PySide6 | `src/osineitor_gui/ui/`, `app.py` | **En curso**: ventana principal (G2), scan en vivo (G3) y historial, detalle y exportación (G4) hechos; faltan las vistas de G5 a G7 |
-| PR-F | Instalador (PyInstaller + Inno Setup) | `packaging/windows/` | Después de PR-E2 |
+| **PR-E2** | **Vistas y aspecto** con PySide6 | `src/osineitor_gui/ui/`, `app.py` | **En curso**: ventana principal (G2), scan en vivo (G3) y historial, detalle y exportación (G4) y panel de salud (G5) y ajustes con API keys (G6) y avisos legales con `--active` (G7) hechos; faltan solo la instancia única y exponer `--scope` / `--evidence` |
+| PR-F | Instalador (PyInstaller + Inno Setup) | `packaging/windows/` | **Hecho** (G8); sin ejecutar aún en la CI |
 
 Stack: Python 3.13, **PySide6** (Qt 6, widgets), PyInstaller en modo carpeta e Inno Setup.
 
@@ -30,7 +30,7 @@ Stack: Python 3.13, **PySide6** (Qt 6, widgets), PyInstaller en modo carpeta e I
    llámalas desde un hilo de trabajo (`QThreadPool`/`QRunnable`).
 
 ```
-OSINEITOR.exe (GUI, sin consola)      osineitor.exe (CLI, misma carpeta)
+osineitor-gui.exe (GUI, sin consola)  osineitor.exe (CLI, misma carpeta)
  ┌────────────────────────────┐         ┌──────────────────────┐
  │ ui/  (PySide6)  ← PR-E2    │         │ motor, módulos, SQLite│
  │ osineitor_gui/ (sin Qt)    │ stdout  │                      │
@@ -181,7 +181,17 @@ más el lanzador `osineitor-gui = osineitor_gui.app:main` en `pyproject.toml` (`
 
 *Desviación del diseño:* el panel de detalle va a la derecha de la tabla de entidades (un `QSplitter` horizontal) y no debajo, para no apretar tres paneles en vertical. Muestra fuente, origen y los campos de `data`; la confianza y las observaciones quedan fuera.
 
-**Pendiente:** `modules_view.py` (G5), `settings_dialog.py` (G6), el selector de módulos del diálogo y las confirmaciones de `--active` / `--allow-private` (G7), el aviso legal de primer arranque, la instancia única y `--purpose` / `--scope` / `--evidence`.
+**Hecho (G5):** `ui/modules_view.py` (`HealthModel` y `HealthDialog`) y la acción Herramientas ▸ Salud de los módulos… El diálogo no arranca solo: «Comprobar» lanza `CliApi.doctor()` en un hilo de trabajo, con un indicador de espera, y rellena la tabla (módulo, veredicto, detalle, tiempo, peticiones). Un fallo de la CLI se ve en el propio diálogo, no en un cuadro modal. Solo comprueba módulos pasivos y un `doctor` en curso no se puede cancelar: cerrar el diálogo deja que el proceso termine solo (máx. 300 s). La ventana reutiliza un único diálogo.
+
+**Hecho (G6):** `keys.py` (capa sin Qt: `group_keys` agrupa `CliApi.modules()` por nombre de key, porque varios módulos comparten la misma) y `ui/settings_dialog.py` (`SettingsDialog`, con `KeysModel`), abierto desde Herramientas ▸ Ajustes… (`Ctrl+,`). La pestaña «API keys» tiene una fila por key con su estado; «Guardar» envía el valor recortado a `CliApi.config_set` (stdin) y «Borrar» llama a `config_unset`, ambos en un hilo de trabajo y con los botones desactivados mientras corren. Tras cada cambio se vuelve a pedir `modules()`: el estado «configurada» sale de la CLI, no de lo que se escribió. La key vive solo en un campo de contraseña que se vacía al guardar; ninguna tabla, etiqueta ni tooltip la contiene y un error de la CLI se muestra con un texto fijo y el código de salida, sin repetir `stderr`. La pestaña «General» elige el tema; el diálogo emite `theme_changed` y la ventana principal lo aplica y lo guarda (`MainWindow.set_theme`, que también marca el menú Ver ▸ Tema). El diálogo se reutiliza y recarga las keys cada vez que se abre.
+
+*Fuera de alcance:* guardar las keys en el Administrador de credenciales de Windows. La CLI ya da prioridad a `OSINEITOR_<NOMBRE>_KEY` sobre el fichero, pero una key guardada solo por la GUI no valdría para la CLI usada desde una terminal; hacerlo bien exige soporte de `keyring` en la propia CLI y cambiar el contrato.
+
+**Hecho (G7):** `ui/risk_dialog.py` (`confirm_active`, `confirm_private`: un `QMessageBox` con el texto de `legal.ACTIVE_WARNING` / `PRIVATE_WARNING`, «Entiendo el riesgo y continúo» y «Cancelar», que es el botón por defecto y el de Escape: Enter no confirma), `LegalDialog(require_acceptance=True)` y `app.ensure_legal(settings)`, que `main()` llama tras aplicar el tema y antes de localizar la CLI (rechazarlo, con «Salir», Esc o la X, cierra sin crear la ventana ni lanzar la CLI; si no se puede guardar la aceptación, avisa y sigue, y volverá a pedirse). «Nuevo scan» recibe el catálogo de `CliApi.modules()` (la ventana lo carga al abrirse; si falla, se avisa en la barra de estado y el diálogo se abre sin selector): una lista con casillas (los módulos activos están deshabilitados hasta confirmar «módulos activos» y se desmarcan al quitarla; los que necesitan una key que falta, deshabilitados con el motivo), las casillas «módulos activos» y «redes privadas» —solo se marcan si el usuario confirma; al desmarcarlas se olvida la confirmación y volver a marcarlas la pide de nuevo— y el cuadro «Propósito». `ScanRequest.purpose` replica la regla de la CLI (de 1 a 500 caracteres, sin saltos de línea ni NUL) y se pasa como un único argumento (`--purpose`, antes de `--`). El panel de salud tiene la casilla «Incluir módulos activos», con la misma confirmación, y pasa `active=True` a `doctor`. El propósito es opcional en la vista porque la GUI no conoce `require_purpose` (vive en la configuración de la CLI): si falta y se exige, el scan falla con el mensaje de la CLI, que se ve en la pestaña.
+
+**Hecho (G8):** `packaging/windows/`. `osineitor.spec` (PyInstaller, modo carpeta) define dos ejecutables que comparten `dist/OSINEITOR/`: `osineitor.exe` (la CLI, con consola) y `osineitor-gui.exe` (sin consola). No pueden llamarse `OSINEITOR.exe` y `osineitor.exe`: NTFS no distingue mayúsculas. `locate_cli` ya busca `osineitor.exe` junto a la GUI. Los módulos se importan por nombre, así que el `.spec` los pasa como `hiddenimports` desde `modules/_manifest.py` (el motor ya usaba esa lista congelado). `build.ps1 -Version x.y.z` construye y crea el ZIP portable; `smoke.py <carpeta>` comprueba versión, número de módulos, presets, un scan sin red y que la GUI sigue viva a los 3 s (con el aviso legal ya aceptado en un directorio temporal); `osineitor.iss` (Inno Setup) instala por usuario, sin UAC, con la CLI en el PATH del usuario como tarea opcional y sin borrar los datos al desinstalar; `checksums.py` escribe `SHA256SUMS.txt`. El job `windows` de `release.yml` lo encadena y, con una etiqueta, crea la Release de GitHub con instalador, ZIP y sumas (ver [PUBLICACION.md](PUBLICACION.md)).
+
+**Pendiente:** la instancia única y exponer `--scope` y `--evidence`.
 
 **Criterios de aceptación**
 
@@ -212,10 +222,11 @@ no hace falta lanzar la CLI.
 
 ## Qué no está verificado
 
-- **Solo la ventana principal (G2) se ha visto**, en capturas con la plataforma nativa de Windows en tema claro y oscuro; el scan en vivo (G3), el historial, el detalle y la exportación (G4) están probados con la CLI real y módulos falsos sin pantalla, pero no se han visto ni se ha hecho un scan a un dominio real desde la ventana, ni abierto en un navegador un informe HTML exportado; el resto de vistas no existen y la lista manual de abajo no se ha ejecutado. La capa no visual se prueba contra la CLI real en la CI de Windows y Linux. Los tests de Qt (`tests/gui/test_main_window.py`) corren sin pantalla y no entran en la CI mientras no instale el extra `gui`. La plataforma `offscreen` ignora el esquema de color, así que el cambio real de tema solo se ha comprobado en Windows y a mano.
+- **Instalador (G8):** el paquete de PyInstaller se construyó y pasó `smoke.py` en local (Python 3.14; la CI usa 3.13). No se ha compilado el `.iss`, ni instalado o desinstalado, ni se ha ejecutado el job `windows` ni creado una Release. Tampoco SmartScreen ni los antivirus, que pueden marcar un `.exe` de PyInstaller sin firmar. El instalador no tiene icono propio.
+- **Solo la ventana principal (G2) se ha visto**, en capturas con la plataforma nativa de Windows en tema claro y oscuro; el scan en vivo (G3), el historial, el detalle y la exportación (G4) están probados con la CLI real y módulos falsos sin pantalla, pero no se han visto ni se ha hecho un scan a un dominio real desde la ventana, ni abierto en un navegador un informe HTML exportado; el panel de salud (G5), el diálogo de ajustes (G6) y los avisos y confirmaciones (G7) están probados sin pantalla (las confirmaciones, con la respuesta del usuario simulada), con módulos falsos y con una CLI real, pero tampoco se han visto, ni se ha comprobado con un teclado real que Enter no confirme; el resto de vistas no existen y la lista manual de abajo no se ha ejecutado. La capa no visual se prueba contra la CLI real en la CI de Windows y Linux. Los tests de Qt (`tests/gui/test_main_window.py`) corren sin pantalla y no entran en la CI mientras no instale el extra `gui`. La plataforma `offscreen` ignora el esquema de color, así que el cambio real de tema solo se ha comprobado en Windows y a mano.
 - La latencia de lanzar un proceso de la CLI por cada orden en Windows (con antivirus) no está
   medida. Si el historial o la lista de módulos tardan, cachear en la GUI.
 - `CREATE_NO_WINDOW` evita la ventana de consola, pero que no parpadee solo se comprueba a ojo.
-- La GUI aún no pasa `--purpose`, `--scope` ni `--evidence`, y `CliApi` no expone `osineitor verify`.
+- La GUI aún no pasa `--scope` ni `--evidence`, y `CliApi` no expone `osineitor verify`.
 - Fuera de alcance por ahora: grafo, hallazgos, procedencia en la interfaz, internacionalización y
   actualizaciones automáticas.

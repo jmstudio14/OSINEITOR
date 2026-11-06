@@ -671,6 +671,9 @@
           },
           "analyzer": {
             "type": "boolean"
+          },
+          "plugin": {
+            "type": "boolean"
           }
         },
         "additionalProperties": true
@@ -1065,6 +1068,470 @@
             "boolean",
             "null"
           ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "diff_item": {
+      "type": "object",
+      "required": [
+        "key",
+        "type",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "field"
+            ],
+            "properties": {
+              "field": {
+                "type": "string"
+              },
+              "before": {},
+              "after": {}
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "diff_output": {
+      "type": "object",
+      "required": [
+        "from",
+        "to",
+        "same_target",
+        "added",
+        "removed",
+        "changed",
+        "findings",
+        "unchanged"
+      ],
+      "properties": {
+        "from": {
+          "type": "object",
+          "required": [
+            "scan_id",
+            "target",
+            "started_at"
+          ],
+          "properties": {
+            "scan_id": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "target": {
+              "type": "string"
+            },
+            "started_at": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        },
+        "to": {
+          "type": "object",
+          "required": [
+            "scan_id",
+            "target",
+            "started_at"
+          ],
+          "properties": {
+            "scan_id": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "target": {
+              "type": "string"
+            },
+            "started_at": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        },
+        "same_target": {
+          "type": "boolean"
+        },
+        "added": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diff_item"
+          }
+        },
+        "removed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diff_item"
+          }
+        },
+        "changed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diff_item"
+          }
+        },
+        "findings": {
+          "type": "object",
+          "required": [
+            "added",
+            "removed",
+            "changed"
+          ],
+          "properties": {
+            "added": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/diff_item"
+              }
+            },
+            "removed": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/diff_item"
+              }
+            },
+            "changed": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/diff_item"
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        "unchanged": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": true
+    },
+    "watch_alert": {
+      "type": "object",
+      "required": [
+        "rule",
+        "title",
+        "severity",
+        "entity",
+        "value",
+        "recommendation",
+        "evidence"
+      ],
+      "properties": {
+        "rule": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "entity": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "recommendation": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "watch_target": {
+      "type": "object",
+      "required": [
+        "target",
+        "due",
+        "ran",
+        "scan_id",
+        "status",
+        "baseline",
+        "alerts",
+        "deliveries",
+        "error"
+      ],
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "due": {
+          "type": "boolean"
+        },
+        "ran": {
+          "type": "boolean"
+        },
+        "scan_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "baseline": {
+          "type": "boolean"
+        },
+        "alerts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/watch_alert"
+          }
+        },
+        "deliveries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "notifier",
+              "ok",
+              "sent",
+              "error"
+            ],
+            "properties": {
+              "notifier": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "sent": {
+                "type": "integer"
+              },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "watch_output": {
+      "type": "object",
+      "required": [
+        "checked_at",
+        "alerts",
+        "exit_code",
+        "targets"
+      ],
+      "properties": {
+        "checked_at": {
+          "type": "string"
+        },
+        "alerts": {
+          "type": "integer"
+        },
+        "exit_code": {
+          "type": "integer"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/watch_target"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "watch_list_output": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "target",
+          "type",
+          "every",
+          "last_run",
+          "last_status",
+          "due",
+          "notify"
+        ],
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "every": {
+            "type": "number"
+          },
+          "last_run": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due": {
+            "type": "boolean"
+          },
+          "notify": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "purge_output": {
+      "type": "object",
+      "required": [
+        "before",
+        "deleted",
+        "dry_run"
+      ],
+      "properties": {
+        "before": {
+          "type": "string"
+        },
+        "deleted": {
+          "type": "integer"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "summary_output": {
+      "type": "object",
+      "required": [
+        "scan_id",
+        "target",
+        "provider",
+        "model",
+        "remote",
+        "summary",
+        "sentences",
+        "rejected",
+        "citations",
+        "facts",
+        "omitted"
+      ],
+      "properties": {
+        "scan_id": {
+          "type": "integer"
+        },
+        "target": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "boolean"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "sentences": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "text",
+              "citations"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "citations": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "pattern": "^E[0-9]+$"
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "rejected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "text",
+              "reason"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "citations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "facts": {
+          "type": "integer"
+        },
+        "omitted": {
+          "type": "integer"
         }
       },
       "additionalProperties": true

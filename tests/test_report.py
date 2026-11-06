@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 
 import pytest
 from typer.testing import CliRunner
@@ -96,7 +97,9 @@ def test_show_lists_every_source_in_the_table(tmp_path):
 
 def test_html_escapes_content():
     html = report.render(RESULT, "html")
-    assert "<script>" not in html.split("</style>", 1)[1]
+    # Salvo los <script> propios del grafo, el contenido de terceros no puede traer etiquetas.
+    page = re.sub(r"<script.*?</script>", "", html.split("</style>", 1)[1], flags=re.S)
+    assert "<script>" not in page
     assert "&lt;script&gt;" in html
     assert "timeout &lt;x&gt;" in html
 

@@ -222,8 +222,19 @@ def test_exit_code_for_priority():
 def test_json_outputs_of_every_command_match_the_schema(modules, tmp_path):
     db = str(tmp_path / "s.db")
     runner.invoke(app, ["domain", "example.com", "--db", db, "--quiet"])
+    runner.invoke(app, ["domain", "example.com", "--db", db, "--quiet"])
     runner.invoke(app, ["config", "set", "shodan", "SECRETVALUE"])
+    watch_file = tmp_path / "watch.yml"
+    watch_file.write_text(
+        "targets: [{target: example.com, depth: 1}]\n"
+        f"notifiers: {{log: {{type: file, path: '{(tmp_path / 'a.ndjson').as_posix()}'}}}}\n",
+        encoding="utf-8",
+    )
     cases = {
+        "watch_output": ["watch", "run", "--file", str(watch_file), "--db", db, "--json"],
+        "watch_list_output": ["watch", "list", "--file", str(watch_file), "--db", db, "--json"],
+        "purge_output": ["purge", "--older-than", "1000d", "--db", db, "--json"],
+        "diff_output": ["diff", "1", "2", "--db", db, "--json"],
         "modules_output": ["modules", "--json"],
         "history_output": ["history", "--db", db, "--json"],
         "scan_result": ["show", "1", "--db", db, "--json"],
@@ -476,3 +487,34 @@ async def test_entities_are_streamed_as_each_module_finishes(ctx):
     progress = [e for e in seen if e["type"] == "progress"]
     assert [p["done"] for p in progress] == [1, 2]
     assert progress[0]["entities"] == 1 and progress[1]["entities"] == 2
+
+
+def test_summarize_json_validates_against_the_schema(tmp_path):
+    import httpx
+    import respx
+
+    from osineitor.storage import Storage
+
+    db = tmp_path / "s.db"
+    with Storage(db) as storage:
+        storage.save(
+            ScanResult(
+                target=Entity(type=EntityType.DOMAIN, value="example.com"),
+                depth=1,
+                entities=[Entity(type=EntityType.DOMAIN, value="www.example.com")],
+            )
+        )
+    cfg = tmp_path / "ai.yml"
+    cfg.write_text("enabled: true\nprovider: ollama\nmodel: m\n", encoding="utf-8")
+    reply = "Hay un subdominio, www.example.com [E2]. Sin cita."
+    with respx.mock:
+        respx.post("http://localhost:11434/api/chat").mock(
+            return_value=httpx.Response(200, json={"message": {"content": reply}})
+        )
+        result = runner.invoke(
+            app, ["summarize", "1", "--db", str(db), "--config", str(cfg), "--json"]
+        )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    validate("summary_output", data)
+    assert data["citations"] == {"E2": "domain:www.example.com"}

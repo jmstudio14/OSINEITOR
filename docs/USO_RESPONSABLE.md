@@ -42,8 +42,13 @@ Fuera de la UE aplica la legislación local (p. ej. la Ley 25.326 en Argentina).
   la huella: conserva la respuesta original de cada fuente y permite comprobar que no se ha tocado
   (ver [EVIDENCIA.md](EVIDENCIA.md)).
 - Guarda los resultados cifrados o en un equipo controlado; la base de datos y los informes se
-  guardan sin cifrar (ver [SECURITY.md](../SECURITY.md)).
-- Borra los scans cuando termine la investigación.
+  guardan sin cifrar (ver [SECURITY.md](https://github.com/jmstudio14/OSINEITOR/blob/main/SECURITY.md)).
+- Borra los scans cuando termine la investigación; `osineitor purge --older-than 90d` aplica una
+  retención.
+- Vigila solo activos propios o con autorización expresa ([VIGILANCIA.md](VIGILANCIA.md)).
+- Los resúmenes con IA están desactivados por defecto. Un proveedor remoto recibe los hechos del
+  scan, que pueden ser datos personales: usa un modelo local (Ollama) para investigar personas y
+  lee [IA.md](IA.md) antes de activar uno remoto.
 - Verifica los hallazgos antes de actuar sobre ellos: las fuentes se equivocan y la búsqueda de
   usernames produce falsos positivos.
 

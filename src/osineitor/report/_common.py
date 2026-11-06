@@ -36,6 +36,10 @@ def summary(result: ScanResult) -> list[tuple[str, str]]:
         ("Entidades", str(len(result.entities))),
     ]
     rows += [(f"  {t}", str(len(es))) for t, es in result.by_type().items()]
+    if found := [e for e in result.entities if e.type == "finding"]:
+        order = ("critical", "high", "medium", "low", "info")
+        counts = {s: sum(1 for e in found if e.data.get("severity") == s) for s in order}
+        rows.append(("Hallazgos", ", ".join(f"{n} {s}" for s, n in counts.items() if n)))
     if result.purpose:
         rows.append(("Propósito", result.purpose))
     if result.scope:

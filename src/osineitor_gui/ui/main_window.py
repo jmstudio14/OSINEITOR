@@ -26,8 +26,10 @@ from osineitor_gui.scan_request import ScanRequest
 from osineitor_gui.settings import THEMES, GuiSettings
 from osineitor_gui.ui.history_panel import HistoryPanel
 from osineitor_gui.ui.legal_dialog import LegalDialog
+from osineitor_gui.ui.modules_view import HealthDialog
 from osineitor_gui.ui.new_scan_dialog import NewScanDialog
 from osineitor_gui.ui.scan_view import ScanView
+from osineitor_gui.ui.settings_dialog import SettingsDialog
 from osineitor_gui.ui.theme import apply_theme
 from osineitor_gui.ui.worker import run_in_thread
 
@@ -45,6 +47,9 @@ class MainWindow(QMainWindow):
         self.cli = list(cli) if cli else None
         self.api = CliApi(self.cli)
         self._saved_ids: set[int] = set()  # scans en vivo ya anotados en el historial
+        self._health: HealthDialog | None = None
+        self._settings_dialog: SettingsDialog | None = None
+        self.catalog: list[dict[str, Any]] | None = None  # `modules --json`, para «Nuevo scan»
         self.setWindowTitle("OSINEITOR")
         self.resize(1000, 650)
         if settings.window_geometry:
@@ -83,6 +88,7 @@ class MainWindow(QMainWindow):
         self._update_state()
         if self.cli:
             QTimer.singleShot(0, self.history.reload)
+            QTimer.singleShot(0, self.load_catalog)
 
     def _build_actions(self) -> None:
         self.action_new = QAction(self.tr("&Nuevo scan…"), self)
@@ -116,9 +122,17 @@ class MainWindow(QMainWindow):
         for theme in THEMES:
             action = QAction(names[theme], self, checkable=True)
             action.setChecked(theme == self.settings.theme)
-            action.triggered.connect(lambda _checked=False, t=theme: self._set_theme(t))
+            action.triggered.connect(lambda _checked=False, t=theme: self.set_theme(t))
             group.addAction(action)
             self.theme_actions[theme] = action
+
+        self.action_health = QAction(self.tr("&Salud de los módulos…"), self)
+        self.action_health.setEnabled(self.cli is not None)
+        self.action_health.triggered.connect(self._show_health)
+
+        self.action_settings = QAction(self.tr("&Ajustes…"), self)
+        self.action_settings.setShortcut(QKeySequence("Ctrl+,"))
+        self.action_settings.triggered.connect(self._show_settings)
 
         self.action_legal = QAction(self.tr("&Uso responsable"), self)
         self.action_legal.triggered.connect(self._show_legal)
@@ -144,6 +158,8 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self.history_dock.toggleViewAction())
         theme_menu = view_menu.addMenu(self.tr("&Tema"))
         theme_menu.addActions(list(self.theme_actions.values()))
+        tools_menu = self.menuBar().addMenu(self.tr("&Herramientas"))
+        tools_menu.addActions([self.action_health, self.action_settings])
         help_menu = self.menuBar().addMenu(self.tr("A&yuda"))
         help_menu.addActions([self.action_legal, self.action_about])
 
@@ -156,9 +172,21 @@ class MainWindow(QMainWindow):
         return self.tabs.currentWidget()
 
     def _new_scan(self) -> None:
-        dialog = NewScanDialog(self)
+        dialog = NewScanDialog(self, self.catalog)
         dialog.accepted.connect(lambda: self.open_scan(dialog.request()))
         dialog.open()
+
+    def load_catalog(self) -> None:
+        """Pide la lista de módulos a la CLI; si falla, «Nuevo scan» se abre sin selector."""
+        run_in_thread(self.api.modules, self._catalog_loaded, self._catalog_failed, self)
+
+    def _catalog_loaded(self, modules: list[dict[str, Any]]) -> None:
+        self.catalog = modules
+
+    def _catalog_failed(self, exc: Exception) -> None:
+        self.statusBar().showMessage(
+            f"{self.tr('No se pudo cargar la lista de módulos')}: {exc}", 15000
+        )
 
     def open_scan(self, request: ScanRequest) -> ScanView:
         """Lanza un scan en una pestaña nueva."""
@@ -285,10 +313,25 @@ class MainWindow(QMainWindow):
         view.deleteLater()
         self._update_state()
 
-    def _set_theme(self, theme: str) -> None:
+    def set_theme(self, theme: str) -> None:
         apply_theme(theme)
+        self.theme_actions[theme].setChecked(True)  # el cambio puede venir de los ajustes
         self.settings.theme = theme
         self.settings.save()
+
+    def _show_settings(self) -> None:
+        if self._settings_dialog is None:
+            self._settings_dialog = SettingsDialog(self.api, self.settings, self)
+            self._settings_dialog.theme_changed.connect(self.set_theme)
+        self._settings_dialog.reload()
+        self._settings_dialog.show()
+        self._settings_dialog.raise_()
+
+    def _show_health(self) -> None:
+        if self._health is None:
+            self._health = HealthDialog(self.api, self)
+        self._health.show()
+        self._health.raise_()
 
     def _show_legal(self) -> None:
         LegalDialog(self).open()

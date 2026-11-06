@@ -1,0 +1,34 @@
+{
+  "module": "gravatar",
+  "target": "test@example.com",
+  "recorded": "2026-11-05",
+  "entities": 0,
+  "sites": null,
+  "http": [
+    {
+      "method": "GET",
+      "url": "https://gravatar.com/973dfe463ec85785f5f95af5ba3906eedb2d931c24e69824a89ea65dba4e813b.json",
+      "status": 404,
+      "headers": {
+        "server": "nginx",
+        "date": "Thu, 05 Nov 2026 17:14:22 GMT",
+        "content-type": "application/json",
+        "connection": "keep-alive",
+        "vary": "Accept-Encoding",
+        "content-language": "en",
+        "p3p": "CP=\"CAO PSA\"",
+        "expires": "Wed, 11 Jan 1984 05:00:00 GMT",
+        "cache-control": "no-cache, must-revalidate, max-age=0",
+        "x-frame-options": "SAMEORIGIN",
+        "link": "<https://gravatar.com/973dfe463ec85785f5f95af5ba3906eedb2d931c24e69824a89ea65dba4e813b.json>; rel=\"canonical\"",
+        "access-control-allow-origin": "*",
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "GET, OPTIONS",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "strict-transport-security": "max-age=31536000; includeSubdomains; preload"
+      },
+      "body": "\"User not found\""
+    }
+  ],
+  "dns": []
+}

@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 from osineitor import cli, registry
 from osineitor.cli import app
 from osineitor.config import Config
-from osineitor.doctor import check_module, run_doctor
+from osineitor.doctor import check_module, run_doctor, seed_entity
 from osineitor.models import EntityType
 from osineitor.modules.base import Module, ModuleError
 
@@ -63,6 +63,23 @@ async def test_doctor_uses_the_canary_and_reports_verdicts():
         "d_active": "skipped",
     }
     assert (await verdicts([classes[-1]], active=True)) == {"d_active": "ok"}
+
+
+async def test_doctor_seeds_an_organization_canary_with_its_own_type():
+    """Un nombre de empresa se detectaría como username y `Entity` lo rechazaría."""
+    cls = make(
+        "d_org",
+        ok,
+        canary="Banco Santander, S.A.",
+        consumes=frozenset({EntityType.ORGANIZATION}),
+    )
+    assert await verdicts([cls]) == {"d_org": "ok"}
+
+
+def test_every_bundled_canary_builds_a_valid_seed():
+    for cls in registry.discover():
+        if cls.canary:
+            seed_entity(cls)  # no debe lanzar: un canary mal sembrado rompe todo `doctor`
 
 
 async def test_doctor_detail_carries_the_module_error():

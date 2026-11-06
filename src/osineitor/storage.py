@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 
@@ -78,6 +79,22 @@ MIGRATIONS = [
     "ALTER TABLE scans ADD COLUMN scope TEXT",
     # 7: propósito declarado del scan (NULL si no se indicó).
     "ALTER TABLE scans ADD COLUMN purpose TEXT",
+    # 8: estado de `osineitor watch`: última ejecución de cada objetivo y qué entidades conoce ya
+    # (para alertar solo de lo nuevo).
+    """
+    CREATE TABLE watch_targets (
+        target TEXT PRIMARY KEY,
+        last_at TEXT NOT NULL,
+        last_scan INTEGER REFERENCES scans(id) ON DELETE SET NULL,
+        status TEXT NOT NULL
+    );
+    CREATE TABLE watch_seen (
+        target TEXT NOT NULL,
+        key TEXT NOT NULL,
+        first_at TEXT NOT NULL,
+        PRIMARY KEY (target, key)
+    );
+    """,
 ]
 
 
@@ -282,6 +299,54 @@ class Storage:
             " LEFT JOIN entities e ON e.scan_id = s.id GROUP BY s.id ORDER BY s.id DESC LIMIT ?",
             (limit,),
         ).fetchall()
+
+    def watch_last(self, target: str) -> tuple[str, int | None, str] | None:
+        """Última ejecución vigilada de `target`: (fecha ISO, id del scan, estado) o `None`."""
+        return self._conn.execute(
+            "SELECT last_at, last_scan, status FROM watch_targets WHERE target = ?", (target,)
+        ).fetchone()
+
+    def watch_seen(self, target: str) -> set[str]:
+        """Claves de las entidades que la vigilancia de `target` ya conoce."""
+        rows = self._conn.execute("SELECT key FROM watch_seen WHERE target = ?", (target,))
+        return {key for (key,) in rows}
+
+    def watch_record(
+        self,
+        target: str,
+        *,
+        at: str,
+        scan_id: int | None,
+        status: str,
+        add: Iterable[str],
+        remove: Iterable[str] = (),
+    ) -> None:
+        """Anota una ejecución: cuándo fue, qué entidades ya se conocen y cuáles desaparecieron."""
+        with self._conn:
+            self._conn.execute(
+                "INSERT INTO watch_targets (target, last_at, last_scan, status) VALUES (?, ?, ?, ?)"
+                " ON CONFLICT(target) DO UPDATE SET last_at = excluded.last_at,"
+                " last_scan = excluded.last_scan, status = excluded.status",
+                (target, at, scan_id, status),
+            )
+            self._conn.executemany(
+                "INSERT OR IGNORE INTO watch_seen (target, key, first_at) VALUES (?, ?, ?)",
+                [(target, key, at) for key in add],
+            )
+            self._conn.executemany(
+                "DELETE FROM watch_seen WHERE target = ? AND key = ?",
+                [(target, key) for key in remove],
+            )
+
+    def purge(self, before: str, *, dry_run: bool = False) -> int:
+        """Borra los scans iniciados antes de `before` (fecha ISO) y devuelve cuántos eran."""
+        (count,) = self._conn.execute(
+            "SELECT COUNT(*) FROM scans WHERE started_at < ?", (before,)
+        ).fetchone()
+        if count and not dry_run:
+            with self._conn:
+                self._conn.execute("DELETE FROM scans WHERE started_at < ?", (before,))
+        return count
 
     def close(self) -> None:
         self._conn.close()

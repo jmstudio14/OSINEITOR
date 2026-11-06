@@ -15,7 +15,7 @@ from osineitor.cli import app
 ROOT = Path(__file__).parent.parent
 DOCS = sorted([*ROOT.glob("*.md"), *(ROOT / "docs").glob("*.md")])
 # Documentos cuyos ejemplos de órdenes deben ser ejecutables tal cual.
-COMMAND_DOCS = [ROOT / "README.md", ROOT / "docs" / "USO.md"]
+COMMAND_DOCS = [ROOT / "README.md", ROOT / "docs" / "USO.md", ROOT / "docs" / "TUTORIAL.md"]
 
 LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)\)")
 FENCE_RE = re.compile(r"^```(\w*)\n(.*?)^```", re.M | re.S)

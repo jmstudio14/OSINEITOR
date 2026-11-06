@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 
 import pytest
 
@@ -26,7 +27,9 @@ from osineitor_gui.ui import main_window  # noqa: E402
 from osineitor_gui.ui.history_panel import HistoryPanel  # noqa: E402
 from osineitor_gui.ui.legal_dialog import LegalDialog  # noqa: E402
 from osineitor_gui.ui.main_window import MainWindow  # noqa: E402
+from osineitor_gui.ui.modules_view import HealthDialog  # noqa: E402
 from osineitor_gui.ui.new_scan_dialog import NewScanDialog  # noqa: E402
+from osineitor_gui.ui.settings_dialog import SettingsDialog  # noqa: E402
 from tests.gui.fakecli import CLI as FAKE_CLI  # noqa: E402
 from tests.gui.fakecli import save_scan, use_modules  # noqa: E402
 
@@ -52,6 +55,23 @@ def stub_history(monkeypatch):
     return reloads
 
 
+REAL_CATALOG = MainWindow.load_catalog
+
+
+@pytest.fixture(autouse=True)
+def stub_catalog(monkeypatch):
+    """Sin esto cada ventana lanzaría `modules` contra la CLI al abrirse; los tests que lo
+    necesitan usan `real_catalog`."""
+    loads = []
+    monkeypatch.setattr(MainWindow, "load_catalog", lambda self: loads.append(1))
+    return loads
+
+
+@pytest.fixture
+def real_catalog(monkeypatch):
+    monkeypatch.setattr(MainWindow, "load_catalog", REAL_CATALOG)
+
+
 @pytest.fixture
 def real_history(monkeypatch):
     monkeypatch.setattr(HistoryPanel, "reload", REAL_RELOAD)
@@ -70,7 +90,7 @@ def labels(actions) -> list[str]:
 def test_menus_have_only_actions_that_work_today(qtbot):
     window = make_window(qtbot)
     menus = {a.text().replace("&", ""): a.menu() for a in window.menuBar().actions()}
-    assert list(menus) == ["Archivo", "Ver", "Ayuda"]
+    assert list(menus) == ["Archivo", "Ver", "Herramientas", "Ayuda"]
     assert labels(menus["Archivo"].actions()) == [
         "Nuevo scan…",
         "Abrir scan guardado…",
@@ -78,6 +98,7 @@ def test_menus_have_only_actions_that_work_today(qtbot):
         "Cancelar scan",
         "Salir",
     ]
+    assert labels(menus["Herramientas"].actions()) == ["Salud de los módulos…", "Ajustes…"]
     assert labels(menus["Ayuda"].actions()) == ["Uso responsable", "Acerca de"]
     assert "Historial" in labels(menus["Ver"].actions())
     theme = next(a.menu() for a in menus["Ver"].actions() if a.menu())
@@ -107,6 +128,98 @@ def test_new_scan_action_opens_the_dialog(qtbot):
     window = make_window(qtbot)
     window.action_new.trigger()
     assert window.findChild(NewScanDialog) is not None
+
+
+def test_catalog_loads_on_startup(qtbot, monkeypatch, real_catalog):
+    use_modules(monkeypatch, "fast,bad")
+    window = make_window(qtbot, cli=FAKE_CLI)
+    assert window.catalog is None
+    qtbot.waitUntil(lambda: window.catalog is not None, timeout=30_000)
+    assert {m["name"] for m in window.catalog} == {"fast", "bad"}
+
+
+def test_catalog_is_requested_only_with_a_cli(qtbot, stub_catalog):
+    make_window(qtbot, cli=None, cli_error="falta")
+    qtbot.wait(50)
+    assert stub_catalog == []
+    make_window(qtbot)
+    qtbot.waitUntil(lambda: stub_catalog == [1], timeout=5000)
+
+
+def test_new_scan_receives_the_catalog(qtbot):
+    window = make_window(qtbot)
+    window.catalog = [{"name": "dns", "description": "DNS", "passive": True}]
+    window.action_new.trigger()
+    dialog = window.findChild(NewScanDialog)
+    assert dialog.module_list.count() == 1
+
+
+def test_catalog_failure_leaves_none_and_new_scan_still_opens(qtbot, monkeypatch, real_catalog):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("un QMessageBox modal bloquearía la ventana")
+
+    monkeypatch.setattr(QMessageBox, "critical", forbidden)
+    dead = [sys.executable, "-c", "import sys; sys.stderr.write('boom\n'); sys.exit(2)"]
+    window = make_window(qtbot, cli=dead)
+    qtbot.waitUntil(lambda: "módulos" in window.statusBar().currentMessage(), timeout=30_000)
+    assert window.catalog is None
+    window.action_new.trigger()
+    dialog = window.findChild(NewScanDialog)
+    assert dialog is not None and dialog.module_list.isHidden()
+
+
+def test_health_action_opens_one_dialog_and_reuses_it(qtbot):
+    window = make_window(qtbot)
+    assert window.action_health.isEnabled()
+    window.action_health.trigger()
+    dialog = window.findChild(HealthDialog)
+    assert dialog is not None and dialog.isVisible()
+    window.action_health.trigger()
+    assert window.findChildren(HealthDialog) == [dialog]
+
+
+def test_health_action_needs_the_cli(qtbot):
+    assert not make_window(qtbot, cli=None, cli_error="falta").action_health.isEnabled()
+
+
+def test_settings_action_opens_one_dialog_and_reuses_it(qtbot, monkeypatch):
+    reloads = []
+    monkeypatch.setattr(SettingsDialog, "reload", lambda self: reloads.append(1))
+    window = make_window(qtbot)
+    assert window.action_settings.isEnabled()
+    window.action_settings.trigger()
+    dialog = window.findChild(SettingsDialog)
+    assert dialog is not None and dialog.isVisible()
+    window.action_settings.trigger()
+    assert window.findChildren(SettingsDialog) == [dialog]
+    assert len(reloads) == 2  # cada vez que se abre se vuelve a pedir el estado de las keys
+
+
+def test_settings_without_the_cli_shows_the_error_in_the_dialog(qtbot, monkeypatch):
+    def missing():
+        raise CliNotFound("no hay CLI")
+
+    monkeypatch.setattr("osineitor_gui.api.locate_cli", missing)
+    window = make_window(qtbot, cli=None, cli_error="falta")
+    assert window.action_settings.isEnabled()
+    window.action_settings.trigger()
+    dialog = window.findChild(SettingsDialog)
+    qtbot.waitUntil(lambda: "no hay CLI" in dialog.message.text(), timeout=30_000)
+    assert not dialog.save_button.isEnabled()
+
+
+def test_theme_chosen_in_settings_is_applied_saved_and_checked(qtbot, monkeypatch):
+    monkeypatch.setattr(SettingsDialog, "reload", lambda self: None)
+    requested = []
+    monkeypatch.setattr(QStyleHints, "setColorScheme", lambda self, s: requested.append(s))
+    window = make_window(qtbot)
+    window.action_settings.trigger()
+    dialog = window.findChild(SettingsDialog)
+    dialog.theme_changed.emit("dark")
+    assert requested == [Qt.ColorScheme.Dark]
+    assert window.settings.theme == "dark"
+    assert json.loads(settings_path().read_text(encoding="utf-8"))["theme"] == "dark"
+    assert window.theme_actions["dark"].isChecked()
 
 
 def test_quit_action_closes_the_window(qtbot):
@@ -249,6 +362,7 @@ def test_main_shows_the_dialog_when_the_cli_is_missing(qtbot, monkeypatch):
         raise CliNotFound("No se encuentra la CLI de OSINEITOR (osineitor).")
 
     critical = []
+    monkeypatch.setattr(app, "ensure_legal", lambda settings: True)
     monkeypatch.setattr(app, "locate_cli", missing)
     monkeypatch.setattr(QMessageBox, "critical", lambda *args: critical.append(args))
     monkeypatch.setattr(app.QApplication, "exec", lambda: 0)
@@ -258,6 +372,7 @@ def test_main_shows_the_dialog_when_the_cli_is_missing(qtbot, monkeypatch):
 
 
 def test_main_starts_with_the_located_cli(qtbot, monkeypatch):
+    monkeypatch.setattr(app, "ensure_legal", lambda settings: True)
     monkeypatch.setattr(app, "locate_cli", lambda: CLI)
     monkeypatch.setattr(app.QApplication, "exec", lambda: 0)
     monkeypatch.setattr(main_window.MainWindow, "show", lambda self: None)

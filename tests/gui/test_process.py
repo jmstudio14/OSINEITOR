@@ -197,3 +197,28 @@ def test_missing_cli_command_fails_loudly():
     proc = CliProcess([], cli=["/no/existe/osineitor"])
     with pytest.raises(OSError):
         proc.start()
+
+
+# --- propósito del scan con `require_purpose` activo (G7) -------------------------------------
+
+
+def email_scan(purpose, monkeypatch):
+    monkeypatch.setenv("OSINEITOR_REQUIRE_PURPOSE", "1")
+    args = ScanRequest("a@example.com", kind="email", no_save=True, purpose=purpose).to_args()
+    return launch(args)
+
+
+def test_email_scan_without_purpose_fails_with_the_cli_message(monkeypatch):
+    proc, rec = email_scan(None, monkeypatch)
+    assert proc.wait(30) == 2
+    session = ScanSession()
+    session.begin()
+    session.process_exited(2, proc.stderr_tail)
+    assert session.state == "failed" and "--purpose" in session.message
+
+
+def test_email_scan_with_purpose_succeeds(monkeypatch):
+    proc, rec = email_scan("auditoría autorizada", monkeypatch)
+    assert proc.wait(30) == EXIT_OK
+    kinds = [type(e).__name__ for e in rec.events]
+    assert "ScanStart" in kinds and kinds[-1] == "ScanEnd"

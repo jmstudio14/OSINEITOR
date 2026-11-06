@@ -1,0 +1,27 @@
+{
+  "module": "ipinfo",
+  "target": "1.1.1.1",
+  "recorded": "2026-11-05",
+  "entities": 1,
+  "sites": null,
+  "http": [
+    {
+      "method": "GET",
+      "url": "https://ipinfo.io/1.1.1.1/json",
+      "status": 200,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "x-frame-options": "SAMEORIGIN",
+        "x-xss-protection": "1; mode=block",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "content-type": "application/json",
+        "date": "Thu, 05 Nov 2026 17:14:19 GMT",
+        "vary": "accept-encoding",
+        "via": "1.1 google",
+        "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+      },
+      "body": "{\n  \"ip\": \"1.1.1.1\",\n  \"hostname\": \"one.one.one.one\",\n  \"city\": \"Brisbane\",\n  \"region\": \"Queensland\",\n  \"country\": \"AU\",\n  \"loc\": \"-27.4679,153.0281\",\n  \"org\": \"AS13335 Cloudflare, Inc.\",\n  \"postal\": \"9010\",\n  \"timezone\": \"Australia/Brisbane\",\n  \"readme\": \"https://ipinfo.io/missingauth\",\n  \"anycast\": true\n}"
+    }
+  ],
+  "dns": []
+}

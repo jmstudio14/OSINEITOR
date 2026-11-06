@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,20 @@ name = "osineitor"
 version = "0.5.0"
 description = "Herramienta OSINT modular: dominios, IPs, emails y usernames con pivoteo entre entidades"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["osint", "reconnaissance", "security", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+]
 requires-python = ">=3.11"
 dependencies = [
     "typer>=0.12",
@@ -18,7 +31,14 @@ dependencies = [
     "platformdirs>=4",
     "idna>=3",
     "pyyaml>=6",
+    "phonenumbers>=8.13",
 ]
+
+[project.urls]
+Homepage = "https://github.com/jmstudio14/OSINEITOR"
+Documentation = "https://github.com/jmstudio14/OSINEITOR/blob/main/docs/USO.md"
+Changelog = "https://github.com/jmstudio14/OSINEITOR/blob/main/CHANGELOG.md"
+Issues = "https://github.com/jmstudio14/OSINEITOR/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -32,6 +52,11 @@ dev = [
 ]
 
 gui = ["PySide6-Essentials>=6.8"]
+
+# Construcción del paquete de Windows (packaging/windows/); no es una dependencia de ejecución.
+build = ["pyinstaller>=6"]
+
+docs = ["mkdocs>=1.6"]
 
 [project.scripts]
 osineitor = "osineitor.cli:app"
@@ -47,6 +72,7 @@ osineitor = [
     "modules/domain/data/*.json",
     "modules/username/data/*.json",
     "data/presets/*.yml",
+    "data/rules/*.yml",
 ]
 
 [tool.pytest.ini_options]

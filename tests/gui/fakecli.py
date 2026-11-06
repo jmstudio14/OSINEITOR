@@ -32,7 +32,16 @@ DRIVER = textwrap.dedent(
             await asyncio.sleep(120)
             return []
 
-    mods = {"fast": Fast, "bad": Bad, "hang": Hang}
+    class Keyed(Module):
+        name = "keyed"; description = "necesita key"; requires_key = "demo"
+        consumes = frozenset({EntityType.DOMAIN})
+        async def run(self, entity):
+            return []
+
+    class Keyed2(Keyed):
+        name = "keyed2"; description = "comparte key"
+
+    mods = {"fast": Fast, "bad": Bad, "hang": Hang, "keyed": Keyed, "keyed2": Keyed2}
     registry.discover = lambda: [mods[m] for m in os.environ["DRIVER_MODULES"].split(",")]
     from osineitor.cli import app
     app()

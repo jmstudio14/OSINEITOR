@@ -13,6 +13,8 @@ from osineitor.report._common import (
     summary,
     title,
 )
+from osineitor.report.graph import CSS as GRAPH_CSS
+from osineitor.report.graph import render_graph
 
 CSS = """
 :root { --bg:#fff; --fg:#1d1f23; --muted:#5f6670; --line:#e3e6ea; --head:#f4f6f8; --acc:#0b6bcb; }
@@ -42,11 +44,12 @@ def to_html(result: ScanResult) -> str:
     out = [
         "<!doctype html><html lang='es'><head><meta charset='utf-8'>",
         "<meta name='viewport' content='width=device-width, initial-scale=1'>",
-        f"<title>{escape(title(result))}</title><style>{CSS}</style></head><body>",
+        f"<title>{escape(title(result))}</title><style>{CSS}{GRAPH_CSS}</style></head><body>",
         f"<h1>{escape(title(result))}</h1><table>",
     ]
     out += [f"<tr><th>{escape(k)}</th><td>{escape(v)}</td></tr>" for k, v in summary(result)]
     out.append("</table>")
+    out.append(render_graph(result))
     for etype, entities in result.by_type().items():
         out.append(f"<h2>{escape(etype)} ({len(entities)})</h2>")
         out.append(

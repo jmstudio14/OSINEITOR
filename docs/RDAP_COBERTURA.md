@@ -1,6 +1,6 @@
 # Cobertura RDAP por TLD
 
-Generado con `scripts/rdap_coverage.py` (entregable F0.6 del [roadmap](../ROADMAP.md)).
+Generado con `scripts/rdap_coverage.py` (entregable F0.6 del [roadmap](https://github.com/jmstudio14/OSINEITOR/blob/main/ROADMAP.md)).
 
 - **Fuente:** https://data.iana.org/rdap/dns.json (copia local `dns.json`)
 - **Publicación del bootstrap:** 2026-10-28T22:00:04Z

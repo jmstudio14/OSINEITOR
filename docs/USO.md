@@ -1,7 +1,7 @@
 # Guía de uso
 
 Referencia de las órdenes y del comportamiento de OSINEITOR. Para instalar y probar rápido, mira
-el [README](../README.md). Los ejemplos usan `example.com` y `1.1.1.1`: dominio e IP reservados
+el [README](https://github.com/jmstudio14/OSINEITOR/blob/main/README.md). Los ejemplos usan `example.com` y `1.1.1.1`: dominio e IP reservados
 para documentación.
 
 ## Índice
@@ -18,6 +18,8 @@ para documentación.
 - [Doctor](#doctor)
 - [Red y entradas](#red-y-entradas)
 - [Informes e historial](#informes-e-historial)
+- [Vigilancia](#vigilancia)
+- [Resúmenes con IA](#resúmenes-con-ia)
 - [API keys y rutas](#api-keys-y-rutas)
 - [Uso desde otros programas](#uso-desde-otros-programas)
 
@@ -29,16 +31,19 @@ osineitor domain example.com          # solo el dominio (profundidad 1)
 osineitor ip 1.1.1.1
 osineitor email alguien@example.com --depth 2
 osineitor username johndoe
+osineitor person "Ana García López" --domain example.com   # variantes de usuario y emails candidatos
 osineitor scan https://example.com/login   # una URL: se investiga su host
-osineitor scan 1.1.1.0/24                  # red CIDR (el tipo se reconoce; los módulos llegan en la fase 4)
-osineitor scan AS13335                     # sistema autónomo (ídem)
+osineitor scan 1.1.1.0/24                  # red CIDR (el tipo se reconoce; ningún módulo la consume aún)
+osineitor scan AS13335                     # sistema autónomo (asn_netblock lista sus prefijos)
 osineitor domain example.com --preset quick   # con un preset (ver Presets)
 
 osineitor history --limit 50          # scans guardados (20 por defecto)
 osineitor show 3                      # volver a ver el scan 3
-osineitor export 3 -f html            # informe en reports/ (json | md | html)
+osineitor export 3 -f html            # informe en reports/ (json | md | html | csv | graphml | gexf | cypher)
 osineitor export 3 -f md -o informe.md  # en el fichero indicado
+osineitor diff 3 7                    # qué cambió entre dos scans (--json para máquinas)
 osineitor verify 3                    # comprueba las evidencias del scan 3 (ver Evidencia)
+osineitor import nmap scan.xml        # guarda como scan un XML de Nmap (-oX); no ejecuta Nmap
 
 osineitor modules                     # módulos disponibles y estado de sus API keys
 osineitor presets                     # perfiles de escaneo disponibles
@@ -46,6 +51,9 @@ osineitor update-data                 # descarga los datasets de terceros (ver D
 osineitor doctor                      # prueba cada módulo contra su fuente real
 osineitor doctor -m dns --json        # solo esos módulos (-m, repetible); --active y --allow-private como en los scans
 osineitor cache info                  # respuestas cacheadas (cache clear las borra)
+osineitor summarize 3                 # resumen con IA del scan 3 (desactivado hasta crear ai.yml)
+osineitor watch run                   # vigilancia: ejecuta lo que toca y avisa de lo nuevo (ver Vigilancia)
+osineitor purge --older-than 90d      # borra scans antiguos (--dry-run solo cuenta)
 osineitor config show                 # keys configuradas (se ven solo los 4 primeros caracteres)
 osineitor version
 ```
@@ -54,9 +62,13 @@ osineitor version
 en ese caso usa la orden explícita: `osineitor username john.doe`. Lo mismo con un username que
 empiece por `AS` y números (`AS1234`), que `scan` toma por un ASN.
 
-`scan` reconoce IP, red CIDR, ASN, URL, email, dominio y username. De una URL se investiga su host
-(dominio o IP); una red CIDR o un ASN se aceptan como objetivo, pero aún no hay módulos que los
-consuman (llegan con la fase 4), así que el resultado queda vacío.
+`scan` reconoce IP, red CIDR, ASN, URL, email, teléfono (con prefijo `+` o `00`), dirección de
+criptomoneda (Bitcoin, Ethereum, Litecoin, Dogecoin y Monero), coordenadas (`40.4168,-3.7038`),
+ruta de un fichero local, dominio y username. La ruta debe contener `/` o `\` y existir: un
+`foto.jpg` suelto en la carpeta actual se tomaría por un dominio, así que escribe `./foto.jpg`.
+Los ficheros se leen **en local**: ni su contenido ni su ruta salen del equipo. De una URL se investiga su host
+(dominio o IP); un ASN se acepta como objetivo (`asn_netblock` saca sus prefijos) y una red CIDR
+también, pero ningún módulo consume aún una red, así que ese resultado queda vacío.
 
 ## Qué se investiga y cómo se pivota
 
@@ -69,6 +81,15 @@ email alguien@example.com
 │                 └► username alguien ─► username_sites ─► profile https://…
 └─ gravatar ─► profile https://gravatar.com/…
 ```
+
+### Personas
+
+`osineitor person "Ana García López" [--domain example.com]` parte de un nombre y **solo genera
+candidatos**: variantes de username (`ana.garcia`, `agarcia`, `anagarcia`…, hasta 12) y, con
+`--domain`, direcciones de email sobre ese dominio. Ninguna se verifica por SMTP ni se consulta
+nada para crearlas; los candidatos pasan a los módulos de username y de email como cualquier otra
+entidad, así que sus resultados son hipótesis que hay que contrastar. Como el email y el username,
+exige `--purpose` si `require_purpose` está activo.
 
 `--depth` controla cuántos niveles se pivota (1 a 4). Con `1` solo se analiza el objetivo; con `2`
 también las entidades descubiertas (p. ej. las IPs a las que resuelve un dominio). Cada nivel
@@ -148,14 +169,14 @@ Para obligarte a indicarlo en los scans sobre personas, activa `require_purpose`
 require_purpose = true
 ```
 
-Con eso, `email`, `username` y los `scan` que resulten de uno de ellos sin `--purpose` terminan con
+Con eso, `email`, `username`, `person`, los teléfonos y los `scan` que resulten de uno de ellos sin `--purpose` terminan con
 código 2 antes de consultar nada. Los de dominio e IP no se ven afectados. La aplicación de
 escritorio aún no pasa `--purpose`: con `require_purpose` activo sus scans de email y username
 fallarán.
 
 ## Opciones de los scans
 
-Valen para `scan`, `domain`, `ip`, `email` y `username`.
+Valen para `scan`, `domain`, `ip`, `email`, `username` y `person`.
 
 | Opción | Efecto |
 |---|---|
@@ -207,7 +228,7 @@ Un preset fija de una vez los módulos, la profundidad y el presupuesto de un ti
 | `quick` | DNS, RDAP y datos de IP y email, 1 nivel, tope de 100 peticiones y 60 s |
 | `domain-recon` | `crtsh`, `dns`, `rdap` y `wayback`, 2 niveles |
 | `attack-surface` | Dominio e IP con `http_fingerprint` y los de IP, 3 niveles; admite `--active` |
-| `person` | Email y username: perfiles y filtraciones, 2 niveles |
+| `person` | Email y username: perfiles, repositorios públicos y filtraciones, 2 niveles |
 | `email-audit` | Email y su dominio de correo (MX, SPF, DMARC), 2 niveles |
 | `full` | Todos los módulos, 3 niveles; admite `--active` |
 
@@ -255,6 +276,8 @@ el stream `--ndjson` emite todas las entidades y el código de salida no cambia.
 de datos y anota en `manifest.json` la versión, el SHA-256 y la licencia de cada uno. Hoy solo
 hay uno, `sherlock-sites` (las firmas de `username_sites`, licencia MIT): si lo actualizas, el módulo
 usa tu copia en lugar de la del paquete, siempre que su hash coincida con el registrado.
+Las firmas de WhatsMyName (`username_wmn`, CC BY-SA 4.0) vienen solo en el paquete: esa licencia
+no es compatible con el catálogo de `update-data`.
 
 ```bash
 osineitor update-data
@@ -308,7 +331,7 @@ red.
 **Red.** Por seguridad, ninguna petición se envía a IPs privadas, loopback ni al servicio de
 metadatos de una nube (`169.254.169.254`), tampoco a través de redirecciones: un subdominio
 publicado por un tercero podría apuntar ahí. `--allow-private` lo permite si investigas tu propia
-red. Queda un riesgo residual de *DNS rebinding* documentado en [SECURITY.md](../SECURITY.md).
+red. Queda un riesgo residual de *DNS rebinding* documentado en [SECURITY.md](https://github.com/jmstudio14/OSINEITOR/blob/main/SECURITY.md).
 
 **Entradas.** Los dominios se guardan en minúsculas y en punycode (`münchen.de` →
 `xn--mnchen-3ya.de`), así que escrituras distintas del mismo dato son una sola entidad. Un
@@ -348,6 +371,76 @@ Cada scan se guarda en una base SQLite del directorio de datos (salvo con `--no-
 `osineitor history` los lista, `osineitor show N` muestra uno y `osineitor export N -f json|md|html`
 genera un informe en `reports/`.
 
+### Hallazgos
+
+El analizador `findings` aplica al final de cada scan las reglas de
+`src/osineitor/data/rules/default.yml` (DMARC y SPF débiles, certificados y dominios a punto de
+caducar, CVE en KEV o con EPSS alto, CNAME colgante, IP en listas negras, servicios de
+administración expuestos…) y deja un `finding` por cada coincidencia, con su severidad
+(`info`, `low`, `medium`, `high`, `critical`), la entidad afectada, la evidencia y la
+recomendación. Un hallazgo es una pista a revisar, no una conclusión: p. ej. un certificado
+«caducado» puede ser uno antiguo ya sustituido. Se ven con `show`, `export`
+(`-f csv-findings` los saca solos) y el resumen del informe los cuenta por severidad.
+
+### Comparar scans
+
+`osineitor diff A B` compara dos scans guardados por la clave de cada entidad: lista las
+nuevas, las desaparecidas y las que cambiaron de datos (campo, antes y después), y aparte los
+hallazgos. Avisa si los dos scans son de objetivos distintos.
+
+### Importar un escaneo de Nmap
+
+`osineitor import nmap scan.xml` guarda como un scan el XML que genera `nmap -oX`. OSINEITOR no
+escanea puertos ni ejecuta Nmap: solo lee el fichero (hasta 32 MiB, sin `DOCTYPE` ni entidades).
+Del XML salen, para cada host `up`, su `ip`, sus nombres de host (`domain`, con `hostname_type`) y
+un `service` por cada puerto `open` (`<ip>:<puerto>`, la misma clave que `internetdb`, con
+`transport`, `name`, `product`, `version`, `extrainfo`, `tunnel` y `cpe`). El objetivo del scan es un
+`record` `nmap:<fichero>` con el SHA-256 del fichero, la versión de Nmap y el número de hosts
+activos; todas las entidades llevan la fuente `import_nmap`. La línea de comandos de Nmap (`args`) no
+se guarda porque puede llevar credenciales, y las direcciones MAC se ignoran. Lo que no es válido (IP,
+nombre de host o puerto) se descarta y se avisa con un evento `skipped`.
+
+El scan importado se ve con `show`, `export` y `diff` como cualquier otro, pero no pivota: ningún
+módulo corre sobre él y no lleva confianza. `--no-save` no lo guarda, `--json` imprime el resultado
+(el mismo esquema que `show`) y `--db` elige la base de datos. Úsalo solo con resultados de redes
+propias o autorizadas.
+
+### Formatos de exportación
+
+| `-f` | Contenido | Fichero |
+|---|---|---|
+| `json`, `md`, `html` | Informe completo; el HTML lleva un grafo interactivo (sin librerías externas) | `.json`, `.md`, `.html` |
+| `csv` | Una fila por entidad: tipo, valor, fuentes, confianza, primera vez, padre y datos | `.entities.csv` |
+| `csv-relations` | Una fila por relación de pivoteo (padre → entidad) | `.relations.csv` |
+| `csv-findings` | Una fila por hallazgo | `.findings.csv` |
+| `graphml`, `gexf` | El grafo (nodos = entidades, aristas = pivoteo) para Gephi y otras herramientas | `.graphml`, `.gexf` |
+| `cypher` | Script para `cypher-shell` de Neo4j: `MERGE` de nodos por clave y relaciones `DISCOVERED` | `.cypher` |
+
+Los scripts Cypher no se han probado contra una instancia de Neo4j; GraphML y GEXF se validan
+como XML bien formado, no contra Gephi.
+
+En los CSV, un valor que empieza por `=`, `+`, `-` o `@` lleva una comilla delante para que la hoja
+de cálculo no lo ejecute como fórmula.
+
+## Vigilancia
+
+`osineitor watch run` repite los scans que declara `watch.yml` y avisa solo de lo nuevo:
+subdominios, IPs, servicios, CVE o filtraciones nuevos y hallazgos nuevos, por webhook
+(Slack, Discord, Teams o genérico), correo SMTP o un fichero NDJSON. La primera ejecución fija la
+línea base y no alerta. Sale con `10` si hay alertas y con `11` si alguna no se pudo entregar.
+`watch check` valida el fichero, `watch list` muestra el estado y `purge --older-than 90d` aplica
+la retención. Formato, reglas y despliegue con cron, systemd y GitHub Actions:
+[VIGILANCIA.md](VIGILANCIA.md).
+
+## Resúmenes con IA
+
+`osineitor summarize <scan>` pide a un modelo un resumen de un scan guardado. Está desactivado
+hasta que creas `ai.yml`; con Ollama en tu máquina los datos no salen, y con un proveedor remoto
+(OpenAI compatible o Anthropic) hace falta `consent_remote: true`. Cada frase lleva citas
+(`[E3]`) a las entidades del scan y solo se muestran las que un validador comprueba (sin cita, cita
+inexistente o IP, CVE, correo u host que no figure en lo citado se descartan). Sale con `12` si el
+modelo falla. Configuración, límites y evaluación: [IA.md](IA.md).
+
 ## API keys y rutas
 
 ```bash
@@ -368,6 +461,7 @@ Nombres de key: `shodan`, `abuseipdb`, `greynoise`, `hibp`, `hunter`, `ipinfo`.
 |---|---|---|
 | Configuración y keys | `%APPDATA%\osineitor\config.toml` | `~/.config/osineitor/config.toml` |
 | Historial (SQLite) y cachés | `%LOCALAPPDATA%\osineitor\` | `~/.local/share/osineitor/` |
+| Vigilancia (`watch.yml`) y IA (`ai.yml`), si los creas | `%APPDATA%\osineitor\` | `~/.config/osineitor/` |
 
 El fichero de keys **no se cifra**: en Windows hereda los permisos de tu carpeta de usuario.
 
@@ -381,8 +475,9 @@ reciben el mismo avance como eventos `progress` con `--ndjson`.
 ## Uso desde otros programas
 
 `--ndjson` emite un evento JSON por línea (inicio, cada módulo, cada entidad, progreso, fin);
-`--json` un único documento (también en `modules`, `history`, `show`, `doctor`, `config show`,
-`config set`, `config unset`, `version` y `export`); `--quiet` suprime la salida legible. `--control-stdin` permite cancelar
+`--json` un único documento (también en `modules`, `presets`, `history`, `show`, `diff`, `verify`,
+`export`, `summarize`, `watch run`, `watch list`, `purge`, `update-data`, `doctor`, `config show`,
+`config set`, `config unset` y `version`); `--quiet` suprime la salida legible. `--control-stdin` permite cancelar
 escribiendo `{"cmd": "cancel"}` en stdin: se guarda lo ya obtenido.
 
 | Código de salida | Significado |
@@ -392,6 +487,9 @@ escribiendo `{"cmd": "cancel"}` en stdin: se guarda lo ya obtenido.
 | `2` | Uso incorrecto o entrada inválida |
 | `3` | Terminó, pero algún módulo falló |
 | `4` | Resultado incompleto por agotar el presupuesto |
+| `5` | Solo `verify`: alguna evidencia no coincide con su huella |
+| `10`, `11` | Solo `watch run`: hay alertas nuevas / una alerta no se pudo entregar |
+| `12` | Solo `summarize`: el modelo falló o no produjo ninguna frase válida |
 | `130` | Cancelado |
 
 El detalle de eventos y esquemas está en [CLI_CONTRACT.md](CLI_CONTRACT.md), con su

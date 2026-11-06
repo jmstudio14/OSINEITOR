@@ -43,3 +43,44 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: python -m pytest -q
+
+  # Lo que se publicaría: construye el wheel, lo instala en un entorno limpio y lo ejecuta.
+  package:
+    name: paquete
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - run: |
+          python -m venv /tmp/limpio
+          /tmp/limpio/bin/pip install dist/*.whl
+          /tmp/limpio/bin/osineitor version
+          /tmp/limpio/bin/osineitor modules --json > /dev/null
+          /tmp/limpio/bin/osineitor presets --json > /dev/null
+
+  docs:
+    name: sitio de documentación
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e '.[docs]'
+      - run: mkdocs build --strict
+
+  docker:
+    name: imagen Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t osineitor:ci .
+      - run: docker run --rm osineitor:ci version
+      - run: docker run --rm osineitor:ci modules --json > /dev/null
+      - name: La imagen no corre como root
+        run: test "$(docker run --rm --entrypoint id osineitor:ci -u)" != 0

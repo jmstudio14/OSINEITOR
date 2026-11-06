@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+import os
 import re
 from collections.abc import Iterable
 from datetime import UTC, datetime
@@ -13,8 +14,15 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
+from osineitor.crypto_address import classify
 from osineitor.errors import InvalidEntityValue
-from osineitor.normalize import ASN_RE, canonical, canonical_hostname
+from osineitor.normalize import (
+    ASN_RE,
+    COORDS_RE,
+    canonical,
+    canonical_hostname,
+    canonical_phone,
+)
 
 
 def digest(hashes: Iterable[str]) -> str:
@@ -184,12 +192,36 @@ DOMAIN_RE = re.compile(
 )
 
 
+def _is_file_path(value: str) -> bool:
+    """Un fichero existente escrito como ruta. Sin separador no cuenta: un username como `john`
+    no debe tomarse por un fichero que casualmente esté en la carpeta actual."""
+    if "/" not in value and "\\" not in value:
+        return False
+    try:
+        return os.path.isfile(value)
+    except (OSError, ValueError):
+        return False
+
+
 def detect_type(value: str) -> EntityType:
     """Deduce el tipo de entidad de una entrada libre del usuario.
 
     `AS` seguido de dígitos es un ASN: para un username con esa forma hay que usar `username`.
+    Un fichero solo se reconoce si la ruta tiene separador y existe (ver `_is_file_path`).
     """
     value = value.strip()
+    if value[:1] == "+" or value[:2] == "00":
+        try:
+            canonical_phone(value)
+            return EntityType.PHONE
+        except InvalidEntityValue:
+            pass
+    if classify(value):
+        return EntityType.CRYPTO_ADDRESS
+    if COORDS_RE.fullmatch(value):
+        return EntityType.LOCATION
+    if _is_file_path(value):
+        return EntityType.FILE
     try:
         ipaddress.ip_address(value)
         return EntityType.IP

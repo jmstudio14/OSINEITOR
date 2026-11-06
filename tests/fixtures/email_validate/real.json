@@ -1,0 +1,17 @@
+{
+  "module": "email_validate",
+  "target": "octocat@github.com",
+  "recorded": "2026-11-05",
+  "entities": 3,
+  "sites": null,
+  "http": [],
+  "dns": [
+    {
+      "name": "github.com",
+      "type": "MX",
+      "values": [
+        "0 github-com.mail.protection.outlook.com."
+      ]
+    }
+  ]
+}

@@ -10,7 +10,7 @@ CLI (cli.py) ──► Engine (engine.py) ──► Módulos (modules/**)
      │                 ▼
      │           ScanResult (models.py)
      ▼
-Storage (storage.py, SQLite) ──► Informes (report/: JSON, Markdown, HTML)
+Storage (storage.py, SQLite) ──► Informes (report/: JSON, Markdown, HTML, CSV, grafo)
 ```
 
 | Fichero | Responsabilidad |
@@ -38,8 +38,16 @@ Storage (storage.py, SQLite) ──► Informes (report/: JSON, Markdown, HTML)
 | `control.py` | Lectura de órdenes por stdin (`--control-stdin`) para cancelar un scan |
 | `cache.py` | Caché HTTP en SQLite (`cache.db`) |
 | `doctor.py` | Comprobaciones de `osineitor doctor` sobre cada módulo |
+| `scanner.py` | `Scanner`: API de librería (`scan`, `ascan`, `cancel`); la vigilancia la reutiliza |
+| `findings.py` | Motor de hallazgos: reglas YAML de `data/rules/` evaluadas sobre las entidades (las usa el analizador `findings` y las alertas de `watch`) |
+| `diff.py` | `osineitor diff`: entidades y hallazgos nuevos, desaparecidos y modificados entre dos scans |
+| `nmap_import.py` | `osineitor import nmap`: lee un XML de Nmap y lo convierte en un `ScanResult` (sin red, sin pivoteo) |
+| `crypto_address.py` | Reconoce y valida direcciones de criptomonedas |
+| `watch.py` | Vigilancia continua (`osineitor watch`): qué es nuevo y qué avisar ([VIGILANCIA.md](VIGILANCIA.md)) |
+| `notify.py` | Notificadores de la vigilancia: webhook, correo SMTP y fichero NDJSON |
+| `ai.py` | Resumen con IA (`osineitor summarize`): consentimiento, hechos numerados y validación de citas ([IA.md](IA.md)) |
 | `storage.py` | Guarda y recupera scans en SQLite |
-| `report/` | Exportadores a JSON, Markdown y HTML |
+| `report/` | Exportadores a JSON, Markdown, HTML (con grafo interactivo), CSV y grafos (GraphML, GEXF, Cypher) |
 | `cli.py` | Comandos de Typer y salida con Rich |
 | `__main__.py` | Permite ejecutar la CLI con `python -m osineitor` |
 
@@ -52,7 +60,7 @@ Todo lo que se descubre es una `Entity`:
 
 | Campo | Descripción |
 |---|---|
-| `type` | `domain`, `ip`, `email`, `username`, `url`, `profile`, `service`, `vulnerability`, `breach`, `record`, `asn`, `netblock`, `certificate`, `technology`, `organization`, `person`, `phone`, `crypto_address`, `file`, `location` o `finding` (reservado a F7.8) |
+| `type` | `domain`, `ip`, `email`, `username`, `url`, `profile`, `service`, `vulnerability`, `breach`, `record`, `asn`, `netblock`, `certificate`, `technology`, `organization`, `person`, `phone`, `crypto_address`, `file`, `location` o `finding` |
 | `value` | Valor identificador (`example.com`, `1.1.1.1:443`, `CVE-2024-0001`…) |
 | `data` | Diccionario libre con los detalles que aporta la fuente |
 | `source` | Nombre del primer módulo que la vio |
@@ -216,11 +224,13 @@ SQLite en `osineitor.db` dentro del directorio de datos (`%LOCALAPPDATA%\osineit
 - `module_runs`: el `ModuleRun` de cada ejecución (estado, entidades, peticiones, caché, ms).
 - `evidence`: respuesta original de cada fuente con su SHA-256 y el cuerpo (BLOB), desde la
   versión 4. Solo se rellena con `--evidence`.
+- `watch_targets` y `watch_seen`, desde la versión 8: por objetivo vigilado, la última ejecución y
+  las claves de entidad que la vigilancia ya conoce. `osineitor purge` no las toca.
 
 **Migraciones.** El esquema se versiona con `PRAGMA user_version`: `storage.MIGRATIONS` es una
 lista donde la posición es la versión y cada migración se aplica en una transacción. Una base de
 la v0.1.0 (versión 0) se actualiza sola sin perder datos; una de una versión más nueva se rechaza.
-Nunca se edita una migración ya publicada: los cambios van al final de la lista. Un tipo de
+El esquema está hoy en la versión 8. Nunca se edita una migración ya publicada: los cambios van al final de la lista. Un tipo de
 entidad nuevo no necesita migración: `entities.type` es texto sin restricción y el valor se
 normaliza al cargarlo. Una base con tipos nuevos no la lee un OSINEITOR anterior.
 

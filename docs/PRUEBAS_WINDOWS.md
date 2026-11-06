@@ -2,12 +2,12 @@
 
 Estado de lo que **no se ha podido comprobar en vivo** y que se verificará cuando el repositorio
 se clone en VS Code y se pruebe desde Windows. Corresponde a los entregables F0.1, F0.2, F0.3 y
-F0.5 del [roadmap](../ROADMAP.md). La lista de comprobación manual de la aplicación de escritorio
+F0.5 del [roadmap](https://github.com/jmstudio14/OSINEITOR/blob/main/ROADMAP.md). La lista de comprobación manual de la aplicación de escritorio
 está en [GUI.md](GUI.md).
 
 ## Por qué está pendiente
 
-- Todo el desarrollo se hace en un contenedor Linux cuyo proxy **bloquea casi todos los hosts**
+- Hasta el 2026-11-05 el desarrollo se hizo en un contenedor Linux cuyo proxy **bloquea casi todos los hosts**
   de las fuentes (`403 Forbidden` al abrir el túnel). Los módulos que dependen de ellas no se
   han podido ejecutar contra el servicio real.
 - La CI de GitHub (Windows y Linux, Python 3.11 y 3.13) **pasa**, pero no hace peticiones reales
@@ -20,17 +20,33 @@ Leyenda: ✅ comprobado en vivo · ⚠️ comprobado solo en parte · ❌ no com
 
 | Módulo | Estado | Qué se sabe |
 |---|---|---|
-| `dns` | ⚠️ | Resolvió registros reales (p. ej. `A` de `github.com`) en el contenedor Linux. Desde mi red en Windows falla, causa sin confirmar (ver [salidas literales](#salidas-literales-2026-10-29)) |
-| `email_validate` | ✅ | Validó la sintaxis, los MX y derivó el username |
-| `username_sites` | ⚠️ | Solo con los sitios que el proxy dejaba pasar: 6 perfiles para `blue` y 1 falso positivo (`Apple Developer`) con un username aleatorio. La tasa real de falsos positivos **no está medida** (F0.5) |
-| `rdap` | ❌ | `rdap.org` bloqueado. El formato de la respuesta sí se comprobó contra una respuesta real de `github.com`; la omisión por TLD sin RDAP se probó con el bootstrap real de IANA |
-| `crtsh` | ❌ | `crt.sh` bloqueado; formato sin contrastar con una respuesta real |
-| `wayback` | ❌ | `web.archive.org` bloqueado; formato sin contrastar |
-| `ipinfo` | ❌ | `ipinfo.io` bloqueado |
-| `internetdb` | ❌ | Bloqueado en el entorno; el formato sí se comprobó contra una respuesta real de `1.1.1.1` |
-| `gravatar` | ❌ | `gravatar.com` bloqueado |
-| `http_fingerprint` | ❌ | Solo se comprobó que la guardia de red bloquea `localhost`; nunca consultó un sitio real |
-| `shodan`, `abuseipdb`, `greynoise`, `hibp`, `hunter_verify`, `hunter_domain` | ❌ | Necesitan API key; **nunca se han ejecutado contra su servicio**. Están escritas según su documentación |
+| `dns` | ✅ | Fixture real de `github.com` (A, MX, NS, TXT, CAA, SPF y DMARC). Con `example.com` (el canary de `doctor`) falla en mi red doméstica porque algo intercepta el puerto 53 (ver [salidas literales](#salidas-literales-2026-10-29)) |
+| `email_validate` | ✅ | Validó la sintaxis, los MX y derivó el username; fixture real de `octocat@github.com` |
+| `username_sites` | ✅ | Fixtures reales de 10 sitios (`octocat` y un username inexistente) y tasa de falsos positivos medida: 0,26 % ([FALSOS_POSITIVOS.md](FALSOS_POSITIVOS.md)) |
+| `rdap` | ✅ | Fixture real de `github.com` (bootstrap de IANA y `rdap.org` → Verisign); la omisión por TLD sin RDAP se probó con el bootstrap real de IANA |
+| `crtsh` | ⚠️ | Responde, pero es intermitente: 3 de 5 intentos del 2026-11-05 dieron `502` y en `doctor` tardó 61 s. Fixture real de `example.org` grabada al reintentar |
+| `wayback` | ✅ | Fixture real de `example.org` (5000 URLs, truncado por el límite; 91 entidades); `doctor`: 25 entidades en 18,5 s |
+| `ipinfo` | ✅ | Fixture real de `1.1.1.1` |
+| `internetdb` | ✅ | Fixture real de `1.1.1.1` |
+| `gravatar` | ✅ | Fixtures reales: sin perfil (`404`) y con perfil (`octocat@github.com`) |
+| `http_fingerprint` | ✅ | Fixture real de `example.org`, con las cabeceras de respuesta. Es un módulo activo: `doctor` lo omite sin `--active` |
+| `shodan`, `abuseipdb`, `greynoise`, `hibp`, `hunter_verify`, `hunter_domain` | ❌ | Necesitan API key; **nunca se han ejecutado contra su servicio**. Están escritas según su documentación. **Bloqueado** hasta tener una cuenta de cada servicio |
+
+## Resultado de la ejecución en vivo (2026-11-05)
+
+Windows 11 10.0.26300, Python 3.14.10, red doméstica. Los 10 módulos de los 16 originales que no necesitan API key se ejecutaron contra su servicio real y sus respuestas se grabaron con `scripts/record_fixtures.py` en `tests/fixtures/`; `tests/modules/test_recorded.py` las reproduce.
+
+- **Parseo:** sin discrepancias. Cada módulo produce con la respuesta real las mismas entidades que produjo al grabar y los campos esperados (F0.3 no necesitó cambios de código).
+- **Hallazgos reales, no fallos de parseo:** `crtsh` devuelve `502` de forma intermitente; `npm` (403, WAF) y `HackerNews` (419) no se pueden evaluar desde esta red y quedan como «desconocido»; `Reddit` responde 200 a usernames inexistentes y la verificación lo descarta.
+- **`doctor`:** con los 10 módulos tarda 1 min 23 s (`crtsh` 61 s). Sin `-m` fallaba antes de empezar con `ValidationError: username no válido: 'Banco Santander, S.A.'` (el `canary` de `gleif` se sembraba como username); corregido en `doctor.seed_entity`. `doctor` completo (módulos pasivos y sin key; el resto sale «omitido») tarda 41 s y falla en `crtsh` y `cert_details` (`502` intermitente de crt.sh) y en `dns` y `mail_security` (el filtrado de `example.com` de mi red doméstica).
+- **Sin comprobar:** los 6 módulos con API key y las fuentes añadidas en las fases 4 a 11.
+
+Para volver a grabar una fixture (usa solo objetivos públicos):
+
+```powershell
+python scripts/record_fixtures.py rdap github.com
+python scripts/record_fixtures.py username_sites octocat --sites GitHub,Keybase --name existe
+```
 
 ## Preparar el entorno en VS Code (Windows)
 
@@ -85,7 +101,7 @@ Qué se espera:
 - `scan example.com --max-entities 100`: si se alcanza el tope debe avisar de que el resultado
   es incompleto.
 
-Mediciones pendientes (F0.5), desde tu red:
+Medición de falsos positivos (F0.5, ya hecha: [FALSOS_POSITIVOS.md](FALSOS_POSITIVOS.md)); para repetirla desde tu red:
 
 ```powershell
 python scripts/fp_baseline.py --output reports/fp_baseline.md
@@ -121,22 +137,22 @@ Rellenar al probar desde Windows.
 
 | Módulo | Fecha | Windows / Python | ¿Funciona? | Observaciones |
 |---|---|---|---|---|
-| `dns` | 2026-10-29 | Windows 11 10.0.26300 / Python 3.14.7 | ❌ Falla desde mi red, causa sin confirmar | `doctor`: «el resolvedor DNS no respondió». Ver [salidas literales](#salidas-literales-2026-10-29) |
-| `rdap` | | | | |
-| `crtsh` | 2026-10-29 | Windows 11 10.0.26300 / Python 3.14.7 | ❌ Falla desde mi red, causa sin confirmar | `doctor`: «crt.sh respondió 404» tras 61 s; `curl` directo: 502. Ver [salidas literales](#salidas-literales-2026-10-29) |
-| `wayback` | | | | |
-| `http_fingerprint` | | | | |
-| `ipinfo` | | | | |
-| `internetdb` | | | | |
-| `email_validate` | | | | |
-| `gravatar` | | | | |
-| `username_sites` | | | | |
-| `shodan` | | | | |
-| `abuseipdb` | | | | |
-| `greynoise` | | | | |
-| `hibp` | | | | |
-| `hunter_verify` | | | | |
-| `hunter_domain` | | | | |
+| `dns` | 2026-11-05 | Windows 11 10.0.26300 / Python 3.14.10 | ✅ Funciona con `github.com` | Con `example.com` (canary de `doctor`) sigue fallando por el filtrado de la red doméstica: `doctor` ahora lo informa como REFUSED. Ver [salidas literales](#salidas-literales-2026-10-29) |
+| `rdap` | 2026-11-05 | Windows 11 10.0.26300 / Python 3.14.10 | ✅ Funciona | `github.com`: bootstrap de IANA y `rdap.org` → Verisign |
+| `crtsh` | 2026-11-05 | Windows 11 10.0.26300 / Python 3.14.10 | ⚠️ Intermitente | 3 de 5 intentos con `502`; `doctor` ok en 61 s; fixture de `example.org` grabada al reintentar. Antes (2026-10-29): ver [salidas literales](#salidas-literales-2026-10-29) |
+| `wayback` | 2026-11-05 | Windows 11 10.0.26300 / Python 3.14.10 | ✅ Funciona | `example.org`: 5000 URLs (truncado), 91 entidades |
+| `http_fingerprint` | 2026-11-05 | Windows 11 10.0.26300 / Python 3.14.10 | ✅ Funciona | `example.org`, con cabeceras de respuesta |
+| `ipinfo` | 2026-11-05 | Windows 11 10.0.26300 / Python 3.14.10 | ✅ Funciona | `1.1.1.1` |
+| `internetdb` | 2026-11-05 | Windows 11 10.0.26300 / Python 3.14.10 | ✅ Funciona | `1.1.1.1` |
+| `email_validate` | 2026-11-05 | Windows 11 10.0.26300 / Python 3.14.10 | ✅ Funciona | `octocat@github.com` |
+| `gravatar` | 2026-11-05 | Windows 11 10.0.26300 / Python 3.14.10 | ✅ Funciona | `test@example.com` (sin perfil) y `octocat@github.com` (con perfil) |
+| `username_sites` | 2026-11-05 | Windows 11 10.0.26300 / Python 3.14.10 | ✅ Funciona | 10 sitios con `octocat`; tasa de falsos positivos 0,26 % |
+| `shodan` | | | ⬜ Bloqueado | Necesita API key; no se ha podido ejecutar |
+| `abuseipdb` | | | ⬜ Bloqueado | Necesita API key; no se ha podido ejecutar |
+| `greynoise` | | | ⬜ Bloqueado | Necesita API key; no se ha podido ejecutar |
+| `hibp` | | | ⬜ Bloqueado | Necesita API key; no se ha podido ejecutar |
+| `hunter_verify` | | | ⬜ Bloqueado | Necesita API key; no se ha podido ejecutar |
+| `hunter_domain` | | | ⬜ Bloqueado | Necesita API key; no se ha podido ejecutar |
 
 ## Salidas literales (2026-10-29)
 

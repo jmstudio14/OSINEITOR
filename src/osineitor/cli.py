@@ -7,10 +7,12 @@ import contextlib
 import dataclasses
 import functools
 import json
+import re
 import signal
 import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -22,6 +24,8 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn
 from rich.table import Table
 
 from osineitor import __version__, datasets, events, evidence, logs, presets, registry, report
+from osineitor import ai as ai_mod
+from osineitor import watch as watch_mod
 from osineitor.budget import (
     DEFAULT_MAX_ENTITIES,
     DEFAULT_MAX_REQUESTS,
@@ -31,13 +35,17 @@ from osineitor.budget import (
 from osineitor.cache import ResponseCache, default_cache_path
 from osineitor.config import Config, config_dir, config_path
 from osineitor.control import watch_stdin
+from osineitor.diff import diff_scans
 from osineitor.doctor import run_doctor
 from osineitor.engine import Engine
 from osineitor.errors import InvalidEntityValue
 from osineitor.events import (
+    EXIT_AI_FAILED,
+    EXIT_ALERTS,
     EXIT_CANCELLED,
     EXIT_INTERNAL,
     EXIT_MODULE_ERRORS,
+    EXIT_NOTIFY_FAILED,
     EXIT_OK,
     EXIT_TAMPERED,
     EXIT_TRUNCATED,
@@ -46,11 +54,12 @@ from osineitor.events import (
 from osineitor.http import HttpClient, validate_proxy
 from osineitor.models import Entity, EntityType, ScanResult, decompose, detect_type
 from osineitor.modules.base import Context
+from osineitor.nmap_import import NmapImportError, parse_nmap
+from osineitor.normalize import canonical_hostname
+from osineitor.scanner import MAX_PURPOSE, PURPOSE_REQUIRED_FOR
 from osineitor.scope import Scope, ScopeError
 from osineitor.storage import Storage, StorageError
-
-MAX_PURPOSE = 500
-PURPOSE_REQUIRED_FOR = (EntityType.EMAIL, EntityType.USERNAME)
+from osineitor.watch import WatchError
 
 LEGAL_NOTICE = (
     "OSINEITOR solo consulta fuentes abiertas. Úsalo sobre objetivos propios o con autorización "
@@ -63,6 +72,12 @@ config_app = typer.Typer(help="Gestiona API keys y ajustes.", no_args_is_help=Tr
 app.add_typer(config_app, name="config")
 cache_app = typer.Typer(help="Caché de respuestas HTTP.", no_args_is_help=True)
 app.add_typer(cache_app, name="cache")
+watch_app = typer.Typer(help="Vigilancia continua de objetivos.", no_args_is_help=True)
+app.add_typer(watch_app, name="watch")
+import_app = typer.Typer(
+    help="Importa resultados de otras herramientas como un scan guardado.", no_args_is_help=True
+)
+app.add_typer(import_app, name="import")
 console = Console()
 err_console = Console(stderr=True)
 
@@ -128,6 +143,13 @@ Purpose = Annotated[
         envvar="OSINEITOR_PURPOSE",
         help="Para qué haces el scan (queda guardado con él). Obligatorio en emails y usernames "
         "si `require_purpose` está activo.",
+    ),
+]
+PersonDomain = Annotated[
+    str | None,
+    typer.Option(
+        "--domain",
+        help="Dominio de correo con el que generar candidatos de email (no se verifican por SMTP).",
     ),
 ]
 ScopeFile = Annotated[
@@ -262,6 +284,15 @@ def _preset_values(ctx: typer.Context, name: str | None, active: bool) -> dict[s
         for k, v in values.items()
         if v is not None and ctx.get_parameter_source(k).name == "DEFAULT"
     }
+
+
+def _person_data(domain: str | None) -> dict[str, object] | None:
+    if domain is None:
+        return None
+    try:
+        return {"domain": canonical_hostname(domain)}
+    except InvalidEntityValue as exc:
+        raise typer.BadParameter(str(exc), param_hint="--domain") from exc
 
 
 def _purpose(value: str | None) -> str | None:
@@ -567,10 +598,10 @@ def _print_json(data: object) -> None:
     print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
 
 
-def _make_seed(etype: EntityType, value: str) -> Entity:
+def _make_seed(etype: EntityType, value: str, data: dict[str, object] | None = None) -> Entity:
     """Crea la entidad semilla; un valor no válido es un error de uso, no un traceback."""
     try:
-        seed = Entity(type=etype, value=value.strip())
+        seed = Entity(type=etype, value=value.strip(), data=data or {})
         decompose(seed)  # de una URL se investiga su host: que sea válido
     except ValidationError as exc:
         reason = exc.errors()[0]["msg"].removeprefix("Value error, ")
@@ -587,10 +618,11 @@ def _run_target(
     no_save: bool,
     as_json: bool,
     db: Path | None,
+    seed_data: dict[str, object] | None = None,
 ) -> None:
     if opts.ndjson and as_json:
         raise typer.BadParameter("--ndjson y --json son excluyentes")
-    seed = _make_seed(etype, value)
+    seed = _make_seed(etype, value, seed_data)
     if opts.scope and not opts.scope.allows(seed):
         raise typer.BadParameter(f"el objetivo {seed.key} está fuera del alcance declarado")
     if etype in PURPOSE_REQUIRED_FOR and not opts.purpose and Config.load().purpose_required():
@@ -859,6 +891,61 @@ def username(
 
 
 @app.command()
+def person(
+    ctx: typer.Context,
+    target: str,
+    domain: PersonDomain = None,
+    depth: Depth = 2,
+    active: Active = False,
+    module: Only = None,
+    no_save: NoSave = False,
+    json_out: AsJson = False,
+    db: DbPath = None,
+    max_entities: MaxEntities = DEFAULT_MAX_ENTITIES,
+    max_requests: MaxRequests = DEFAULT_MAX_REQUESTS,
+    max_time: MaxTime = DEFAULT_MAX_SECONDS,
+    allow_private: AllowPrivate = False,
+    proxy: Proxy = None,
+    no_cache: NoCache = False,
+    refresh: Refresh = False,
+    ndjson: Ndjson = False,
+    quiet: Quiet = False,
+    control_stdin: ControlStdin = False,
+    save_evidence: SaveEvidence = False,
+    scope: ScopeFile = None,
+    purpose: Purpose = None,
+    preset: PresetOpt = None,
+    only_types: OnlyTypes = None,
+    exclude_types: ExcludeTypes = None,
+) -> None:
+    """Investiga a una persona: genera variantes de username y, con --domain, candidatos de email.
+
+    Solo genera candidatos: nunca los verifica por SMTP."""
+    from_preset = _preset_values(ctx, preset, active)
+    opts = ScanOptions(
+        from_preset.get("depth", depth),
+        active,
+        from_preset.get("module", module),
+        from_preset.get("max_entities", max_entities),
+        from_preset.get("max_requests", max_requests),
+        from_preset.get("max_time", max_time),
+        allow_private,
+        no_cache,
+        refresh,
+        ndjson,
+        quiet,
+        control_stdin,
+        _proxy(proxy),
+        save_evidence,
+        _scope(scope),
+        _purpose(purpose),
+        _types(only_types, "--only-types"),
+        _types(exclude_types, "--exclude"),
+    )
+    _run_target(EntityType.PERSON, target, opts, no_save, json_out, db, _person_data(domain))
+
+
+@app.command()
 def scan(
     ctx: typer.Context,
     target: str,
@@ -885,8 +972,9 @@ def scan(
     only_types: OnlyTypes = None,
     exclude_types: ExcludeTypes = None,
 ) -> None:
-    """Detecta el tipo de objetivo (IP, red CIDR, ASN, URL, email, dominio o username) y pivota
-    entre frentes (profundidad 2 por defecto). De una URL se investiga su host."""
+    """Detecta el tipo de objetivo (IP, red CIDR, ASN, URL, email, teléfono, criptomoneda,
+    coordenadas, fichero local, dominio o username) y pivota entre frentes (profundidad 2 por
+    defecto). De una URL se investiga su host."""
     from_preset = _preset_values(ctx, preset, active)
     opts = ScanOptions(
         from_preset.get("depth", depth),
@@ -915,6 +1003,9 @@ def scan(
 def list_modules(json_out: AsJson = False) -> None:
     """Lista los módulos disponibles y su estado."""
     config = Config.load()
+    classes = registry.discover()
+    for problem in registry.plugin_problems:
+        err_console.print(f"[yellow]Aviso: {escape(problem)}[/]")
     if json_out:
         _print_json(
             [
@@ -925,11 +1016,12 @@ def list_modules(json_out: AsJson = False) -> None:
                     "produces": sorted(m.produces),
                     "passive": m.passive,
                     "analyzer": m.analyzer,
+                    "plugin": registry.is_plugin(m),
                     "requires_key": m.requires_key,
                     "key_configured": bool(m.requires_key and config.key(m.requires_key)),
                     "timeout": m.timeout,
                 }
-                for m in registry.discover()
+                for m in classes
             ]
         )
         return
@@ -937,7 +1029,7 @@ def list_modules(json_out: AsJson = False) -> None:
     table.add_column("Módulo", no_wrap=True)
     for col in ("Consume", "Produce", "Tipo", "API key", "Descripción"):
         table.add_column(col, overflow="fold")
-    for m in registry.discover():
+    for m in classes:
         if m.requires_key:
             key = (
                 f"[green]{m.requires_key} ✓[/]"
@@ -950,7 +1042,8 @@ def list_modules(json_out: AsJson = False) -> None:
             m.name,
             ", ".join(sorted(m.consumes)),
             ", ".join(sorted(m.produces)),
-            "analizador" if m.analyzer else "pasivo" if m.passive else "[yellow]activo[/]",
+            ("analizador" if m.analyzer else "pasivo" if m.passive else "[yellow]activo[/]")
+            + (" · plugin" if registry.is_plugin(m) else ""),
             key,
             m.description,
         )
@@ -1029,6 +1122,139 @@ def show(
         render(result)
 
 
+@app.command("summarize")
+def summarize_scan(
+    scan_id: int,
+    file: Annotated[
+        Path | None, typer.Option("--config", "-c", help="Fichero de IA (ai.yml).")
+    ] = None,
+    db: DbPath = None,
+    json_out: AsJson = False,
+) -> None:
+    """Resume un scan guardado con un modelo de lenguaje; solo salen frases con cita válida.
+
+    Desactivado hasta crear ai.yml. Con un proveedor remoto, los datos del scan salen de tu
+    máquina solo si `consent_remote: true` está en el fichero (ver docs/IA.md).
+    """
+    path = file or ai_mod.default_file()
+    if not path.exists():
+        raise typer.BadParameter(
+            f"no existe {path}: la IA está desactivada hasta crearlo (ver docs/IA.md)",
+            param_hint="--config",
+        )
+    try:
+        config = ai_mod.load_config(path)
+    except ai_mod.AiError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--config") from exc
+    with _open_storage(db) as storage:
+        result = storage.load(scan_id)
+    if result is None:
+        raise typer.BadParameter(f"no existe el scan {scan_id}")
+    where = "en tu máquina" if config.local else f"a {config.host}"
+    err_console.print(f"[dim]Enviando el scan {scan_id} {escape(where)} ({config.provider}).[/]")
+    try:
+        summary = asyncio.run(ai_mod.summarize(result, config))
+    except ai_mod.AiError as exc:
+        err_console.print(f"[red]{escape(str(exc))}[/]")
+        raise typer.Exit(EXIT_AI_FAILED) from exc
+    if json_out:
+        _print_json(
+            {
+                "scan_id": scan_id,
+                "target": result.target.value,
+                "provider": config.provider,
+                "model": config.model,
+                "remote": not config.local,
+                "summary": summary.text,
+                "sentences": [
+                    {"text": s.text, "citations": list(s.citations)} for s in summary.accepted
+                ],
+                "rejected": [{"text": s.text, "reason": s.reason} for s in summary.rejected],
+                "citations": summary.cited,
+                "facts": len(summary.facts),
+                "omitted": summary.omitted,
+            }
+        )
+        return
+    console.rule(f"scan #{scan_id} · {escape(result.target.value)}")
+    for sentence in summary.accepted:
+        console.print(escape(sentence.text))
+    console.print()
+    for ident, key in summary.cited.items():
+        console.print(f"[dim]{ident}[/] {escape(key)}")
+    if summary.rejected:
+        err_console.print(
+            f"[yellow]{len(summary.rejected)} frase(s) del modelo descartadas por no tener una "
+            "cita válida.[/]"
+        )
+
+
+@app.command()
+def diff(scan_a: int, scan_b: int, db: DbPath = None, json_out: AsJson = False) -> None:
+    """Compara dos scans guardados: entidades y hallazgos nuevos, desaparecidos y modificados."""
+    with _open_storage(db) as storage:
+        loaded = [(n, storage.load(n)) for n in (scan_a, scan_b)]
+    for number, found in loaded:
+        if found is None:
+            raise typer.BadParameter(f"no existe el scan {number}")
+    first, second = (found for _, found in loaded if found)
+    changes = diff_scans(first, second)
+    if json_out:
+        _print_json(changes)
+        return
+    if not changes["same_target"]:
+        err_console.print(
+            f"[yellow]Aviso: los scans son de objetivos distintos "
+            f"({changes['from']['target']} y {changes['to']['target']}).[/]"
+        )
+    console.rule(f"scan #{scan_a} → scan #{scan_b}")
+    for label, key, style in (
+        ("Nuevas", "added", "green"),
+        ("Desaparecidas", "removed", "red"),
+        ("Modificadas", "changed", "yellow"),
+    ):
+        items = changes[key]
+        if not items:
+            continue
+        table = Table(title=f"{label} ({len(items)})", title_justify="left", expand=True)
+        table.add_column("Tipo", no_wrap=True)
+        table.add_column("Valor", overflow="fold", style=style)
+        table.add_column("Cambios", overflow="fold")
+        for item in items:
+            detail = "; ".join(
+                f"{c['field']}: {c['before']!r} → {c['after']!r}" for c in item.get("changes", [])
+            )
+            table.add_row(item["type"], item["value"], detail)
+        console.print(table)
+    if not any(changes[k] for k in ("added", "removed", "changed")):
+        console.print("Sin diferencias.")
+    console.print(f"Sin cambios: {changes['unchanged']}")
+
+
+@import_app.command("nmap")
+def import_nmap(
+    path: Annotated[Path, typer.Argument(help="XML de Nmap generado con -oX.")],
+    no_save: NoSave = False,
+    json_out: AsJson = False,
+    db: DbPath = None,
+) -> None:
+    """Guarda como scan los hosts activos y los puertos abiertos de un XML de Nmap.
+
+    Solo lee el fichero: no ejecuta Nmap ni contacta con nadie.
+    """
+    try:
+        result = parse_nmap(path)
+    except NmapImportError as exc:
+        raise typer.BadParameter(str(exc), param_hint="PATH") from exc
+    if not no_save:
+        with _open_storage(db) as storage:
+            storage.save(result)
+    if json_out:
+        print(result.model_dump_json(indent=2))
+    else:
+        render(result)
+
+
 @app.command()
 def verify(
     scan_id: int,
@@ -1078,7 +1304,14 @@ def verify(
 @app.command()
 def export(
     scan_id: int,
-    fmt: Annotated[str, typer.Option("--format", "-f", help="json, md o html.")] = "html",
+    fmt: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            "-f",
+            help="json, md, html, csv, csv-relations, csv-findings, graphml, gexf o cypher.",
+        ),
+    ] = "html",
     output: Annotated[
         Path | None, typer.Option("--output", "-o", help="Fichero de salida.")
     ] = None,
@@ -1087,7 +1320,7 @@ def export(
     only_types: OnlyTypes = None,
     exclude_types: ExcludeTypes = None,
 ) -> None:
-    """Exporta un scan guardado a JSON, Markdown o HTML."""
+    """Exporta un scan guardado a JSON, Markdown, HTML, CSV o grafo (GraphML, GEXF, Cypher)."""
     if fmt not in report.FORMATS:
         raise typer.BadParameter(f"formato no soportado: {fmt}")
     only, exclude = _types(only_types, "--only-types"), _types(exclude_types, "--exclude")
@@ -1212,6 +1445,173 @@ def doctor(
     if failed:
         console.print(f"[red]Fallan: {', '.join(failed)}[/]")
         raise typer.Exit(EXIT_MODULE_ERRORS)
+
+
+@watch_app.command("run")
+def watch_run(
+    file: Annotated[
+        Path | None, typer.Option("--file", "-f", help="Fichero de vigilancia (watch.yml).")
+    ] = None,
+    targets: Annotated[
+        list[str] | None,
+        typer.Option("--target", "-t", help="Solo este objetivo del fichero (repetible)."),
+    ] = None,
+    force: Annotated[
+        bool, typer.Option("--force", help="Ejecuta también los que aún no toca por su `every`.")
+    ] = False,
+    db: DbPath = None,
+    json_out: AsJson = False,
+) -> None:
+    """Ejecuta los objetivos que tocan, avisa de lo nuevo y anota el estado."""
+    config = _watch_config(file)
+    try:
+        with _open_storage(db) as storage:
+            reports = asyncio.run(watch_mod.run_watch(config, storage, only=targets, force=force))
+    except WatchError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    alerts = sum(len(r.alerts) for r in reports)
+    failed = any(r.deliveries and not any(d["ok"] for d in r.deliveries) for r in reports)
+    errors = any(r.error or r.status in ("truncated", "cancelled") for r in reports)
+    code = (
+        EXIT_NOTIFY_FAILED
+        if failed
+        else EXIT_ALERTS
+        if alerts
+        else EXIT_MODULE_ERRORS
+        if errors
+        else EXIT_OK
+    )
+    if json_out:
+        _print_json(
+            {
+                "checked_at": datetime.now(UTC).isoformat(),
+                "alerts": alerts,
+                "exit_code": code,
+                "targets": [r.as_dict() for r in reports],
+            }
+        )
+    else:
+        _render_watch(reports)
+    if code:
+        raise typer.Exit(code)
+
+
+def _render_watch(reports: list[watch_mod.TargetReport]) -> None:
+    for r in reports:
+        if r.error:
+            console.print(f"[red]{escape(r.target)}: {escape(r.error)}[/]")
+        elif not r.due:
+            console.print(f"[dim]{escape(r.target)}: aún no toca[/]")
+        elif r.baseline:
+            console.print(f"{escape(r.target)}: línea base fijada (scan #{r.scan_id}), sin alertas")
+        else:
+            console.print(
+                f"{escape(r.target)}: {len(r.alerts)} alerta(s) nueva(s) (scan #{r.scan_id})"
+            )
+        for alert in r.alerts:
+            console.print(
+                f"  [bold]{alert.severity}[/] {escape(alert.title)}: {escape(alert.value)}"
+            )
+        for d in r.deliveries:
+            if not d["ok"]:
+                console.print(
+                    f"  [red]aviso por {escape(d['notifier'])} fallido: {escape(d['error'])}[/]"
+                )
+
+
+def _watch_config(file: Path | None) -> watch_mod.WatchConfig:
+    path = file or watch_mod.default_file()
+    if not path.exists():
+        raise typer.BadParameter(f"no existe {path}", param_hint="--file")
+    try:
+        return watch_mod.load_config(path)
+    except WatchError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--file") from exc
+
+
+@watch_app.command("list")
+def watch_list(
+    file: Annotated[
+        Path | None, typer.Option("--file", "-f", help="Fichero de vigilancia.")
+    ] = None,
+    db: DbPath = None,
+    json_out: AsJson = False,
+) -> None:
+    """Muestra los objetivos vigilados, su frecuencia y cuándo corrieron por última vez."""
+    config = _watch_config(file)
+    now = datetime.now(UTC)
+    rows = []
+    with _open_storage(db) as storage:
+        for t in config.targets:
+            last = storage.watch_last(t.key)
+            rows.append(
+                {
+                    "target": t.target,
+                    "type": t.type.value,
+                    "every": t.every.total_seconds(),
+                    "last_run": last[0] if last else None,
+                    "last_status": last[2] if last else None,
+                    "due": watch_mod.is_due(last[0] if last else None, t.every, now),
+                    "notify": list(t.notify if t.notify is not None else config.notifiers),
+                }
+            )
+    if json_out:
+        _print_json(rows)
+        return
+    table = Table()
+    for col in ("Objetivo", "Tipo", "Cada", "Última", "Estado", "Toca", "Avisa por"):
+        table.add_column(col, overflow="fold")
+    for row in rows:
+        table.add_row(
+            row["target"],
+            row["type"],
+            f"{row['every'] / 3600:g} h",
+            row["last_run"] or "-",
+            row["last_status"] or "-",
+            "sí" if row["due"] else "no",
+            ", ".join(row["notify"]) or "-",
+        )
+    console.print(table)
+
+
+@watch_app.command("check")
+def watch_check(
+    file: Annotated[
+        Path | None, typer.Option("--file", "-f", help="Fichero de vigilancia.")
+    ] = None,
+    json_out: AsJson = False,
+) -> None:
+    """Valida el fichero de vigilancia sin ejecutar nada."""
+    config = _watch_config(file)
+    summary = {"targets": len(config.targets), "notifiers": sorted(config.notifiers)}
+    if json_out:
+        _print_json(summary)
+    else:
+        console.print(
+            f"Válido: {summary['targets']} objetivo(s), {len(config.notifiers)} notificador(es)"
+        )
+
+
+@app.command()
+def purge(
+    older_than: Annotated[str, typer.Option("--older-than", help="Antigüedad, p. ej. 90d o 12w.")],
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Solo cuenta, no borra.")] = False,
+    db: DbPath = None,
+    json_out: AsJson = False,
+) -> None:
+    """Borra los scans más antiguos que la fecha indicada (con sus evidencias)."""
+    match = re.fullmatch(r"(\d+)([dw])", older_than.strip().lower())
+    if not match or int(match[1]) == 0:
+        raise typer.BadParameter("usa un número y d o w, p. ej. 90d", param_hint="--older-than")
+    days = int(match[1]) * (7 if match[2] == "w" else 1)
+    before = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+    with _open_storage(db) as storage:
+        deleted = storage.purge(before, dry_run=dry_run)
+    if json_out:
+        _print_json({"before": before, "deleted": deleted, "dry_run": dry_run})
+    else:
+        verb = "Se borrarían" if dry_run else "Borrados"
+        console.print(f"{verb} {deleted} scan(s) anteriores a {before[:10]}")
 
 
 @cache_app.command("clear")

@@ -3,18 +3,22 @@
 Para cada módulo: qué consume, qué produce, de dónde saca los datos y sus limitaciones.
 `osineitor modules` muestra el estado actual (incluido si falta la API key) y `osineitor doctor`
 prueba cada uno contra su fuente (valor de prueba: `example.com`, `1.1.1.1` o `test@example.com`;
-`whois` usa `google.io`; `username_sites` solo comprueba que `github.com` responde, porque sus ~460
-peticiones no son una prueba de salud, y `cve_enrich` consulta la API de EPSS). Todos los módulos pasivos y sin key cachean sus respuestas 6 horas, salvo
-`username_sites`.
+`whois` usa `google.io`; `username_sites` y `username_wmn` solo comprueban que `github.com` responde, porque sus
+~460 y ~590 peticiones no son una prueba de salud, y `cve_enrich` consulta la API de EPSS). Todos los módulos pasivos y sin key cachean sus respuestas 6 horas, salvo
+`username_sites` y `username_wmn`.
+
+Los módulos de plugins externos (paquetes que declaran el grupo de *entry points*
+`osineitor.modules`) aparecen en `osineitor modules` marcados como «plugin»; cómo escribirlos está
+en [API.md](API.md#plugins).
 
 Hay dos tipos especiales de módulo: los **analizadores** (`analyzer = True`) leen lo ya recogido
-en un pase final, sin red (el único por ahora es `saas_footprint`), y los adaptadores de
-**herramientas externas** (`ExternalToolModule`, sin ejemplos todavía) ejecutan un binario
+en un pase final, sin red (`saas_footprint` y `cloud_attribution`), y los adaptadores de
+**herramientas externas** (`ExternalToolModule`; por ahora `ext_subfinder`) ejecutan un binario
 instalado por el usuario y quedan `omitido` si falta. Ver [Arquitectura](ARCHITECTURE.md).
 
 Pesan más en la [confianza](ARCHITECTURE.md) de un dato los módulos **autoritativos**, cuya respuesta
-viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `http_fingerprint` y
-`email_validate`. El resto son bases de terceros (`aggregated`).
+viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `http_fingerprint`,
+`email_validate`, `ptr`, `web_meta`, `takeover` y `tech_detect`. El resto son bases de terceros (`aggregated`).
 
 ## Dominio
 
@@ -126,6 +130,139 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
   Censys como segunda fuente queda para F4.15.
 - **Términos y datos:** crt.sh no publica cuota; los logs de CT son públicos.
 
+### `web_meta` (activo)
+- **Consume:** dominio raíz. **Produce:** `record` `web_meta:<dominio>`, `url`, `email`.
+- **Fuente:** el propio sitio: `/robots.txt`, los sitemaps (los declarados en robots.txt que sean
+  del mismo sitio, o `/sitemap.xml`) y `/.well-known/security.txt` o `/security.txt` (RFC 9116).
+  Prueba HTTPS y, si no responde, HTTP. Solo con `--active`.
+- **Datos:** rutas `Disallow` concretas (sin comodines), URLs de los sitemaps (hasta 50 en total
+  como `url`), contacto, caducidad (`security_expired`), política y clave de `security.txt`, y el
+  email de un contacto `mailto:`.
+- **Límites:** una respuesta HTML se descarta (muchos sitios devuelven su portada para cualquier
+  ruta). Cada fichero se lee hasta 1 MB y se visitan como máximo 3 sitemaps. No sigue sitemaps
+  de otros dominios. Si el sitio no responde por HTTP(S) falla; sin ninguno de los tres ficheros,
+  vacío.
+- **Términos y datos:** son ficheros que el sitio publica para ser leídos; unas 6 peticiones
+  como máximo por dominio.
+
+### `takeover` (activo)
+- **Consume:** dominio (cualquier subdominio). **Produce:** `record` `takeover:<host>`.
+- **Fuente:** DNS (CNAME y existencia del destino) y la portada del propio subdominio. Solo con
+  `--active`; con `--proxy` se omite (DNS directo).
+- **Datos:** servicio (GitHub Pages, Heroku, S3, Shopify, Fastly, Zendesk, Surge, Bitbucket, Ghost,
+  Pantheon, Tumblr y varios de Azure), CNAME y la evidencia: destino inexistente (NXDOMAIN) y/o
+  la página con el mensaje de recurso sin reclamar. Tabla de firmas versionada en el código.
+- **Límites:** **solo detecta, nunca intenta reclamar el recurso.** Es una pista, no una prueba:
+  un servicio puede cambiar su mensaje de error (falso negativo) y el CNAME a Azure sin texto
+  de comprobación solo cuenta si el destino ya no existe. Un fallo del resolvedor no cuenta como
+  colgante.
+- **Términos y datos:** consulta DNS pública y una petición a un host del propio objetivo.
+
+### `urlscan` (key opcional `urlscan`)
+- **Consume:** dominio raíz. **Produce:** `record` `urlscan:<dominio>`, `ip`, `domain`
+  (subdominios) y `url`.
+- **Fuente:** búsqueda de [urlscan.io](https://urlscan.io/docs/api/) (`domain:<dominio>`, 100
+  resultados). Con key (`config set urlscan`) sube la cuota.
+- **Datos:** número de escaneos, primera y última fecha, países, y hasta 20 IP, subdominios y URLs
+  vistos en escaneos públicos.
+- **Límites:** solo cuentan los resultados cuyo host es el objetivo o un subdominio suyo; un
+  escaneo ajeno que solo menciona el dominio se descarta. Sin key la cuota es baja (429 → cuota
+  agotada). Un escaneo es una foto de un momento: las IP pueden haber cambiado.
+- **Términos y datos:** los escaneos son públicos y los envía cualquier usuario; urlscan.io
+  limita el uso de la API según el plan.
+
+### `otx` (key `otx`)
+- **Consume:** dominio raíz o IP. **Produce:** `record` `otx:<valor>`, `domain` e `ip`.
+- **Fuente:** API de [AlienVault OTX](https://otx.alienvault.com): `indicators/domain/<d>/general`,
+  `.../passive_dns` e `indicators/IPv4|IPv6/<ip>/general`. Key gratuita.
+- **Datos:** número de *pulses* (informes de amenazas que lo citan), reputación y país (IP), y del
+  DNS pasivo hasta 50 subdominios del objetivo y las IP a las que resolvieron.
+- **Límites:** un dominio o IP sin *pulses* ni DNS pasivo útil devuelve vacío. Los *pulses* los
+  publica cualquiera: son una pista, no un veredicto. Del DNS pasivo solo se aceptan los hosts del
+  objetivo.
+- **Términos y datos:** uso de la API sujeto a los términos de OTX; no se
+  redistribuyen los *pulses*.
+
+### `virustotal` (key `virustotal`)
+- **Consume:** dominio raíz o IP. **Produce:** `record` `virustotal:<valor>` y `domain`.
+- **Fuente:** API v3 de [VirusTotal](https://docs.virustotal.com/reference/overview): `domains/<d>`,
+  `domains/<d>/subdomains?limit=40` e `ip_addresses/<ip>`.
+- **Datos:** detecciones (`malicious`, `suspicious`, `harmless`), reputación, fecha del último
+  análisis, registrador y categorías (dominio), propietario del AS, ASN y país (IP), y hasta 40
+  subdominios.
+- **Límites:** el plan gratuito permite **4 peticiones por minuto y 500 al día**: el módulo
+  espacia 15 s sus peticiones (un dominio tarda ≈ 30 s) y un 429 se informa como cuota agotada.
+- **Términos y datos:** la API gratuita es para uso no comercial y no se puede usar en productos
+  o servicios; los datos pertenecen a VirusTotal.
+
+### `tech_detect` (activo)
+- **Consume:** dominio raíz. **Produce:** `technology`.
+- **Fuente:** la portada del sitio (HTTPS y, si falla, HTTP) contrastada con las firmas propias de
+  `modules/domain/data/tech_signatures.json` (más de 50 tecnologías: CMS, comercio electrónico,
+  frameworks, servidores, CDN, analítica…). Solo con `--active`.
+- **Datos:** nombre, categoría, versión (cuando la firma la captura) y la evidencia (cabecera,
+  cookie, `meta`, script o HTML). Además, los plugins y temas de WordPress que la portada enlaza
+  bajo `/wp-content/plugins/` y `/wp-content/themes/` salen como `WordPress plugin: <slug>` y
+  `WordPress theme: <slug>` (categoría `plugin` o `theme`, hasta 50, evidencia `html`), con la
+  versión del primer `?ver=` de sus ficheros si lo lleva. Sin peticiones extra.
+- **Límites:** solo mira la portada, así que no ve lo que carga otra página. **No enumera plugins:**
+  solo aparecen los que la portada carga, y el `?ver=` es el que pone el plugin a sus ficheros, no
+  siempre su versión (una pista, no una prueba). Solo WordPress; no cubre Joomla ni Drupal. Una firma es una
+  pista: un sitio puede ocultar o falsear una cabecera. **No usa `webappanalyzer`** (GPL-3.0, no
+  compatible con la licencia MIT del proyecto), de modo que la cobertura es la de las firmas
+  propias. `http_fingerprint` conserva sus 17 firmas.
+- **Términos y datos:** una petición al sitio del objetivo; las firmas son del proyecto.
+
+### `favicon_pivot` (activo, key `shodan`)
+- **Consume:** dominio raíz. **Produce:** `record` `favicon:<dominio>` e `ip`.
+- **Fuente:** descarga `/favicon.ico` del sitio, calcula su MurmurHash3 de 32 bits (sobre el
+  Base64 con saltos de línea, como Shodan) y busca `http.favicon.hash:<hash>` en la API de
+  búsqueda de Shodan. Solo con `--active`.
+- **Datos:** hash, tamaño del icono, número de hosts con el mismo icono y hasta 50 IP con sus
+  puertos y nombres.
+- **Límites:** **la búsqueda de Shodan exige una cuenta con acceso a ella (no la gratuita)**: sin
+  él, el módulo falla con un aviso claro. Un icono muy común (el de un CMS o un framework) devuelve
+  hosts sin relación con el objetivo: trátalo como una pista. Se descarta un favicon que sea HTML
+  o pese más de 256 KiB. Censys no se usa para esta búsqueda.
+- **Términos y datos:** una petición al sitio y una a Shodan por dominio.
+
+### `lookalike_domains`
+- **Consume:** dominio raíz. **Produce:** `record` `lookalike:<dominio>`.
+- **Fuente:** solo DNS (NS, A, AAAA y MX) al resolvedor del sistema; con `--proxy` se omite. No
+  hace ninguna petición HTTP.
+- **Datos:** hasta 300 permutaciones (omisión, repetición, transposición, teclas vecinas,
+  homógrafos —los cirílicos como punycode—, guion y otros TLD); de los registrados, sus NS, IP y
+  MX. Un dominio con MX puede recibir correo y es un riesgo mayor de suplantación.
+- **Límites:** es una comprobación **defensiva de dominios propios o autorizados**. Deja un
+  `record` y **no emite `domain`**: no se pivota hacia un dominio que puede ser hostil. «Registrado»
+  significa que tiene NS: un dominio registrado sin delegar no aparece. Los homógrafos son una
+  tabla corta, no la lista completa de Unicode.
+- **Términos y datos:** DNS público; son hasta unas 1.000 consultas por dominio.
+
+### `ext_subfinder` (herramienta externa)
+- **Consume:** dominio raíz. **Produce:** `domain` (subdominios).
+- **Fuente:** el binario `subfinder` ([ProjectDiscovery](https://github.com/projectdiscovery/subfinder))
+  que instala el usuario y que se ejecuta como `subfinder -d <dominio> -silent -json`, sin shell.
+  Solo usa fuentes pasivas. Quedan `omitido` si no está instalado, y con `--proxy` el módulo se
+  omite (su tráfico no pasa por `ctx.http`).
+- **Datos:** subdominios del objetivo, con las fuentes que los dieron. Se descarta lo que no sea
+  el dominio o un subdominio suyo.
+- **Límites:** no se comprueba la versión mínima, porque no se ha verificado cuál es. Sus fuentes
+  pueden necesitar keys propias en la configuración de Subfinder. Su tráfico no deja evidencia
+  (`--evidence`). `ext_amass` queda pendiente.
+
+### `cloud_attribution` (analizador)
+- **Consume:** `record` de `dns` y de `http_fingerprint`. **Produce:** `technology`.
+- **Fuente:** nada nuevo: lee el `CNAME` del DNS y las tecnologías de la huella HTTP ya recogidos.
+  No hace ninguna petición.
+- **Datos:** proveedor (CloudFront, Cloudflare, Akamai, Fastly, Azure CDN y Front Door, Imperva,
+  Sucuri, Bunny, StackPath, ELB, S3, Traffic Manager, App Service, App Engine, Heroku, Vercel,
+  Netlify, GitHub Pages), categoría `cdn` o `cloud` y la evidencia.
+- **Límites:** **sin los rangos de IP de los proveedores.** El roadmap (F4.17) pide etiquetar IP
+  con los rangos que publican AWS, GCP, Azure y Cloudflare; quedan pendientes hasta resolver el
+  *spike* de sus feeds y su licencia (ver `docs/plans/fase-04.md`). Hoy solo detecta por CNAME y
+  por la huella HTTP.
+
 ## IP
 
 ### `ipinfo` (key opcional `ipinfo`)
@@ -180,6 +317,73 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 - **Datos:** si la IP genera ruido de Internet (escáneres, bots), si es un servicio legítimo
   conocido (`riot`), clasificación y nombre. Un 404 significa que GreyNoise no la ha visto.
 
+### `censys` (key `censys`)
+- **Consume:** IP. **Produce:** `record` `censys:<ip>` y `service`.
+- **Fuente:** `GET /v3/global/asset/host/<ip>` de la API de
+  [Censys Platform](https://docs.censys.com/reference/get-started), con un token personal
+  (`config set censys`) y, si hace falta, el identificador de organización (`config set
+  censys_org`).
+- **Datos:** ASN, nombre del AS, prefijo BGP, país y hasta 50 servicios (puerto, transporte,
+  protocolo y producto). Complementa a Shodan.
+- **Límites:** **la forma de la respuesta se ha tomado de la documentación y no se ha comprobado
+  contra la API real**; el parseo es tolerante y `osineitor doctor` es la prueba. Los créditos y el
+  acceso a la API del plan gratuito dependen de la cuenta. Los certificados los cubre
+  `cert_details` con crt.sh.
+- **Términos y datos:** sujeto a los términos de Censys y al consumo de créditos de la cuenta.
+
+### `abusech` (key `abusech`)
+- **Consume:** dominio raíz o IP. **Produce:** `record` `abusech:<valor>`.
+- **Fuente:** `POST` a ThreatFox (`search_ioc`, coincidencia exacta) y a URLhaus (`host`), de
+  [abuse.ch](https://abuse.ch). Desde 2025 ambas exigen una `Auth-Key` gratuita.
+- **Datos:** número de IOC en ThreatFox, familias de malware, tipos de amenaza, fechas y
+  etiquetas; URL maliciosas en URLhaus y cuántas siguen en línea. Solo metadatos: no se descargan
+  muestras ni se siguen las URL.
+- **Límites:** sin coincidencias, vacío. Un IOC puede ser un falso positivo o estar caducado.
+- **Términos y datos:** datos de abuse.ch bajo CC0; el uso de la API sigue sus términos.
+
+### `ptr`
+- **Consume:** IP pública. **Produce:** `record` `ptr:<ip>`, `domain` (marcado `subdomain`).
+- **Fuente:** consulta DNS PTR (`in-addr.arpa` o `ip6.arpa`) al resolvedor del sistema; con
+  `--proxy` se omite. Una IP privada queda omitida: no se filtra su consulta al resolvedor.
+- **Límites:** el PTR lo controla el dueño de la IP y puede ser basura o no coincidir con el
+  nombre directo; los nombres no válidos se descartan. No hay confirmación de DNS directo.
+- **Términos y datos:** DNS público, sin cuota ni licencia aplicable.
+
+### `ripestat`
+- **Consume:** IP pública. **Produce:** `record` `ripestat:<ip>`, `netblock`, `asn`.
+- **Fuente:** [RIPEstat](https://stat.ripe.net/docs/data_api) (`prefix-overview`, `rir-geo` y
+  `routing-history`), API de datos abierta de RIPE NCC, sin key.
+- **Datos:** prefijo, si está anunciado, ASN y titular, país de registro, primera y última vez
+  que se vio anunciado y orígenes vistos (hasta 10).
+- **Límites:** 3 peticiones por IP, espaciadas 0,2 s. Los datos de enrutamiento son de la vista
+  de RIPE, no del RIR de la IP.
+- **Términos y datos:** RIPEstat pide identificar la aplicación (`sourceapp=osineitor`) y limita
+  el uso intensivo; los datos son de RIPE NCC (sus condiciones de uso aplican).
+
+### `asn_netblock`
+- **Consume:** IP pública o ASN. **Produce:** `netblock`, `asn`.
+- **Fuente:** Team Cymru por DNS (`origin.asn.cymru.com`, `asn.cymru.com`) para IP→ASN y prefijo;
+  RIPEstat `announced-prefixes` para ASN→prefijos. La consulta de Team Cymru es DNS directo: con
+  `--proxy` el módulo se omite entero.
+- **Datos:** prefijo, ASN (hasta 5 origen), país, registro, fecha de asignación y titular. Desde
+  un ASN, hasta 50 prefijos, los más amplios primero.
+- **Límites:** un prefijo no válido de la fuente se descarta. El tope de 50 deja fuera
+  prefijos específicos de AS grandes (`announced_prefixes` lleva el total).
+- **Términos y datos:** Team Cymru ofrece este servicio gratuito para uso razonable; evita
+  consultas masivas.
+
+### `dnsbl`
+- **Consume:** IPv4 pública. **Produce:** `record` `dnsbl:<ip>`.
+- **Fuente:** listas DNS `zen.spamhaus.org`, `bl.spamcop.net`, `dnsbl-1.uceprotect.net` y
+  `dnsbl.dronebl.org`, consultadas por DNS; con `--proxy` se omite.
+- **Datos:** listas en las que figura y el código devuelto (con su significado para ZEN: SBL,
+  XBL, PBL…); `unanswered` lista las que no respondieron. Sin listas, vacío.
+- **Límites:** solo IPv4. **Spamhaus rechaza las consultas desde resolvedores públicos
+  (8.8.8.8, 1.1.1.1…):** devuelve `127.255.255.x`, que el módulo trata como cuota agotada, no
+  como «listada»; hace falta un resolvedor propio. UCEPROTECT nivel 1 lista por IP.
+- **Términos y datos:** Spamhaus ZEN es gratuito solo para uso no comercial y bajo volumen; revisa
+  los términos de cada lista antes de un uso intensivo.
+
 ## Email
 
 ### `email_validate`
@@ -206,6 +410,36 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 - **Datos:** estado (`valid`, `invalid`, `accept_all`…), puntuación, webmail o desechable, y
   páginas públicas donde aparece el email.
 
+### `hibp_pastes` (key `hibp`)
+- **Consume:** email. **Produce:** `record` `hibp_pastes:<email>`.
+- **Fuente:** endpoint `pasteaccount` de [Have I Been Pwned](https://haveibeenpwned.com), con la
+  misma key que `hibp`.
+- **Datos:** nº de *pastes*, fuentes (Pastebin, Slexy...) y fechas del primero y del último. No
+  guarda los identificadores ni los títulos de los *pastes*.
+
+### `github_email`
+- **Consume:** email. **Produce:** `record` `github_email:<email>`, `username`.
+- **Fuente:** búsqueda de commits de la API de GitHub (`author-email:`). Key `github` opcional.
+- **Datos:** nº de commits, nombres de autor, hasta 10 repositorios, fechas del primero y del
+  último, y hasta 5 logins que pivotan como `username`.
+- **Límites:** 10 búsquedas por minuto sin key, por eso espacia 6 s las peticiones. Solo ve
+  commits públicos cuyo email no está oculto.
+
+### `fediverse` (activo)
+- **Consume:** email. **Produce:** `profile`.
+- **Fuente:** `GET /api/v1/accounts/lookup` de Mastodon y, si falla, WebFinger, en el host del
+  dominio del email (`usuario@instancia`).
+- **Datos:** nombre visible, biografía sin HTML, fecha de alta, seguidores y publicaciones.
+- **Límites:** es **activo**: contacta con el servidor del dominio del email, que puede ser el
+  objetivo. Los dominios de correo corrientes (Gmail...) no son instancias y no devuelven nada.
+  Bluesky no está soportado.
+
+### `email_candidates`
+- **Consume:** person (con `--domain`). **Produce:** `email`.
+- **Datos:** hasta 12 candidatos (`ana.garcia@`, `agarcia@`, `anagarcia@`...), marcados
+  `candidate=True` con su patrón. Sin red: **no se verifican** (ni por SMTP) y la mayoría no
+  existirán.
+
 ## Username
 
 ### `username_sites`
@@ -223,3 +457,153 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 - **Límites:** WAFs, captchas y rediseños producen falsos positivos y negativos. Las respuestas
   403/429 y los errores de red se tratan como "desconocido" y no se reportan. Verifica cada perfil
   a mano.
+
+### `username_wmn`
+- **Consume:** username. **Produce:** `profile`.
+- **Fuente:** ~590 sitios con las firmas de [WhatsMyName](https://github.com/WebBreacher/WhatsMyName)
+  (`modules/username/data/wmn.json`, CC BY-SA 4.0, con atribución en el `README.md` de esa
+  carpeta). Se omiten los sitios de contenido adulto y los que WhatsMyName marca con `protection`
+  (Cloudflare, captcha, DDoS-Guard...): no se eluden esas defensas.
+- **Detección:** el código de estado y el texto de «existe» (`e_code`, `e_string`) deben coincidir
+  y no debe aparecer el de «no existe» (`m_string`). No sigue redirecciones. Los sitios con
+  cuerpo `POST` y cabeceras propias se consultan tal cual los define la firma.
+- **Verificación:** la misma que `username_sites`: cada positivo se contrasta con un username
+  inexistente y se descarta si el sitio también lo «encuentra».
+- **Confirmado:** el perfil lleva la URL de la firma (`uri_pretty` si existe). Si `username_sites`
+  encuentra la misma URL, el motor fusiona las dos entidades y queda con las dos fuentes y
+  confianza `medio`. Si las URLs difieren (barra final, otro subdominio), no se detecta la
+  coincidencia.
+- **Límites:** los mismos que `username_sites`. No entra en `update-data` (su licencia no es
+  compatible con ese catálogo).
+
+### `github_user`
+- **Consume:** username. **Produce:** `profile`, `organization`, `email`, `url`.
+- **Fuente:** API de GitHub (usuario, organizaciones y eventos públicos). Key `github` opcional:
+  de 60 a 5.000 peticiones por hora.
+- **Datos:** nombre, empresa, blog, ubicación, bio, usuario de X, repositorios, seguidores y fecha
+  de alta; hasta 20 organizaciones; hasta 10 emails de los commits de sus eventos recientes, sin
+  las direcciones `noreply` de GitHub.
+- **Límites:** solo los últimos eventos públicos, así que los emails son los de la actividad
+  reciente.
+
+### `dev_registries`
+- **Consume:** username. **Produce:** `profile`.
+- **Fuente:** búsqueda por mantenedor de npm, usuarios de crates.io y de Docker Hub.
+- **Datos:** hasta 20 paquetes o repositorios por registro y, según el registro, nombre, empresa,
+  ubicación y fecha de alta. No emite los emails de los mantenedores de npm.
+- **Límites:** el nombre de usuario de un registro no tiene por qué ser la misma persona. Si una
+  fuente falla, las demás se conservan; solo es un error si fallan todas. PyPI y Stack Exchange
+  quedan pendientes.
+
+### `discord_snowflake`
+- **Consume:** username numérico de 17 a 20 dígitos. **Produce:** `record` `discord:<id>`.
+- **Datos:** fecha de creación de la cuenta decodificada del ID. En local, sin red.
+- **Límites:** descarta los IDs fuera del rango posible (anteriores a mayo de 2015 o futuros).
+
+### `username_variants`
+- **Consume:** person. **Produce:** `username`.
+- **Datos:** hasta 12 variantes (`ana.garcia`, `agarcia`, `ana_garcia`...) de al menos 3
+  caracteres, marcadas `candidate=True` con su patrón. Sin red. Ignora partículas como «de» o
+  «van» y combina el nombre con el primer y el último apellido.
+
+## Análisis
+
+### `findings` (analizador)
+- **Consume:** `record`, `certificate`, `vulnerability`, `url` y `service` (los tipos que citan
+  las reglas). **Produce:** `finding`. Lo que emite no se pivota y no tiene confianza.
+- **Fuente:** ninguna: lee lo ya recogido, sin red ni presupuesto. Las reglas son declarativas, en
+  `src/osineitor/data/rules/default.yml`; el formato (campos, operadores, validación) está en
+  `src/osineitor/findings.py`.
+- **Datos:** `rule`, `title`, `severity`, `recommendation`, `affected` (claves de las entidades
+  que lo justifican) y `evidence` (los campos que lo prueban). El valor es `regla: sujeto`.
+- **Reglas incluidas (15):** DMARC ausente o `p=none`; SPF `+all`/`?all`; sin MTA-STS;
+  certificado caducado o a ≤ 30 días; dominio que expira en ≤ 60 días; CVE en KEV; EPSS ≥ 0,5;
+  CNAME colgante; URL sensible archivada; IP en lista negra; cabeceras de seguridad ausentes;
+  servicio de administración expuesto; `security.txt` caducado.
+- **Límites:** solo ve lo que otros módulos recogieron (sin `dns` no hay hallazgos de DMARC). Un
+  certificado «caducado» puede ser uno antiguo ya sustituido. La regla de DMARC solo mira
+  dominios `nombre.tld` (un solo punto), así que no cubre `ejemplo.co.uk`.
+- **Términos y datos:** reglas propias, bajo la licencia del proyecto (MIT).
+
+## Organización
+
+### `gleif`
+- **Consume:** organization (no las de GitHub). **Produce:** `record` `gleif:<LEI>`, `organization`.
+- **Fuente:** API pública de [GLEIF](https://www.gleif.org) (`/api/v1/lei-records`), sin key. Los
+  datos LEI son de dominio público (CC0, [términos de GLEIF](https://www.gleif.org/en/lei-data/gleif-terms)).
+- **Datos:** LEI, razón social, país y ciudad del domicilio, jurisdicción, estado de la entidad y
+  del registro, nº de registro mercantil y fechas.
+- **Coincidencia:** primero por nombre legal exacto; si no hay, hasta 3 candidatos por texto
+  completo, marcados `match=approximate`. Solo con **un único** LEI exacto se siguen la matriz
+  directa (`relationship=parent`) y hasta 20 filiales directas (`relationship=subsidiary`), que
+  pivotan como `organization`.
+- **Límites:** solo cubre entidades que tienen LEI (grandes y financieras sobre todo). Los
+  registros mercantiles de pymes y autónomos no están (ver `librebor` y `opencorporates` en el
+  roadmap).
+
+## Teléfono
+
+### `phone_parse`
+- **Consume:** phone. **Produce:** `record` `phone:<E.164>`.
+- **Fuente:** biblioteca [`phonenumbers`](https://github.com/daviddrysdale/python-phonenumbers)
+  (puerto de libphonenumber de Google), en local y sin red.
+- **Datos:** validez y posibilidad, prefijo, región, país y zona (en español), tipo de línea,
+  zonas horarias y formatos internacional, nacional y RFC 3966.
+- **Límites:** el operador es el de la **asignación original** del rango: no refleja la
+  portabilidad. Un número válido no implica que esté en servicio. Es un dato personal: con
+  `require_purpose` activo, un scan de teléfono exige `--purpose`.
+
+## Criptomonedas
+
+### `crypto_detect`
+- **Consume:** crypto_address. **Produce:** `record` `crypto:<dirección>`.
+- **Datos:** cadena (Bitcoin, Ethereum, Litecoin, Dogecoin, Monero) y formato (`p2pkh`, `p2sh`,
+  `bech32`, `bech32m`...). Bitcoin, Litecoin y Dogecoin se validan con su suma de comprobación;
+  Ethereum y Monero solo por forma (`checksum_verified=false`), porque la suma EIP-55 pide
+  Keccak-256.
+- **Límites:** sin red. Una dirección de otra cadena (Solana, Tron...) no se reconoce.
+
+### `btc_explorer`
+- **Consume:** crypto_address (solo Bitcoin). **Produce:** `record` `btc:<dirección>`.
+- **Fuente:** API de [mempool.space](https://mempool.space/docs/api/rest), sin key.
+- **Datos:** saldo, total recibido y enviado (satoshis), nº de transacciones confirmadas y sin
+  confirmar, y fecha de la última actividad.
+- **Límites:** la primera actividad solo se informa si la dirección tiene 25 transacciones o menos
+  (las que caben en la primera página); con más, queda vacía en lugar de adivinarla. Una
+  dirección no identifica a nadie por sí sola.
+
+## Ficheros y coordenadas
+
+Los módulos de ficheros trabajan **en local**: no abren conexiones y ni el contenido ni la ruta del
+fichero salen del equipo (hay un test que lo comprueba interceptando la red). Su valor de prueba en
+`doctor` es su propio código fuente.
+
+### `file_meta`
+- **Consume:** file. **Produce:** `record` `file_meta:<ruta>`, `location`.
+- **Formatos:** JPEG con EXIF (cámara, software, fechas, autor, números de serie y GPS), PDF con el
+  diccionario Info en texto claro, DOCX/XLSX/PPTX (`docProps`) y ODT/ODS/ODP (`meta.xml`). El
+  formato se detecta por los primeros bytes, no por la extensión.
+- **Datos:** autor, último autor, software, empresa, fechas de creación y modificación, y, si hay
+  GPS, una entidad `location` que pivota a `geo_point`.
+- **Límites:** no lee PDF que guarden el Info en flujos comprimidos, ni XMP, IPTC, PNG ni TIFF
+  (el adaptador `ext_exiftool` del roadmap cubriría el resto). Lee como mucho 512 KiB al principio
+  y 64 KiB al final del fichero y 1 MiB de cada miembro de un zip; rechaza el XML con `DOCTYPE` o
+  entidades. Los metadatos revelan quién y con qué creó el fichero: úsalo solo con ficheros
+  propios o de los que tengas derecho a analizar.
+
+### `file_hash`
+- **Consume:** file. **Produce:** `record` `file_hash:<sha256>`.
+- **Datos:** MD5, SHA-1, SHA-256 y tamaño, leídos por bloques de 1 MiB.
+- **Límites:** la consulta de reputación por hash (VirusTotal, abuse.ch) no está: el hash es un
+  pivote que se puede lanzar a mano. Pendiente en el roadmap (F6.10).
+
+### `geo_point`
+- **Consume:** location con forma `lat,lon`. **Produce:** `record` `geo:<lat,lon>`.
+- **Datos:** latitud y longitud, grados-minutos-segundos y enlaces a OpenStreetMap y Google Maps.
+  Las coordenadas se guardan con 6 decimales (unos 10 cm).
+
+### `image_links`
+- **Consume:** url de una imagen (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`).
+  **Produce:** `record` `image_links:<url>`.
+- **Datos:** enlaces de búsqueda inversa de Google Lens, Yandex, TinEye y Bing con la URL
+  codificada. Solo genera enlaces: no descarga ni sube la imagen.

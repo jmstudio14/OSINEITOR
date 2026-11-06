@@ -1,0 +1,111 @@
+name: release
+
+# Publica en PyPI al crear una etiqueta vX.Y.Z. Usa publicación de confianza (OIDC): no hay ningún
+# token de PyPI guardado en el repositorio. Ver docs/PUBLICACION.md para configurarlo.
+# El job `windows` construye el instalador, el ZIP portable y SHA256SUMS.txt; solo crea la
+# Release de GitHub con una etiqueta. Con «Run workflow» (workflow_dispatch) construye y sube
+# los artefactos sin publicar nada.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: construir y comprobar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: La etiqueta coincide con la versión de pyproject.toml
+        if: github.ref_type == 'tag'
+        run: >
+          python -c "import os, tomllib;
+          v = tomllib.load(open('pyproject.toml', 'rb'))['project']['version'];
+          t = os.environ['GITHUB_REF_NAME'];
+          assert t == 'v' + v, f'la etiqueta {t} no coincide con la versión {v}'"
+      - run: pip install -e '.[dev]' build twine
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: python -m pytest -q
+      - run: python -m build
+      - run: twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: publicar en PyPI
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # publicación de confianza y firma Sigstore de las atestaciones
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true
+
+  windows:
+    name: instalador de Windows
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write # solo este job crea la Release; el de PyPI no la necesita
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Versión de pyproject.toml
+        id: version
+        shell: pwsh
+        run: |
+          $v = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
+          "version=$v" >> $env:GITHUB_OUTPUT
+      - run: pip install -e ".[gui,build]"
+      - name: Construir con PyInstaller
+        shell: pwsh
+        run: .\packaging\windows\build.ps1 -Version ${{ steps.version.outputs.version }}
+      - name: Prueba de humo del paquete
+        run: python packaging/windows/smoke.py dist/OSINEITOR
+      - name: Instalador (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DMyAppVersion=${{ steps.version.outputs.version }}" packaging\windows\osineitor.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC terminó con código $LASTEXITCODE" }
+      - name: Sumas SHA-256
+        shell: pwsh
+        run: >
+          python packaging/windows/checksums.py
+          dist/OSINEITOR-${{ steps.version.outputs.version }}-setup.exe
+          dist/OSINEITOR-${{ steps.version.outputs.version }}-portable.zip
+          dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/OSINEITOR-*-setup.exe
+            dist/OSINEITOR-*-portable.zip
+            dist/SHA256SUMS.txt
+      - name: Crear la Release de GitHub
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release create ${{ github.ref_name }}
+          dist/OSINEITOR-${{ steps.version.outputs.version }}-setup.exe
+          dist/OSINEITOR-${{ steps.version.outputs.version }}-portable.zip
+          dist/SHA256SUMS.txt
+          --title ${{ github.ref_name }} --generate-notes
