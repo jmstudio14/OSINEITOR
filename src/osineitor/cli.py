@@ -25,6 +25,10 @@ from rich.table import Table
 
 from osineitor import __version__, datasets, events, evidence, logs, presets, registry, report
 from osineitor import ai as ai_mod
+from osineitor import pivots as pivots_mod
+from osineitor import resolve as resolve_mod
+from osineitor import risk as risk_mod
+from osineitor import timeline as timeline_mod
 from osineitor import watch as watch_mod
 from osineitor.budget import (
     DEFAULT_MAX_ENTITIES,
@@ -38,7 +42,7 @@ from osineitor.control import watch_stdin
 from osineitor.diff import diff_scans
 from osineitor.doctor import run_doctor
 from osineitor.engine import Engine
-from osineitor.errors import InvalidEntityValue
+from osineitor.errors import ExportUnavailable, InvalidEntityValue
 from osineitor.events import (
     EXIT_AI_FAILED,
     EXIT_ALERTS,
@@ -52,6 +56,7 @@ from osineitor.events import (
     NdjsonSink,
 )
 from osineitor.http import HttpClient, validate_proxy
+from osineitor.mcp_server import McpServer, serve
 from osineitor.models import Entity, EntityType, ScanResult, decompose, detect_type
 from osineitor.modules.base import Context
 from osineitor.nmap_import import NmapImportError, parse_nmap
@@ -59,6 +64,8 @@ from osineitor.normalize import canonical_hostname
 from osineitor.scanner import MAX_PURPOSE, PURPOSE_REQUIRED_FOR
 from osineitor.scope import Scope, ScopeError
 from osineitor.storage import Storage, StorageError
+from osineitor.targets import TargetsError, read_targets
+from osineitor.tool_import import ToolImportError, parse_maigret, parse_subfinder
 from osineitor.watch import WatchError
 
 LEGAL_NOTICE = (
@@ -78,6 +85,8 @@ import_app = typer.Typer(
     help="Importa resultados de otras herramientas como un scan guardado.", no_args_is_help=True
 )
 app.add_typer(import_app, name="import")
+case_app = typer.Typer(help="Agrupa varios scans de una misma investigación.", no_args_is_help=True)
+app.add_typer(case_app, name="case")
 console = Console()
 err_console = Console(stderr=True)
 
@@ -945,10 +954,47 @@ def person(
     _run_target(EntityType.PERSON, target, opts, no_save, json_out, db, _person_data(domain))
 
 
+def _targets(path: Path | None) -> list[str]:
+    try:
+        return read_targets(path) if path else []
+    except TargetsError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--targets-file") from exc
+
+
+def _run_batch(targets: list[str], opts: ScanOptions, no_save: bool, db: Path | None) -> None:
+    """Un scan por objetivo, en orden. Uno inválido no frena al resto; sale con el peor código."""
+    worst = EXIT_OK
+    for number, value in enumerate(targets, 1):
+        if not (opts.quiet or opts.ndjson):
+            console.print(f"[bold]Objetivo {number} de {len(targets)}[/]")
+        code = EXIT_OK
+        try:
+            _run_target(detect_type(value), value, opts, no_save, False, db)
+        except typer.Exit as exc:
+            if exc.exit_code == EXIT_CANCELLED:
+                raise
+            code = exc.exit_code
+        except typer.BadParameter as exc:
+            err_console.print(f"[red]{escape(value)}: {escape(exc.message)}[/]")
+            code = events.EXIT_USAGE
+        worst = max(worst, code)
+    if worst:
+        raise typer.Exit(worst)
+
+
 @app.command()
 def scan(
     ctx: typer.Context,
-    target: str,
+    target: Annotated[
+        str | None, typer.Argument(help="Qué investigar (o usa --targets-file).")
+    ] = None,
+    targets_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--targets-file",
+            help="Fichero con un objetivo por línea (# comenta): un scan por objetivo.",
+        ),
+    ] = None,
     depth: Depth = 2,
     active: Active = False,
     module: Only = None,
@@ -975,6 +1021,14 @@ def scan(
     """Detecta el tipo de objetivo (IP, red CIDR, ASN, URL, email, teléfono, criptomoneda,
     coordenadas, fichero local, dominio o username) y pivota entre frentes (profundidad 2 por
     defecto). De una URL se investiga su host."""
+    if (target is None) == (targets_file is None):
+        raise typer.BadParameter("indica un objetivo o --targets-file, pero no los dos")
+    if targets_file is not None and json_out:
+        raise typer.BadParameter(
+            "--json no se combina con --targets-file (saldrían varios documentos): usa --ndjson",
+            param_hint="--json",
+        )
+    targets = [target] if target is not None else _targets(targets_file)
     from_preset = _preset_values(ctx, preset, active)
     opts = ScanOptions(
         from_preset.get("depth", depth),
@@ -996,7 +1050,10 @@ def scan(
         _types(only_types, "--only-types"),
         _types(exclude_types, "--exclude"),
     )
-    _run_target(detect_type(target), target, opts, no_save, json_out, db)
+    if target is not None:
+        _run_target(detect_type(target), target, opts, no_save, json_out, db)
+    else:
+        _run_batch(targets, opts, no_save, db)
 
 
 @app.command("modules")
@@ -1231,6 +1288,248 @@ def diff(scan_a: int, scan_b: int, db: DbPath = None, json_out: AsJson = False) 
     console.print(f"Sin cambios: {changes['unchanged']}")
 
 
+def _case_id(storage: Storage, name: str) -> int:
+    case_id = storage.case_id(name)
+    if case_id is None:
+        raise typer.BadParameter(f"no existe el caso {name!r}", param_hint="NAME")
+    return case_id
+
+
+def _print_correlations(found: list[dict[str, Any]]) -> None:
+    if not found:
+        return
+    table = Table(title="Aparecen también en otros casos", title_justify="left", expand=True)
+    table.add_column("Tipo", no_wrap=True)
+    table.add_column("Valor", overflow="fold")
+    table.add_column("Casos", overflow="fold")
+    for item in found:
+        table.add_row(item["type"], item["value"], ", ".join(item["cases"]))
+    console.print(table)
+
+
+@case_app.command("new")
+def case_new(
+    name: Annotated[str, typer.Argument(help="Nombre del caso (único).")],
+    description: Annotated[str, typer.Option("--description", "-d", help="Descripción.")] = "",
+    tags: Annotated[
+        list[str] | None, typer.Option("--tag", "-t", help="Etiqueta (repetible).")
+    ] = None,
+    db: DbPath = None,
+) -> None:
+    """Crea un caso vacío."""
+    with _open_storage(db) as storage:
+        try:
+            storage.case_create(name.strip(), description.strip(), tags or [])
+        except StorageError as exc:
+            raise typer.BadParameter(str(exc), param_hint="NAME") from exc
+    console.print(f"Caso {escape(name)} creado.")
+
+
+@case_app.command("add")
+def case_add(
+    name: Annotated[str, typer.Argument(help="Nombre del caso.")],
+    scan_ids: Annotated[list[int], typer.Argument(help="Scans guardados que se añaden.")],
+    db: DbPath = None,
+) -> None:
+    """Añade scans al caso y avisa si algún dato ya figuraba en otro caso."""
+    with _open_storage(db) as storage:
+        case_id = _case_id(storage, name)
+        for scan_id in scan_ids:
+            try:
+                new = storage.case_add_scan(case_id, scan_id)
+            except StorageError as exc:
+                raise typer.BadParameter(str(exc), param_hint="SCAN_IDS") from exc
+            console.print(f"Scan #{scan_id} {'añadido' if new else 'ya estaba'}.")
+        _print_correlations(storage.correlations(case_id))
+
+
+@case_app.command("note")
+def case_note(
+    name: Annotated[str, typer.Argument(help="Nombre del caso.")],
+    text: Annotated[str, typer.Argument(help="Texto de la nota.")],
+    db: DbPath = None,
+) -> None:
+    """Añade una nota con fecha al caso."""
+    if not text.strip():
+        raise typer.BadParameter("la nota está vacía", param_hint="TEXT")
+    with _open_storage(db) as storage:
+        storage.case_add_note(_case_id(storage, name), text.strip())
+    console.print("Nota añadida.")
+
+
+@case_app.command("show")
+def case_show(
+    name: Annotated[str, typer.Argument(help="Nombre del caso.")],
+    db: DbPath = None,
+    json_out: AsJson = False,
+) -> None:
+    """Muestra un caso: sus scans, sus notas y los datos que comparte con otros casos."""
+    with _open_storage(db) as storage:
+        case = storage.case_get(name)
+        if case is None:
+            raise typer.BadParameter(f"no existe el caso {name!r}", param_hint="NAME")
+        case["correlations"] = storage.correlations(case["id"])
+    if json_out:
+        _print_json(case)
+        return
+    tags = f" [{', '.join(case['tags'])}]" if case["tags"] else ""
+    console.rule(f"{escape(case['name'])}{escape(tags)}")
+    if case["description"]:
+        console.print(escape(case["description"]))
+    table = Table("Scan", "Tipo", "Objetivo", "Entidades", "Fecha")
+    for s in case["scans"]:
+        table.add_row(
+            str(s["id"]), s["target_type"], s["target"], str(s["entities"]), s["started_at"][:19]
+        )
+    console.print(table)
+    for note in case["notes"]:
+        console.print(f"[dim]{note['at'][:19]}[/] {escape(note['text'])}")
+    _print_correlations(case["correlations"])
+
+
+@case_app.command("list")
+def case_list(db: DbPath = None, json_out: AsJson = False) -> None:
+    """Lista los casos."""
+    with _open_storage(db) as storage:
+        cases = storage.case_list()
+    if json_out:
+        _print_json(cases)
+        return
+    table = Table("Caso", "Scans", "Etiquetas", "Descripción")
+    for c in cases:
+        table.add_row(c["name"], str(c["scans"]), ", ".join(c["tags"]), c["description"])
+    console.print(table)
+
+
+@app.command()
+def search(
+    value: Annotated[str, typer.Argument(help="Dato que se busca (dominio, IP, email…).")],
+    contains: Annotated[
+        bool, typer.Option("--contains", help="Busca como subcadena en lugar de igualdad.")
+    ] = False,
+    types: Annotated[
+        list[str] | None, typer.Option("--type", help="Solo estos tipos de entidad (repetible).")
+    ] = None,
+    db: DbPath = None,
+    json_out: AsJson = False,
+) -> None:
+    """Busca un dato en todos los scans guardados y dice en qué casos aparece."""
+    wanted = _types(types, "--type") or frozenset()
+    with _open_storage(db) as storage:
+        hits = storage.search(value, contains=contains, types=sorted(wanted))
+    if json_out:
+        _print_json(hits)
+        return
+    if not hits:
+        console.print("Sin coincidencias.")
+        return
+    table = Table("Scan", "Tipo", "Valor", "Fuente", "Objetivo", "Casos")
+    for h in hits:
+        table.add_row(
+            str(h["scan_id"]),
+            h["type"],
+            h["value"],
+            h["source"] or "(semilla)",
+            h["target"],
+            ", ".join(h["cases"]),
+        )
+    console.print(table)
+
+
+@app.command("risk")
+def risk_cmd(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> None:
+    """Puntúa el riesgo de cada dominio o IP del scan (hallazgos, exposición y confianza)."""
+    with _open_storage(db) as storage:
+        result = storage.load(scan_id)
+    if result is None:
+        raise typer.BadParameter(f"no existe el scan {scan_id}")
+    assets = risk_mod.score(result)
+    if json_out:
+        _print_json({"scan_id": scan_id, "target": result.target.key, "assets": assets})
+        return
+    if not assets:
+        console.print("Nada que puntuar: el scan no tiene hallazgos ni servicios expuestos.")
+        return
+    table = Table("Riesgo", "Nivel", "Activo", "Por qué", title="Heurística de priorización")
+    for a in assets:
+        table.add_row(str(a["score"]), a["level"], a["asset"], "; ".join(a["reasons"]))
+    console.print(table)
+
+
+@app.command("mcp")
+def mcp_cmd(db: DbPath = None) -> None:
+    """Servidor MCP por stdio para agentes de IA: consulta scans y lanza scans pasivos.
+
+    Habla JSON-RPC por la entrada y la salida estándar, así que no imprime nada más. Los módulos
+    activos no se pueden pedir. Ver docs/MCP.md.
+    """
+    serve(McpServer(db), sys.stdin, sys.stdout)
+
+
+@app.command("suggest")
+def suggest_cmd(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> None:
+    """Propone qué investigar a continuación en un scan. Solo propone: no ejecuta nada."""
+    with _open_storage(db) as storage:
+        result = storage.load(scan_id)
+    if result is None:
+        raise typer.BadParameter(f"no existe el scan {scan_id}")
+    found = pivots_mod.suggest(result, registry.discover(), Config.load())
+    if json_out:
+        _print_json({"scan_id": scan_id, "target": result.target.key, "suggestions": found})
+        return
+    if not found:
+        console.print("Nada que sugerir: lo que se descubrió ya se investigó.")
+        return
+    table = Table(
+        "Dato", "Módulos", "Para investigarlo", title="Pivotes sugeridos (no se ejecutan)"
+    )
+    for s in found:
+        table.add_row(s["entity"], ", ".join(s["modules"]), escape(s["command"]))
+    console.print(table)
+
+
+@app.command("resolve")
+def resolve_cmd(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> None:
+    """Agrupa cuentas que podrían ser de la misma persona. Son hipótesis, no identidades."""
+    with _open_storage(db) as storage:
+        result = storage.load(scan_id)
+    if result is None:
+        raise typer.BadParameter(f"no existe el scan {scan_id}")
+    found = resolve_mod.hypotheses(result)
+    if json_out:
+        _print_json({"scan_id": scan_id, "target": result.target.key, "hypotheses": found})
+        return
+    if not found:
+        console.print("Sin hipótesis: ninguna cuenta comparte señales suficientes con otra.")
+        return
+    table = Table("Puntuación", "Cuentas", "Señales", title="Hipótesis (sin confirmar)")
+    for h in found:
+        signals = "; ".join(f"{s['kind']}: {s['value']}" for s in h["signals"])
+        table.add_row(str(h["score"]), "\n".join(h["accounts"]), signals)
+    console.print(table)
+
+
+@app.command()
+def timeline(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> None:
+    """Ordena las fechas que traen los datos del scan (registro, certificados, filtraciones…)."""
+    with _open_storage(db) as storage:
+        result = storage.load(scan_id)
+    if result is None:
+        raise typer.BadParameter(f"no existe el scan {scan_id}")
+    events = timeline_mod.build(result)
+    if json_out:
+        _print_json({"scan_id": scan_id, "target": result.target.key, "events": events})
+        return
+    if not events:
+        console.print("Sin fechas en los datos de este scan.")
+        return
+    table = Table("Fecha (UTC)", "Hecho", "Entidad", "Fuente")
+    for e in events:
+        when = e["at"][:19].replace("T", " ") + (" [dim](futuro)[/]" if e["future"] else "")
+        table.add_row(when, e["event"], e["entity"], e["source"] or "(semilla)")
+    console.print(table)
+
+
 @import_app.command("nmap")
 def import_nmap(
     path: Annotated[Path, typer.Argument(help="XML de Nmap generado con -oX.")],
@@ -1253,6 +1552,50 @@ def import_nmap(
         print(result.model_dump_json(indent=2))
     else:
         render(result)
+
+
+def _import_tool(
+    parser: Callable[[Path], ScanResult], path: Path, no_save: bool, json_out: bool, db: Path | None
+) -> None:
+    try:
+        result = parser(path)
+    except ToolImportError as exc:
+        raise typer.BadParameter(str(exc), param_hint="PATH") from exc
+    if not no_save:
+        with _open_storage(db) as storage:
+            storage.save(result)
+    if json_out:
+        print(result.model_dump_json(indent=2))
+    else:
+        render(result)
+
+
+@import_app.command("subfinder")
+def import_subfinder(
+    path: Annotated[Path, typer.Argument(help="Salida de `subfinder -oJ` (JSON por líneas).")],
+    no_save: NoSave = False,
+    json_out: AsJson = False,
+    db: DbPath = None,
+) -> None:
+    """Guarda como scan los subdominios (y las IP, con `-ip`) de una salida de Subfinder.
+
+    Solo lee el fichero: no ejecuta Subfinder ni contacta con nadie.
+    """
+    _import_tool(parse_subfinder, path, no_save, json_out, db)
+
+
+@import_app.command("maigret")
+def import_maigret(
+    path: Annotated[Path, typer.Argument(help="Informe de `maigret --json simple|ndjson`.")],
+    no_save: NoSave = False,
+    json_out: AsJson = False,
+    db: DbPath = None,
+) -> None:
+    """Guarda como scan las cuentas que Maigret dio por encontradas.
+
+    Solo lee el fichero: no ejecuta Maigret ni contacta con nadie. Las cuentas no se verifican.
+    """
+    _import_tool(parse_maigret, path, no_save, json_out, db)
 
 
 @app.command()
@@ -1309,7 +1652,8 @@ def export(
         typer.Option(
             "--format",
             "-f",
-            help="json, md, html, csv, csv-relations, csv-findings, graphml, gexf o cypher.",
+            help="json, md, html, csv, csv-relations, csv-findings, graphml, gexf, cypher, "
+            "stix, misp, attack-surface o executive.",
         ),
     ] = "html",
     output: Annotated[
@@ -1331,8 +1675,12 @@ def export(
     result = _filtered(result, only, exclude)
     ext = report.FORMATS[fmt][0]
     output = output or Path("reports") / f"osineitor-{scan_id}-{result.target.value}.{ext}"
+    try:
+        content = report.render(result, fmt)
+    except ExportUnavailable as exc:
+        raise typer.BadParameter(str(exc), param_hint="--format") from exc
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(report.render(result, fmt), encoding="utf-8")
+    output.write_text(content, encoding="utf-8")
     if json_out:
         _print_json({"scan_id": scan_id, "format": fmt, "path": str(output)})
     else:
@@ -1512,6 +1860,10 @@ def _render_watch(reports: list[watch_mod.TargetReport]) -> None:
             console.print(
                 f"  [bold]{alert.severity}[/] {escape(alert.title)}: {escape(alert.value)}"
             )
+        if r.pending:
+            console.print(f"  [dim]{r.pending} entidad(es) nueva(s) esperan confirmación[/]")
+        if r.held:
+            console.print(f"  [yellow]{r.held} alerta(s) retenida(s) por la ventana de silencio[/]")
         for d in r.deliveries:
             if not d["ok"]:
                 console.print(

@@ -19,8 +19,8 @@ Sale del [ROADMAP](../../ROADMAP.md) (fase 10). Criterios comunes, de
 | F10.6 | M | Evaluación | ✅ | `scripts/eval_ai.py` + corpus etiquetado; números en `docs/IA.md` |
 | F10.1 | S | `osineitor summarize <scan>` | ✅ | Solo lee scans guardados; muestra únicamente frases validadas |
 | F10.7 | S | Resúmenes basados en hallazgos | ✅ | Los hallazgos van primero en los hechos, con evidencia y entidades afectadas |
-| F10.4 | S | Servidor MCP | ⬜ | Aplazado: exige un servidor JSON-RPC por stdio (o la dependencia `mcp`) y decidir qué herramientas expone; no es parte de la ayuda al análisis |
-| F10.5 | C | Sugerencia de pivotes | ⬜ | Aplazado: es *Could*; además necesita un segundo prompt con su propia validación |
+| F10.4 | S | Servidor MCP | ✅ | Cierre del roadmap: `osineitor mcp` (ver `docs/MCP.md`). |
+| F10.5 | C | Sugerencia de pivotes | ✅ | Cierre del roadmap: `osineitor suggest N`; solo propone. |
 
 ## Decisiones
 

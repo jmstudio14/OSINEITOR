@@ -41,6 +41,10 @@ Storage (storage.py, SQLite) ──► Informes (report/: JSON, Markdown, HTML, 
 | `scanner.py` | `Scanner`: API de librería (`scan`, `ascan`, `cancel`); la vigilancia la reutiliza |
 | `findings.py` | Motor de hallazgos: reglas YAML de `data/rules/` evaluadas sobre las entidades (las usa el analizador `findings` y las alertas de `watch`) |
 | `diff.py` | `osineitor diff`: entidades y hallazgos nuevos, desaparecidos y modificados entre dos scans |
+| `tool_import.py` | `osineitor import subfinder` y `import maigret`: leen la salida JSON de esas herramientas y la convierten en un `ScanResult` (sin red, sin pivoteo) |
+| `mcp_server.py` | `osineitor mcp`: servidor MCP por stdio (consulta y scans pasivos; sin módulos activos) |
+| `pivots.py` | `osineitor suggest`: propone qué investigar a continuación sin ejecutarlo |
+| `targets.py` | Lee la lista de `scan --targets-file` |
 | `nmap_import.py` | `osineitor import nmap`: lee un XML de Nmap y lo convierte en un `ScanResult` (sin red, sin pivoteo) |
 | `crypto_address.py` | Reconoce y valida direcciones de criptomonedas |
 | `watch.py` | Vigilancia continua (`osineitor watch`): qué es nuevo y qué avisar ([VIGILANCIA.md](VIGILANCIA.md)) |

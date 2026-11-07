@@ -11,6 +11,80 @@ las fases 5 a 11 (v0.6.0 a v1.0.0) en lo que no depende de cuentas o de red real
 publicado ni se ha probado contra los servicios reales; el detalle de cada fase y sus límites está
 en `docs/plans/fase-NN.md`. Las secciones van de la fase más reciente a la más antigua.
 
+### Cierre del roadmap (pendientes y parciales)
+
+Plan en `docs/plans/cierre-roadmap.md`. Se rellena según se cierra cada bloque.
+
+- **DNS wildcard (F1.15):** `dns` sondea una etiqueta aleatoria de la zona de cada subdominio; si el
+  subdominio solo resuelve a las IP del wildcard, lo marca (`wildcard: true`) y no pivota a esas
+  IP. Un sondeo por zona y escaneo.
+- **Límites por fuente (F1.6):** `shodan` (1/s), `hibp` y `hibp_pastes` (plan más bajo, 10/min
+  compartidos), `hunter_verify` y `hunter_domain`, `wayback` (CDX, 60/min) y `crtsh` declaran su
+  `min_interval` según la documentación de cada servicio.
+- **Supresión de ruido en `watch` (F9.4):** `confirm: N` por objetivo (alertar solo si la entidad
+  se ve en N ejecuciones seguidas) y `quiet: HH:MM-HH:MM` por notificador (ventana de silencio sin
+  pérdida de alertas). `watch run --json` añade `pending` y `held` por objetivo. Migración 9 de la
+  base de datos (`watch_pending`).
+- **Casos (F7.2), búsqueda global (F7.5) y correlación (F7.6):** `osineitor case new/add/note/show/list`
+  agrupa scans con descripción, etiquetas y notas; `osineitor search VALOR` dice en qué scans y casos
+  aparece un dato (también la semilla); `case add` y `case show` avisan de los datos
+  identificadores que ya figuran en otro caso. Migración 10 (tablas `cases`, `case_scans`,
+  `case_notes` e índice por valor). Salidas `--json` en el contrato (`case_show_output`,
+  `case_list_output`, `search_output`).
+- **Línea temporal (F7.4):** `osineitor timeline N` ordena las fechas de los datos del scan
+  (registro, certificados, Wayback, filtraciones, actividad cripto…), con las futuras marcadas. Salida
+  `--json` en el contrato (`timeline_output`).
+- **Exportación a STIX 2.1 y a MISP (F8.1 y F8.2):** `osineitor export N -f stix` y `-f misp`
+  generan un bundle STIX y un evento MISP con los dominios, IP, URL, emails y CVE del scan. Las
+  librerías `stix2` y `pymisp` son extras opcionales (`osineitor[stix]`, `osineitor[misp]`) y entran
+  en `dev`. En MISP nada se marca como indicador de detección y el evento no se comparte.
+- **Importación de Subfinder y Maigret y lista de objetivos (F8.7):** `osineitor import subfinder`
+  (`-oJ`) y `osineitor import maigret` (`--json simple|ndjson`) guardan su salida como un scan, sin
+  ejecutar nada; Amass no se importa porque su JSON no tiene un formato estable que comprobar.
+  `osineitor scan --targets-file lista.txt` lanza un scan por objetivo (hasta 200), sin que uno
+  inválido frene a los demás.
+- **Riesgo por activo (F7.9):** `osineitor risk N` puntúa de 0 a 100 cada dominio o IP según sus
+  hallazgos (ponderados por la confianza del dato afectado) y su exposición (servicios y CVE), con el
+  desglose del porqué. Es una heurística de priorización sin contrastar con scans reales. Salida
+  `--json` en el contrato (`risk_output`).
+- **Vigilancia de filtraciones (F9.7):** un email en `watch.yml` alerta (`new-breach`, severidad alta)
+  de las filtraciones de `leakcheck` o `hibp` que no figuraban en la ejecución anterior; lo ya filtrado
+  al fijar la línea base no alerta. Los infostealers no están cubiertos (ver
+  `docs/MODULES.md#fuentes-evaluadas-y-no-incluidas`).
+- **Más fuentes (F4.21, F4.22, F5.1, F5.12):** `leakcheck` (filtraciones por email, API pública
+  sin datos), `pgp_keyserver` (clave PGP con identidad verificada), `reverse_ip` (hostnames en la
+  misma IP; una IP con más de 50 queda en un resumen) y `analytics_ids` (IDs de Google Analytics,
+  Tag Manager, Ads y AdSense de la portada; activo).
+- **Extracción de perfil y pivote recursivo (F5.4, F5.5):** `profile_extract` completa el perfil de
+  DEV Community y Codeberg con lo que el dueño publicó (nombre, bio, web) leyendo sus APIs
+  oficiales, sin tocar HTML ni guardar emails, y emite como `username` los de X y GitHub que
+  enlazó para que el motor los investigue en el siguiente nivel.
+- **Adaptador de Maigret (F5.15):** `ext_maigret` ejecuta el `maigret` instalado por el usuario
+  (sin recursión ni extracción), lee su informe `--json simple` de una carpeta temporal y emite
+  los perfiles que dio por encontrados. `ExternalToolModule` separa ahora la comprobación del
+  binario (`_executable`) para los adaptadores cuyo informe no sale por stdout.
+- **Bluesky y más registros de desarrollo (F5.10, F5.11):** el módulo `bluesky` lee el perfil
+  público de un username (`<usuario>.bsky.social` o un handle con dominio propio). `dev_registries`
+  añade PyPI (su página pública de perfil) y Stack Overflow (solo nombres visibles idénticos,
+  marcados `match: display_name` y sin `verified`).
+- **Servidor MCP (F10.4):** `osineitor mcp` expone por stdio, a agentes de IA, la consulta de scans
+  guardados, la búsqueda, los hallazgos, la sugerencia de pivotes y el lanzamiento de scans
+  **pasivos**. No hay forma de pedir módulos activos ni de investigar ficheros locales, y cada scan
+  tiene tope de profundidad, entidades, peticiones y tiempo. Ver `docs/MCP.md`.
+- **Sugerencia de pivotes (F10.5):** `osineitor suggest N` propone qué investigar a continuación
+  (datos sin investigar, módulos pasivos disponibles y el comando) sin ejecutar nada. Salida `--json`
+  en el contrato (`suggest_output`).
+- **Resolución de entidades (F7.10):** `osineitor resolve N` agrupa cuentas que comparten email
+  de origen, username o nombre, siempre como hipótesis con sus señales y una puntuación que no pasa de
+  0,95. Los informes `md` y `executive` las incluyen etiquetadas. Salida `--json` en el contrato
+  (`resolve_output`).
+- **Informes de superficie de ataque y ejecutivo (F7.12 y F7.7):** `osineitor export N -f
+  attack-surface` y `-f executive` generan dos informes en Markdown pensados para leerse: el inventario
+  de lo expuesto con los hallazgos priorizados, y un resumen para quien decide con límites y anexos.
+- **Vigilancia de dominios parecidos (F9.6):** `lookalike_domains` emite además un `record`
+  `lookalike:<parecido>` por cada dominio registrado, y `alerts.yml` trae dos reglas nuevas:
+  `new-lookalike-domain` (media) y `new-lookalike-domain-with-mail` (alta, si tiene MX).
+
 ### Añadido
 
 - **`web_meta` (F4.5, activo):** `robots.txt`, sitemaps y `security.txt` (RFC 9116). Emite las

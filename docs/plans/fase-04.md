@@ -31,9 +31,9 @@ del [ROADMAP](../../ROADMAP.md):
 | F4.20 | S | `lookalike_domains` | ⬜ | Se implementa sin dnstwist |
 | F4.10 | C | `abusech` | ⬜ | Se implementa (ThreatFox y URLhaus) |
 | F4.24 | C | `ext_subfinder` | ⬜ | Se implementa; `ext_amass` aplazado |
-| F4.22 | C | `reverse_ip` | ⛔ | Bloqueado por *spike* |
+| F4.22 | C | `reverse_ip` | ✅ | Cierre del roadmap: `reverse_ip` con la API gratuita de HackerTarget; si la IP aloja más de 50 hostnames deja un resumen en vez de dominios que pivotar. |
 | F4.23 | C | `geoip_offline` | ⛔ | Bloqueado por *spike* |
-| F4.21 | C | `analytics_ids` | ⛔ | Bloqueado por *spike* |
+| F4.21 | C | `analytics_ids` | ✅ | Cierre del roadmap: `analytics_ids` (activo) extrae los IDs de la portada; no busca otros dominios con el mismo ID porque no hay una fuente gratuita verificada. |
 
 ## Orden de trabajo y verificación
 

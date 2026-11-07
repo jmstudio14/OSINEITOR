@@ -16,9 +16,9 @@ Sale del [ROADMAP](../../ROADMAP.md) (fase 8). Criterios comunes, de
 | F8.5 | M | API de librería | ✅ | `osineitor.Scanner` (`scan`, `ascan`, `cancel`) |
 | F8.6 | M | Plugins externos | ✅ | *Entry points* del grupo `osineitor.modules` |
 | F8.3 | S | Formatos de grafo | ✅ | GraphML, GEXF y script Cypher, sin dependencias |
-| F8.1 | S | Exportación STIX 2.1 | ⬜ | Aplazado: dependencia nueva (`stix2`) y validación con el validador de OASIS por comprobar |
+| F8.1 | S | Exportación STIX 2.1 | ✅ | Cierre del roadmap: `export -f stix` (extra `osineitor[stix]`). |
 | F8.7 | S | Importación | 🟡 | Solo `osineitor import nmap` (XML `-oX`, guardado como un scan, sin pivoteo). Aplazado: `--targets-file` obliga a repetir el scan por objetivo y los formatos de Subfinder, Amass y Maigret no están verificados |
-| F8.2 | C | Exportación a MISP | ⬜ | Aplazado: `pymisp` y un servidor MISP con el que probar |
+| F8.2 | C | Exportación a MISP | ✅ | Cierre del roadmap: `export -f misp` (extra `osineitor[misp]`); no se ha probado contra un servidor MISP. |
 
 ## Decisiones
 

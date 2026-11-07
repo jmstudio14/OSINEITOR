@@ -10,6 +10,9 @@ from osineitor.report.graph_export import to_cypher, to_gexf, to_graphml
 from osineitor.report.html import to_html
 from osineitor.report.json_report import to_json
 from osineitor.report.markdown import to_markdown
+from osineitor.report.misp import to_misp
+from osineitor.report.stix import to_stix
+from osineitor.report.surface import to_attack_surface, to_executive
 
 FORMATS: dict[str, tuple[str, Callable[[ScanResult], str]]] = {
     "json": ("json", to_json),
@@ -21,6 +24,10 @@ FORMATS: dict[str, tuple[str, Callable[[ScanResult], str]]] = {
     "graphml": ("graphml", to_graphml),
     "gexf": ("gexf", to_gexf),
     "cypher": ("cypher", to_cypher),
+    "stix": ("stix.json", to_stix),
+    "misp": ("misp.json", to_misp),
+    "attack-surface": ("attack-surface.md", to_attack_surface),
+    "executive": ("executive.md", to_executive),
 }
 
 

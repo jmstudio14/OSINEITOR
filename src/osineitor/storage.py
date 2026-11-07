@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from osineitor.config import data_dir
@@ -95,7 +95,68 @@ MIGRATIONS = [
         PRIMARY KEY (target, key)
     );
     """,
+    # 9: entidades nuevas que la vigilancia aún no da por conocidas porque esperan confirmación
+    # en otra ejecución (`confirm`); `count` es las veces seguidas que se han visto.
+    """
+    CREATE TABLE watch_pending (
+        target TEXT NOT NULL,
+        key TEXT NOT NULL,
+        count INTEGER NOT NULL,
+        PRIMARY KEY (target, key)
+    );
+    """,
+    # 10: casos (varios scans de una misma investigación, con notas y etiquetas) y un índice por
+    # valor para buscar un dato en todos los scans.
+    """
+    CREATE TABLE cases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        description TEXT NOT NULL DEFAULT '',
+        tags TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL
+    );
+    CREATE TABLE case_scans (
+        case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+        scan_id INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+        added_at TEXT NOT NULL,
+        PRIMARY KEY (case_id, scan_id)
+    );
+    CREATE INDEX idx_case_scans_scan ON case_scans(scan_id);
+    CREATE TABLE case_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+        at TEXT NOT NULL,
+        text TEXT NOT NULL
+    );
+    CREATE INDEX idx_entities_value ON entities(lower(value));
+    """,
 ]
+
+# Tipos cuya coincidencia entre casos dice algo: identifican a alguien o algo concreto. Se dejan
+# fuera `technology`, `service`, `record`, `finding`, `asn` o `netblock`: coinciden en casi todo.
+CORRELATION_TYPES = (
+    "ip",
+    "domain",
+    "email",
+    "username",
+    "profile",
+    "phone",
+    "crypto_address",
+    "certificate",
+    "person",
+    "organization",
+    "file",
+)
+# Cada fila es una entidad guardada; la semilla de un scan solo está en `scans`, así que se une.
+_ALL_ENTITIES = (
+    "WITH ent(scan_id, type, value, source, confidence) AS ("
+    " SELECT scan_id, type, value, source, confidence FROM entities"
+    " UNION ALL SELECT id, target_type, target, NULL, NULL FROM scans)"
+)
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 class StorageError(Exception):
@@ -311,6 +372,13 @@ class Storage:
         rows = self._conn.execute("SELECT key FROM watch_seen WHERE target = ?", (target,))
         return {key for (key,) in rows}
 
+    def watch_pending(self, target: str) -> dict[str, int]:
+        """Entidades nuevas de `target` pendientes de confirmar, con las veces que se han visto."""
+        rows = self._conn.execute(
+            "SELECT key, count FROM watch_pending WHERE target = ?", (target,)
+        )
+        return dict(rows.fetchall())
+
     def watch_record(
         self,
         target: str,
@@ -320,8 +388,12 @@ class Storage:
         status: str,
         add: Iterable[str],
         remove: Iterable[str] = (),
+        pending: dict[str, int] | None = None,
     ) -> None:
-        """Anota una ejecución: cuándo fue, qué entidades ya se conocen y cuáles desaparecieron."""
+        """Anota una ejecución: cuándo fue, qué entidades ya se conocen y cuáles desaparecieron.
+
+        `pending`, si se indica, sustituye a todo lo pendiente de confirmar de `target`.
+        """
         with self._conn:
             self._conn.execute(
                 "INSERT INTO watch_targets (target, last_at, last_scan, status) VALUES (?, ?, ?, ?)"
@@ -337,6 +409,167 @@ class Storage:
                 "DELETE FROM watch_seen WHERE target = ? AND key = ?",
                 [(target, key) for key in remove],
             )
+            if pending is not None:
+                self._conn.execute("DELETE FROM watch_pending WHERE target = ?", (target,))
+                self._conn.executemany(
+                    "INSERT INTO watch_pending (target, key, count) VALUES (?, ?, ?)",
+                    [(target, key, n) for key, n in pending.items()],
+                )
+
+    # --- casos (F7.2), búsqueda global (F7.5) y correlación (F7.6) ---
+
+    def case_create(self, name: str, description: str = "", tags: Iterable[str] = ()) -> int:
+        try:
+            with self._conn:
+                cur = self._conn.execute(
+                    "INSERT INTO cases (name, description, tags, created_at) VALUES (?, ?, ?, ?)",
+                    (name, description, json.dumps(sorted(set(tags))), _now()),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise StorageError(f"ya existe el caso {name!r}") from exc
+        assert cur.lastrowid is not None
+        return cur.lastrowid
+
+    def case_id(self, name: str) -> int | None:
+        row = self._conn.execute("SELECT id FROM cases WHERE name = ?", (name,)).fetchone()
+        return row[0] if row else None
+
+    def case_add_scan(self, case_id: int, scan_id: int) -> bool:
+        """Añade el scan al caso; `False` si ya estaba. `StorageError` si el scan no existe."""
+        if not self._conn.execute("SELECT 1 FROM scans WHERE id = ?", (scan_id,)).fetchone():
+            raise StorageError(f"no existe el scan {scan_id}")
+        with self._conn:
+            cur = self._conn.execute(
+                "INSERT OR IGNORE INTO case_scans (case_id, scan_id, added_at) VALUES (?, ?, ?)",
+                (case_id, scan_id, _now()),
+            )
+        return cur.rowcount == 1
+
+    def case_add_note(self, case_id: int, text: str) -> None:
+        with self._conn:
+            self._conn.execute(
+                "INSERT INTO case_notes (case_id, at, text) VALUES (?, ?, ?)",
+                (case_id, _now(), text),
+            )
+
+    def case_get(self, name: str) -> dict | None:
+        row = self._conn.execute(
+            "SELECT id, name, description, tags, created_at FROM cases WHERE name = ?", (name,)
+        ).fetchone()
+        if row is None:
+            return None
+        case_id, real_name, description, tags, created = row
+        scans = [
+            {"id": i, "target_type": t, "target": v, "started_at": s, "entities": n}
+            for i, t, v, s, n in self._conn.execute(
+                "SELECT s.id, s.target_type, s.target, s.started_at,"
+                " (SELECT COUNT(*) FROM entities e WHERE e.scan_id = s.id)"
+                " FROM case_scans cs JOIN scans s ON s.id = cs.scan_id"
+                " WHERE cs.case_id = ? ORDER BY s.id",
+                (case_id,),
+            )
+        ]
+        notes = [
+            {"at": at, "text": text}
+            for at, text in self._conn.execute(
+                "SELECT at, text FROM case_notes WHERE case_id = ? ORDER BY id", (case_id,)
+            )
+        ]
+        return {
+            "id": case_id,
+            "name": real_name,
+            "description": description,
+            "tags": json.loads(tags),
+            "created_at": created,
+            "scans": scans,
+            "notes": notes,
+        }
+
+    def case_list(self) -> list[dict]:
+        return [
+            {
+                "name": n,
+                "description": d,
+                "tags": json.loads(t),
+                "created_at": c,
+                "scans": count,
+            }
+            for n, d, t, c, count in self._conn.execute(
+                "SELECT c.name, c.description, c.tags, c.created_at,"
+                " (SELECT COUNT(*) FROM case_scans cs WHERE cs.case_id = c.id)"
+                " FROM cases c ORDER BY c.name"
+            )
+        ]
+
+    def search(
+        self, value: str, *, contains: bool = False, types: Iterable[str] = (), limit: int = 500
+    ) -> list[dict]:
+        """Scans (y casos) donde aparece `value`, por igualdad sin distinguir mayúsculas o, con
+        `contains`, por subcadena. Incluye la semilla de cada scan."""
+        needle = value.strip().lower()
+        wanted = tuple(types)
+        where = "instr(lower(value), ?) > 0" if contains else "lower(value) = ?"
+        params: list[object] = [needle]
+        if wanted:
+            where += f" AND type IN ({','.join('?' * len(wanted))})"
+            params += wanted
+        rows = self._conn.execute(
+            f"{_ALL_ENTITIES} SELECT ent.scan_id, ent.type, ent.value, ent.source, ent.confidence,"
+            " s.target_type, s.target, s.started_at FROM ent JOIN scans s ON s.id = ent.scan_id"
+            f" WHERE {where} ORDER BY ent.scan_id DESC, ent.type, ent.value LIMIT ?",
+            (*params, limit),
+        ).fetchall()
+        cases_of = self._cases_by_scan({r[0] for r in rows})
+        return [
+            {
+                "scan_id": sid,
+                "type": typ,
+                "value": val,
+                "source": src,
+                "confidence": conf,
+                "target": f"{ttype}:{target}",
+                "started_at": started,
+                "cases": cases_of.get(sid, []),
+            }
+            for sid, typ, val, src, conf, ttype, target, started in rows
+        ]
+
+    def _cases_by_scan(self, scan_ids: set[int]) -> dict[int, list[str]]:
+        found: dict[int, list[str]] = {}
+        for scan_id in scan_ids:
+            found[scan_id] = [
+                name
+                for (name,) in self._conn.execute(
+                    "SELECT c.name FROM case_scans cs JOIN cases c ON c.id = cs.case_id"
+                    " WHERE cs.scan_id = ? ORDER BY c.name",
+                    (scan_id,),
+                )
+            ]
+        return found
+
+    def correlations(self, case_id: int) -> list[dict]:
+        """Entidades identificadoras del caso que también aparecen en scans de **otros** casos."""
+        marks = ",".join("?" * len(CORRELATION_TYPES))
+        rows = self._conn.execute(
+            f"{_ALL_ENTITIES} SELECT DISTINCT a.type, lower(a.value), c2.name, b.scan_id"
+            " FROM ent a"
+            " JOIN case_scans m ON m.scan_id = a.scan_id AND m.case_id = ?"
+            " JOIN ent b ON b.type = a.type AND lower(b.value) = lower(a.value)"
+            " JOIN case_scans m2 ON m2.scan_id = b.scan_id AND m2.case_id != ?"
+            " JOIN cases c2 ON c2.id = m2.case_id"
+            f" WHERE a.type IN ({marks}) ORDER BY a.type, lower(a.value), c2.name, b.scan_id",
+            (case_id, case_id, *CORRELATION_TYPES),
+        ).fetchall()
+        grouped: dict[tuple[str, str], dict] = {}
+        for typ, val, case_name, scan_id in rows:
+            item = grouped.setdefault(
+                (typ, val), {"type": typ, "value": val, "cases": [], "scans": []}
+            )
+            if case_name not in item["cases"]:
+                item["cases"].append(case_name)
+            if scan_id not in item["scans"]:
+                item["scans"].append(scan_id)
+        return list(grouped.values())
 
     def purge(self, before: str, *, dry_run: bool = False) -> int:
         """Borra los scans iniciados antes de `before` (fecha ISO) y devuelve cuántos eran."""

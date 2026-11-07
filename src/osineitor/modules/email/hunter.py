@@ -31,6 +31,7 @@ class HunterVerify(_HunterBase):
     consumes = frozenset({EntityType.EMAIL})
     produces = frozenset({EntityType.RECORD, EntityType.URL})
     canary = "test@example.com"
+    min_interval = 0.1  # documentado: 10 peticiones/s en el verificador
 
     async def run(self, entity: Entity) -> list[Entity]:
         data = await self._get("email-verifier", email=entity.value)
@@ -62,6 +63,7 @@ class HunterDomain(_HunterBase):
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.EMAIL, EntityType.RECORD})
     canary = "example.com"
+    min_interval = 0.1  # documentado: 15 peticiones/s en la búsqueda por dominio
 
     def accepts(self, entity: Entity) -> bool:
         return is_root_domain(entity)

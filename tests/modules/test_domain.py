@@ -16,7 +16,7 @@ from osineitor.modules.domain.dns import Dns
 from osineitor.modules.domain.http_fingerprint import HttpFingerprint
 from osineitor.modules.domain.rdap import Rdap
 from osineitor.modules.domain.wayback import Wayback
-from tests.conftest import FakeResolver
+from tests.conftest import FakeRdata, FakeResolver
 
 DOMAIN = Entity(type=EntityType.DOMAIN, value="example.com")
 SUB = Entity(type=EntityType.DOMAIN, value="a.example.com", data={"subdomain": True})
@@ -257,3 +257,72 @@ async def test_dns_domain_without_records_is_still_empty(ctx):
 
     ctx.resolver = FakeResolver({})  # NoAnswer en todo: el dominio existe pero no tiene registros
     assert await Dns(ctx).run(Entity(type=EntityType.DOMAIN, value="example.com")) == []
+
+
+SUB = Entity(type=EntityType.DOMAIN, value="www.example.com", data={"subdomain": True})
+
+
+class WildcardResolver(FakeResolver):
+    """Zona con wildcard: cualquier etiqueta desconocida de example.com resuelve a la misma IP."""
+
+    async def resolve(self, name, rtype, lifetime=None):
+        if name.endswith(".example.com") and (name, rtype) not in self.records and rtype == "A":
+            return [FakeRdata("203.0.113.7")]
+        return await super().resolve(name, rtype, lifetime)
+
+
+async def test_dns_marks_subdomain_that_only_resolves_by_wildcard(ctx):
+    ctx.resolver = WildcardResolver({("www.example.com", "A"): ["203.0.113.7"]})
+    out = await Dns(ctx).run(SUB)
+    assert [e.type for e in out] == [EntityType.RECORD, EntityType.DOMAIN]
+    assert out[0].data["wildcard"] is True
+    assert out[1].value == "www.example.com" and out[1].data["wildcard"] is True
+    assert not any(e.type == EntityType.IP for e in out)  # no se pivota a la IP del wildcard
+
+
+async def test_dns_subdomain_with_its_own_address_is_not_wildcard(ctx):
+    ctx.resolver = WildcardResolver({("www.example.com", "A"): ["198.51.100.9"]})
+    out = await Dns(ctx).run(SUB)
+    assert [e.type for e in out] == [EntityType.RECORD, EntityType.IP]
+    assert out[0].data.get("wildcard") is None
+
+
+async def test_dns_without_wildcard_zone_keeps_pivoting(ctx):
+    ctx.resolver = FakeResolver({("www.example.com", "A"): ["203.0.113.7"]})
+    out = await Dns(ctx).run(SUB)
+    assert [e.type for e in out] == [EntityType.RECORD, EntityType.IP]
+
+
+async def test_dns_does_not_probe_wildcard_for_the_apex(ctx):
+    resolver = WildcardResolver({("example.com", "A"): ["203.0.113.7"]})
+    seen: list[str] = []
+    original = resolver.resolve
+
+    async def spy(name, rtype, lifetime=None):
+        seen.append(name)
+        return await original(name, rtype, lifetime)
+
+    resolver.resolve = spy
+    ctx.resolver = resolver
+    out = await Dns(ctx).run(DOMAIN)
+    assert [e.type for e in out] == [EntityType.RECORD, EntityType.IP]
+    assert not any(n.startswith("osineitor-") for n in seen)
+
+
+async def test_dns_probes_each_zone_once(ctx):
+    resolver = WildcardResolver({})
+    probes: list[str] = []
+    original = resolver.resolve
+
+    async def spy(name, rtype, lifetime=None):
+        if name.startswith("osineitor-") and rtype == "A":
+            probes.append(name)
+        return await original(name, rtype, lifetime)
+
+    resolver.resolve = spy
+    ctx.resolver = resolver
+    module = Dns(ctx)
+    for host in ("a.example.com", "b.example.com"):
+        resolver.records[(host, "A")] = ["198.51.100.1"]
+        await module.run(Entity(type=EntityType.DOMAIN, value=host, data={"subdomain": True}))
+    assert len(probes) == 1

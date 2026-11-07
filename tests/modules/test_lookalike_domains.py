@@ -53,7 +53,11 @@ async def test_registered_lookalikes_are_reported_without_http_or_domain_entitie
         }
     )
     out = await LookalikeDomains(ctx).run(DOMAIN)
-    assert [(e.type, e.value) for e in out] == [(EntityType.RECORD, "lookalike:example.com")]
+    assert [(e.type, e.value) for e in out] == [
+        (EntityType.RECORD, "lookalike:example.com"),
+        (EntityType.RECORD, "lookalike:example.net"),
+        (EntityType.RECORD, "lookalike:exmple.com"),
+    ]
     data = out[0].data
     assert [r["domain"] for r in data["registered"]] == ["example.net", "exmple.com"]
     typo = data["registered"][1]
@@ -87,3 +91,24 @@ def test_only_the_investigated_domain_is_accepted(ctx):
     sub = Entity(type=EntityType.DOMAIN, value="a.example.com", data={"subdomain": True})
     assert not LookalikeDomains(ctx).accepts(sub)
     assert LookalikeDomains(ctx).accepts(DOMAIN)
+
+
+@respx.mock
+async def test_each_registered_lookalike_is_its_own_record_so_a_new_one_has_a_new_key(ctx):
+    ctx.resolver = FakeResolver(
+        {
+            ("exmple.com", "NS"): ["ns1.parking.test."],
+            ("exmple.com", "A"): ["203.0.113.7"],
+            ("exmple.com", "MX"): ["mail.parking.test."],
+        }
+    )
+    out = await LookalikeDomains(ctx).run(DOMAIN)
+    typo = next(e for e in out if e.value == "lookalike:exmple.com")
+    assert typo.data == {
+        "lookalike_of": "example.com",
+        "technique": "omisión",
+        "ns": ["ns1.parking.test"],
+        "a": ["203.0.113.7"],
+        "mx": ["mail.parking.test"],
+    }
+    assert typo.parent == DOMAIN.key

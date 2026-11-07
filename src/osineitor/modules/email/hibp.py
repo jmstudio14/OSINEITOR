@@ -15,6 +15,7 @@ class Hibp(Module):
     produces = frozenset({EntityType.BREACH})
     requires_key = "hibp"
     canary = "test@example.com"
+    min_interval = 12.0  # plan más bajo: 10/min por key, compartidos con `hibp_pastes`
 
     async def run(self, entity: Entity) -> list[Entity]:
         response = await self.ctx.http.get(

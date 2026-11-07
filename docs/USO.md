@@ -39,11 +39,22 @@ osineitor domain example.com --preset quick   # con un preset (ver Presets)
 
 osineitor history --limit 50          # scans guardados (20 por defecto)
 osineitor show 3                      # volver a ver el scan 3
-osineitor export 3 -f html            # informe en reports/ (json | md | html | csv | graphml | gexf | cypher)
+osineitor export 3 -f html            # informe en reports/ (json | md | html | csv | graphml | gexf | cypher | executive | attack-surface)
 osineitor export 3 -f md -o informe.md  # en el fichero indicado
 osineitor diff 3 7                    # qué cambió entre dos scans (--json para máquinas)
 osineitor verify 3                    # comprueba las evidencias del scan 3 (ver Evidencia)
+osineitor search 203.0.113.7          # en qué scans y casos aparece un dato (--contains, --type)
+osineitor timeline 3                  # las fechas de los datos del scan 3, en orden
+osineitor risk 3                      # riesgo orientativo de cada dominio o IP del scan 3
+osineitor resolve 3                   # hipótesis: cuentas que podrían ser de la misma persona
+osineitor suggest 3                   # qué investigar a continuación (solo propone)
+osineitor mcp                         # servidor MCP por stdio para agentes de IA (ver MCP.md)
+osineitor case new acme -t cliente    # agrupa scans de una investigación (ver Casos)
+osineitor case add acme 3 7           # añade scans al caso y avisa de datos que ya vio otro caso
 osineitor import nmap scan.xml        # guarda como scan un XML de Nmap (-oX); no ejecuta Nmap
+osineitor import subfinder sub.json   # ídem con la salida de `subfinder -oJ`
+osineitor import maigret report.json  # ídem con `maigret --json simple|ndjson`
+osineitor scan --targets-file lista.txt  # un scan por objetivo de la lista
 
 osineitor modules                     # módulos disponibles y estado de sus API keys
 osineitor presets                     # perfiles de escaneo disponibles
@@ -388,6 +399,95 @@ recomendación. Un hallazgo es una pista a revisar, no una conclusión: p. ej. u
 nuevas, las desaparecidas y las que cambiaron de datos (campo, antes y después), y aparte los
 hallazgos. Avisa si los dos scans son de objetivos distintos.
 
+### Casos, búsqueda y correlación
+
+Un **caso** agrupa varios scans de una misma investigación, con descripción, etiquetas y notas.
+
+```bash
+osineitor case new acme -d "Auditoría de huella 2026" -t cliente -t externa
+osineitor case add acme 3 7 12        # varios scans a la vez; 3 y 7 pueden ser de objetivos distintos
+osineitor case note acme "El cliente confirma que example.org es suyo"
+osineitor case show acme              # scans, notas y datos compartidos con otros casos (--json)
+osineitor case list
+osineitor search 203.0.113.7          # en qué scans y casos aparece (igualdad, sin mayúsculas)
+osineitor search example --contains --type email --type domain
+```
+
+`search` mira también la semilla de cada scan (`fuente: (semilla)`). La **correlación** avisa, en
+`case add` y en `case show`, de los datos de un caso que ya figuran en scans de **otro** caso. Solo
+cuenta lo que identifica a alguien o algo: `ip`, `domain`, `email`, `username`, `profile`, `phone`,
+`crypto_address`, `certificate`, `person`, `organization` y `file`. Tecnologías, servicios,
+registros, hallazgos, ASN y redes se dejan fuera porque coinciden en casi todo. Es una pista, no una
+prueba: dos casos pueden compartir una IP de un CDN o un hosting compartido.
+
+Borrar un scan (`purge`) lo saca de sus casos.
+
+### Línea temporal
+
+`osineitor timeline N` ordena las fechas que traen los **datos** del scan: alta, modificación y
+caducidad de un dominio (RDAP o WHOIS), validez de los certificados, primera y última captura de
+Wayback o urlscan, fecha de una filtración, actividad de una dirección cripto, commits y pastes,
+creación de una cuenta, etc. Cada fecha es la que declara su fuente y no se verifica. No incluye
+cuándo vio OSINEITOR el dato (eso está en las observaciones). Las posteriores al inicio del scan, como
+una caducidad, salen marcadas como futuras. Acepta fechas ISO 8601 y los sellos de 14 dígitos de
+Wayback; un valor que no sea una fecha se ignora.
+
+### Riesgo por activo
+
+`osineitor risk N` puntúa de 0 a 100 cada dominio o IP del scan que tenga algo que puntuar
+(`--json` para máquinas). Es una **heurística para decidir qué mirar primero**, no una medida de
+riesgo: los pesos son estimaciones razonables y no se han contrastado con scans reales. Cada fila
+trae el desglose de por qué sale esa nota.
+
+- Cada hallazgo suma según su severidad: crítica 40, alta 25, media 10, baja 3, informativa 0.
+- Pesa menos si el dato afectado tiene poco respaldo: confianza alta ×1,0; media ×0,8; baja ×0,5;
+  sin confianza conocida, ×0,8.
+- La exposición suma 2 puntos por cada servicio abierto y 2 por cada CVE, con un tope de 10
+  puntos por tipo, aunque no haya hallazgo.
+- El total se limita a 100 y se traduce en un nivel: 75 o más crítico, 50 alto, 20 medio, 1 bajo.
+
+Un hallazgo cuenta para el dominio o la IP más cercanos subiendo por el pivoteo: uno sobre un
+registro DNS de `www.example.com` va a ese dominio y uno sobre el puerto 443 de `1.2.3.4`, a esa IP.
+
+### Sugerencia de pivotes
+
+`osineitor suggest N` lista los datos del scan que ningún módulo investigó (por ejemplo, los que
+quedaron en el último nivel de profundidad) con los módulos **pasivos** que podrían hacerlo y el
+comando para lanzarlos (`--json` para máquinas). **Solo propone: no ejecuta nada**; copiar el comando
+y lanzarlo es decisión tuya. Solo se sugieren módulos que pueden correr en tu equipo (con su API key y
+su herramienta); los activos salen aparte en `active_modules`, como información, y nunca van en el
+comando. Los datos personales (email, username, teléfono) llevan `sensitive: true` y el comando incluye
+`--purpose`. Es una aproximación: un módulo puede decidir al correr que no aplica.
+
+### Hipótesis de identidad
+
+`osineitor resolve N` agrupa las cuentas (`profile`) del scan que podrían ser de la misma persona
+(`--json` para máquinas). **Todo es una hipótesis con su evidencia, nunca una identidad confirmada**:
+dos cuentas con el mismo username o nombre pueden ser de personas distintas, y por eso la puntuación
+no pasa de 0,95 y cada grupo lleva las señales que lo justifican. Los informes `md` y `executive`
+incluyen la sección «Hipótesis de identidad» con la misma advertencia.
+
+Señales (pesos orientativos, sin contrastar con datos reales): mismo email de origen, 0,8; mismo
+username, 0,4 (0,2 si tiene menos de 5 caracteres, por común); mismo nombre visible de al menos dos
+palabras, 0,3. Varias señales se combinan como probabilidades independientes y solo se informan los
+grupos de 0,4 o más. No se compara el avatar: ningún módulo guarda su huella y descargar imágenes de
+terceros para compararlas queda fuera del alcance. Los formatos de tabla y de grafo (`csv`, `graphml`…)
+no llevan las hipótesis porque se calculan al consultar, no son entidades guardadas.
+
+### Informes de superficie de ataque y ejecutivo
+
+Dos formatos de `export` en Markdown, pensados para leerse:
+
+- `-f attack-surface`: inventario de dominios, IP con sus servicios, tecnologías y certificados,
+  hallazgos de mayor a menor severidad y los límites del inventario.
+- `-f executive`: resumen para quien decide: frase de resumen, hallazgos clave (críticos, altos y
+  medios, con su recomendación), los cinco activos con más riesgo, la distribución de confianza, los
+  límites del análisis (scan truncado o cancelado, fuentes con error u omitidas) y como anexos las
+  fuentes consultadas y la huella de las evidencias.
+
+Los dos usan la puntuación de riesgo anterior, así que heredan su salvedad. Un activo que no
+aparece no es necesariamente un activo que no existe: solo se lista lo que las fuentes devolvieron.
+
 ### Importar un escaneo de Nmap
 
 `osineitor import nmap scan.xml` guarda como un scan el XML que genera `nmap -oX`. OSINEITOR no
@@ -405,6 +505,33 @@ módulo corre sobre él y no lleva confianza. `--no-save` no lo guarda, `--json`
 (el mismo esquema que `show`) y `--db` elige la base de datos. Úsalo solo con resultados de redes
 propias o autorizadas.
 
+### Importar Subfinder y Maigret
+
+`osineitor import subfinder FICHERO` y `osineitor import maigret FICHERO` guardan como un scan la
+salida de esas herramientas, igual que `import nmap`: solo leen el fichero (hasta 32 MiB), no
+ejecutan nada ni contactan con nadie, y el scan importado no pivota ni lleva confianza. Aceptan
+`--no-save`, `--json` y `--db`.
+
+- **Subfinder** (`subfinder -oJ`, un objeto JSON por línea): cada `host` válido sale como `domain`
+  con las fuentes que dio Subfinder (`sources`) y, si el fichero trae `ip` (`-ip`), su `ip`. El
+  objetivo del scan es un `record` `subfinder:<fichero>` con el SHA-256 y los dominios de entrada.
+- **Maigret** (`--json simple` o `--json ndjson`): cada cuenta que Maigret dio por encontrada sale
+  como `profile` con `site` y `username`. **No se marcan como verificadas**: las comprobó Maigret, no
+  OSINEITOR.
+
+Las líneas o cuentas inválidas se descartan y se cuentan en un evento `skipped`; un fichero sin ni
+una entrada válida se rechaza. **Amass no se importa**: su salida JSON cambió entre versiones y no
+hay un formato estable que comprobar; se prefiere no leer uno sin verificar.
+
+### Lista de objetivos
+
+`osineitor scan --targets-file lista.txt` lanza un scan por cada línea del fichero (UTF-8, hasta
+200 objetivos; las líneas vacías, las que empiezan por `#` y los repetidos se ignoran). Admite las
+mismas opciones que `scan` y cada scan se guarda aparte. Un objetivo inválido o fuera del alcance no
+frena a los demás: se avisa por stderr y el código de salida es el más alto de todos (con Ctrl+C se
+corta la lista). `--json` no se admite en este modo porque saldrían varios documentos; usa
+`--ndjson` o `--quiet`. No se puede combinar con un objetivo suelto.
+
 ### Formatos de exportación
 
 | `-f` | Contenido | Fichero |
@@ -415,6 +542,20 @@ propias o autorizadas.
 | `csv-findings` | Una fila por hallazgo | `.findings.csv` |
 | `graphml`, `gexf` | El grafo (nodos = entidades, aristas = pivoteo) para Gephi y otras herramientas | `.graphml`, `.gexf` |
 | `cypher` | Script para `cypher-shell` de Neo4j: `MERGE` de nodos por clave y relaciones `DISCOVERED` | `.cypher` |
+| `stix` | Bundle STIX 2.1 con los observables de infraestructura (necesita `pip install 'osineitor[stix]'`) | `.stix.json` |
+| `misp` | Evento MISP con atributos, sin compartir (necesita `pip install 'osineitor[misp]'`) | `.misp.json` |
+| `attack-surface` | Inventario de la superficie expuesta y hallazgos priorizados (Markdown) | `.attack-surface.md` |
+| `executive` | Resumen para quien decide, con límites y anexos (Markdown) | `.executive.md` |
+
+**STIX y MISP** exportan solo la infraestructura: dominios, IP, URL, emails y CVE; cuentas,
+hallazgos y demás se omiten porque no tienen equivalente. Los dos usan identificadores
+deterministas (el mismo scan da los mismos), y las librerías `stix2` y `pymisp` son extras
+opcionales: sin ellas, `export -f stix|misp` explica qué instalar. En STIX, dominio → IP sale como
+`resolves_to_refs` y el resto de vínculos como `related-to`. En MISP ningún atributo es `to_ids`
+(lo que sale de un scan es contexto, no un indicador de detección) y el evento queda con
+distribución 0, solo tu organización: compartirlo es una decisión que se toma ya en MISP. El bundle
+STIX lo construye y valida `stix2`; el evento MISP, `pymisp`. Ninguno se ha probado contra un
+servidor MISP ni contra el validador de OASIS.
 
 Los scripts Cypher no se han probado contra una instancia de Neo4j; GraphML y GEXF se validan
 como XML bien formado, no contra Gephi.

@@ -7,6 +7,7 @@ from osineitor.report._common import (
     details,
     evidence_hint,
     evidence_rows,
+    hypothesis_lines,
     seen,
     summary,
     title,
@@ -39,6 +40,7 @@ def to_markdown(result: ScanResult) -> str:
             f"- **{ev.kind}** `{ev.module}`{f' ({ev.entity})' if ev.entity else ''}: {ev.message}"
             for ev in result.events
         ]
+    lines += hypothesis_lines(result)
     lines += ["", "## Evidencias", ""]
     if result.evidence:
         lines += [

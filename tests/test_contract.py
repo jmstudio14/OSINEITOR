@@ -230,7 +230,16 @@ def test_json_outputs_of_every_command_match_the_schema(modules, tmp_path):
         f"notifiers: {{log: {{type: file, path: '{(tmp_path / 'a.ndjson').as_posix()}'}}}}\n",
         encoding="utf-8",
     )
+    runner.invoke(app, ["case", "new", "uno", "--db", db])
+    runner.invoke(app, ["case", "add", "uno", "1", "--db", db])
     cases = {
+        "case_show_output": ["case", "show", "uno", "--db", db, "--json"],
+        "case_list_output": ["case", "list", "--db", db, "--json"],
+        "search_output": ["search", "example.com", "--db", db, "--json"],
+        "timeline_output": ["timeline", "1", "--db", db, "--json"],
+        "risk_output": ["risk", "1", "--db", db, "--json"],
+        "resolve_output": ["resolve", "1", "--db", db, "--json"],
+        "suggest_output": ["suggest", "1", "--db", db, "--json"],
         "watch_output": ["watch", "run", "--file", str(watch_file), "--db", db, "--json"],
         "watch_list_output": ["watch", "list", "--file", str(watch_file), "--db", db, "--json"],
         "purge_output": ["purge", "--older-than", "1000d", "--db", db, "--json"],

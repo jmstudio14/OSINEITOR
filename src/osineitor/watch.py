@@ -41,7 +41,19 @@ from osineitor.storage import Storage
 ALERT_RULES_FILE = Path(__file__).parent / "data" / "rules" / "alerts.yml"
 NOTIFIER_TYPES = ("webhook", "email", "file")
 WEBHOOK_FORMATS = ("generic", "slack", "discord", "teams")
-TARGET_KEYS = {"target", "type", "preset", "depth", "modules", "active", "every", "notify"}
+TARGET_KEYS = {
+    "target",
+    "type",
+    "preset",
+    "depth",
+    "modules",
+    "active",
+    "every",
+    "notify",
+    "confirm",
+}
+QUIET_RE = re.compile(r"^(\d{2}):(\d{2})-(\d{2}):(\d{2})$")
+MAX_CONFIRM = 5
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
 EVERY_RE = re.compile(r"^(\d+)([mhd])$")
 UNITS = {"m": "minutes", "h": "hours", "d": "days"}
@@ -62,6 +74,10 @@ class Notifier:
     def min_severity(self) -> str:
         return self.options.get("min_severity", "info")
 
+    @property
+    def quiet(self) -> str | None:
+        return self.options.get("quiet")
+
 
 @dataclass(frozen=True)
 class Target:
@@ -74,6 +90,7 @@ class Target:
     modules: tuple[str, ...] | None = None
     active: bool = False
     notify: tuple[str, ...] | None = None  # None: todos
+    confirm: int = 1  # ejecuciones seguidas en que debe verse una entidad nueva antes de alertar
 
 
 @dataclass(frozen=True)
@@ -114,6 +131,8 @@ class TargetReport:
     baseline: bool = False
     alerts: list[Alert] = field(default_factory=list)
     deliveries: list[dict[str, Any]] = field(default_factory=list)
+    pending: int = 0  # entidades nuevas que esperan una segunda ejecución (`confirm`)
+    held: int = 0  # alertas retenidas por la ventana de silencio de todos los notificadores
     error: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -126,6 +145,8 @@ class TargetReport:
             "baseline": self.baseline,
             "alerts": [a.as_dict() for a in self.alerts],
             "deliveries": self.deliveries,
+            "pending": self.pending,
+            "held": self.held,
             "error": self.error,
         }
 
@@ -146,6 +167,28 @@ def parse_every(text: Any) -> timedelta:
     return value
 
 
+def _quiet_bounds(name: str, spec: Any) -> tuple[int, int]:
+    """Minutos desde medianoche de inicio y fin de una ventana `HH:MM-HH:MM`."""
+    match = QUIET_RE.fullmatch(str(spec))
+    if not match:
+        raise WatchError(f"{name}: `quiet` debe ser HH:MM-HH:MM (p. ej. 22:00-07:00): {spec!r}")
+    h1, m1, h2, m2 = (int(g) for g in match.groups())
+    if h1 > 23 or h2 > 23 or m1 > 59 or m2 > 59:
+        raise WatchError(f"{name}: `quiet` tiene una hora no válida: {spec!r}")
+    start, end = h1 * 60 + m1, h2 * 60 + m2
+    if start == end:
+        raise WatchError(f"{name}: `quiet` no puede empezar y acabar a la misma hora")
+    return start, end
+
+
+def in_quiet_window(spec: str, moment: datetime) -> bool:
+    """True si `moment` (hora local del equipo) cae en la ventana; el fin es exclusivo y la
+    ventana puede cruzar la medianoche."""
+    start, end = _quiet_bounds("quiet", spec)
+    now = moment.hour * 60 + moment.minute
+    return start <= now < end if start < end else now >= start or now < end
+
+
 def _notifier(name: str, raw: Any) -> Notifier:
     if not NAME_RE.fullmatch(str(name)):
         raise WatchError(f"nombre de notificador no válido: {name!r}")
@@ -154,6 +197,8 @@ def _notifier(name: str, raw: Any) -> Notifier:
     options = {k: v for k, v in raw.items() if k != "type"}
     if options.get("min_severity", "info") not in SEVERITIES:
         raise WatchError(f"{name}: `min_severity` debe ser {', '.join(SEVERITIES)}")
+    if "quiet" in options:
+        _quiet_bounds(name, options["quiet"])
     kind = raw["type"]
     if kind == "webhook":
         if not (bool(options.get("url")) ^ bool(options.get("url_env"))):
@@ -205,6 +250,9 @@ def _target(raw: Any, notifiers: dict[str, Notifier]) -> Target:
             raise WatchError(f"{value}: `notify` debe ser una lista de notificadores")
         if missing := [n for n in notify if n not in notifiers]:
             raise WatchError(f"{value}: notificador desconocido: {', '.join(missing)}")
+    confirm = raw.get("confirm", 1)
+    if not (type(confirm) is int and 1 <= confirm <= MAX_CONFIRM):
+        raise WatchError(f"{value}: `confirm` debe ser un entero de 1 a {MAX_CONFIRM}")
     return Target(
         target=value,
         type=kind,
@@ -215,6 +263,7 @@ def _target(raw: Any, notifiers: dict[str, Notifier]) -> Target:
         modules=tuple(modules) if modules else None,
         active=raw.get("active", False),
         notify=tuple(notify) if notify is not None else None,
+        confirm=confirm,
     )
 
 
@@ -346,15 +395,37 @@ async def run_target(
     known = storage.watch_seen(target.key)
     report.baseline = last is None
     alerts, fresh = find_alerts(result, known)
+    pending: dict[str, int] = {}
+    if not report.baseline and target.confirm > 1:
+        # Una entidad nueva solo alerta si se ve `confirm` ejecuciones seguidas: las que
+        # desaparecen entre medias se olvidan aquí y empiezan de cero.
+        before = storage.watch_pending(target.key)
+        pending = {
+            key: before.get(key, 0) + 1 for key in fresh if before.get(key, 0) + 1 < target.confirm
+        }
+        alerts = [a for a in alerts if a.entity not in pending]
+        fresh -= set(pending)
+        report.pending = len(pending)
     keep_out: set[str] = set()
     if not report.baseline and alerts:
         report.alerts = alerts
         names = target.notify if target.notify is not None else tuple(config.notifiers)
         batch = [config.notifiers[n] for n in names]
-        report.deliveries = await notify.deliver(batch, target.target, report.scan_id, alerts)
-        if report.deliveries and not any(d["ok"] for d in report.deliveries):
-            # Nadie recibió el aviso: que se repita en la próxima ejecución en lugar de perderse.
+        local = now.astimezone()
+        silent = [n for n in batch if n.quiet and in_quiet_window(n.quiet, local)]
+        live = [n for n in batch if n not in silent]
+        report.deliveries = await notify.deliver(live, target.target, report.scan_id, alerts)
+        report.deliveries += [
+            {"notifier": n.name, "ok": True, "sent": 0, "error": None, "held": True} for n in silent
+        ]
+        if report.deliveries and not any(d["ok"] and not d.get("held") for d in report.deliveries):
+            # Nadie recibió el aviso (fallo o ventana de silencio): que se repita en la próxima
+            # ejecución en lugar de perderse.
             keep_out = {a.entity for a in alerts}
+            if silent and not live:
+                report.held = len(alerts)
+            # Siguen confirmadas: no deben volver a esperar otra ejecución.
+            pending.update(dict.fromkeys(keep_out, target.confirm))
     gone = known - {e.key for e in result.entities} if _clean(result) else set()
     storage.watch_record(
         target.key,
@@ -363,6 +434,7 @@ async def run_target(
         status=result.status,
         add=fresh - keep_out,
         remove=gone,
+        pending=pending if target.confirm > 1 else None,
     )
     return report
 

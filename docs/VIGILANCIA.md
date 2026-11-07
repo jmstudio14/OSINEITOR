@@ -19,6 +19,7 @@ notifiers:
     url_env: OSINEITOR_SLACK_URL   # o `url:`; la URL es un secreto, mejor en el entorno
     format: slack                  # generic | slack | discord | teams
     min_severity: medium           # info | low | medium | high | critical
+    quiet: "22:00-07:00"           # opcional: sin avisos en esa franja (hora local del equipo)
   correo:
     type: email
     host: smtp.example.com
@@ -36,6 +37,7 @@ targets:
     preset: attack-surface         # opcional; también `depth`, `modules`, `active`
     every: 1d                      # 30m, 6h, 1d… (mínimo 5m)
     notify: [slack, registro]      # por defecto, todos los notificadores
+    confirm: 2                     # opcional: alertar solo si se ve en 2 ejecuciones seguidas
   - target: 203.0.113.7
     every: 6h
 ```
@@ -60,6 +62,31 @@ su frecuencia, su última ejecución y si le toca.
   Si al menos uno la recibe, se da por entregada (los fallos parciales se informan).
 - Un hallazgo y la alerta de la entidad que lo provoca pueden llegar los dos (p. ej. un servicio RDP
   nuevo da «servicio nuevo» y «servicio de administración expuesto»).
+
+## Vigilar filtraciones de un email
+
+Un objetivo de `watch.yml` puede ser un email (`target: ana@example.com`). Los módulos de
+filtraciones (`leakcheck`, sin key, y `hibp`, con key) emiten un `breach` por cada una en la que
+aparece; la regla `new-breach` (severidad alta) alerta de las que **no figuraban en la ejecución
+anterior**. Lo que ya estaba filtrado al fijar la línea base no alerta. Los infostealers no están
+cubiertos: ninguna fuente de infostealers se ha podido verificar (ver
+[`MODULES.md`](MODULES.md#fuentes-evaluadas-y-no-incluidas)).
+
+Vigilar un email es investigar a una persona: hazlo solo con el consentimiento de su dueño o sobre
+direcciones propias ([uso responsable](USO_RESPONSABLE.md)).
+
+## Menos ruido
+
+- **`min_severity`** (por notificador): solo avisa de alertas de esa severidad o mayor.
+- **`confirm: N`** (por objetivo, 1 a 5; por defecto 1): una entidad nueva solo alerta si se ve en
+  `N` ejecuciones **seguidas**. Si desaparece entre medias, empieza de cero, así que un subdominio que
+  parpadea o una fuente inestable no despiertan a nadie. Mientras espera no cuenta como conocida y
+  `watch run` informa de cuántas hay en `pending`.
+- **`quiet: HH:MM-HH:MM`** (por notificador): ventana de silencio en hora local del equipo; puede
+  cruzar la medianoche y el fin es exclusivo. Una alerta que cae dentro **no se pierde**: si ningún
+  notificador pudo avisar, se conserva y sale en la primera ejecución fuera de la ventana. Se informa
+  en `held` y no cambia el código de salida a `11` (no es un fallo). Si otro notificador sí avisó, la
+  alerta se da por entregada y el que estaba en silencio no la recibirá después.
 
 `every` es un mínimo: un cron cada hora no retrasa un `1d` por unos minutos de diferencia (se admite
 una holgura del 10 %, máximo 10 minutos). `--force` ejecuta también los que aún no tocan y

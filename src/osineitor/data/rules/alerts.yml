@@ -42,3 +42,29 @@ rules:
     recommendation: >
       Revisa qué cuentas están afectadas, fuerza el cambio de contraseña y activa la
       autenticación en dos pasos.
+
+  - id: new-lookalike-domain
+    title: Dominio parecido al tuyo, recién registrado
+    severity: medium
+    type: record
+    value_prefix: "lookalike:"
+    when:
+      - {field: technique, op: exists}
+      - {field: mx, op: missing}
+    evidence: [technique, ns, a]
+    recommendation: >
+      Revisa a quién pertenece y qué sirve; si imita tu marca, valora una denuncia por abuso al
+      registrador o una disputa UDRP, y bloquéalo en tus filtros.
+
+  - id: new-lookalike-domain-with-mail
+    title: Dominio parecido al tuyo, recién registrado y con correo
+    severity: high
+    type: record
+    value_prefix: "lookalike:"
+    when:
+      - {field: technique, op: exists}
+      - {field: mx, op: exists}
+    evidence: [technique, ns, a, mx]
+    recommendation: >
+      Puede servir para suplantar tu correo (phishing, fraude del CEO): avisa a tus equipos,
+      bloquéalo en el filtro de correo y refuerza SPF, DKIM y DMARC con `p=reject`.

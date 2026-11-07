@@ -244,6 +244,15 @@ def test_fediverse_is_active():
 
 # --- dev_registries --------------------------------------------------------------------------
 
+PYPI_ANA = "https://pypi.org/user/ana/"
+STACK = "https://api.stackexchange.com/2.3/users"
+
+
+def quiet_pypi_and_stack() -> None:
+    """Simula PyPI y Stack Exchange sin resultados (para los tests de las otras fuentes)."""
+    respx.get(PYPI_ANA).mock(return_value=httpx.Response(404))
+    respx.get(STACK).mock(return_value=httpx.Response(200, json={"items": []}))
+
 
 @respx.mock
 async def test_dev_registries_collects_the_profiles_that_exist(ctx):
@@ -265,6 +274,7 @@ async def test_dev_registries_collects_the_profiles_that_exist(ctx):
     respx.get("https://hub.docker.com/v2/repositories/ana/").mock(
         return_value=httpx.Response(200, json={"results": [{"name": "img"}]})
     )
+    quiet_pypi_and_stack()
     out = await DevRegistries(ctx).run(USER)
     assert npm.calls[0].request.url.params["text"] == "maintainer:ana"
     assert npm.calls[0].request.headers["User-Agent"] == "osineitor"
@@ -283,6 +293,7 @@ async def test_dev_registries_one_failing_source_does_not_hide_the_rest(ctx):
         return_value=httpx.Response(200, json={"user": {"login": "ana", "name": "Ana"}})
     )
     respx.get("https://hub.docker.com/v2/users/ana/").mock(return_value=httpx.Response(404))
+    quiet_pypi_and_stack()
     out = await DevRegistries(ctx).run(USER)
     assert pairs(out) == [(EntityType.PROFILE, "https://crates.io/users/ana")]
 
@@ -293,10 +304,83 @@ async def test_dev_registries_all_failing_is_an_error(ctx):
         "https://registry.npmjs.org/-/v1/search",
         "https://crates.io/api/v1/users/ana",
         "https://hub.docker.com/v2/users/ana/",
+        PYPI_ANA,
+        STACK,
     ):
         respx.get(url).mock(return_value=httpx.Response(500))
     with pytest.raises(ModuleError):
         await DevRegistries(ctx).run(USER)
+
+
+PYPI_PAGE = """<html><head><title>Profile of ana · PyPI</title></head><body>
+<h1 class="author-profile__name">Ana García</h1>
+<a href="/project/ana-lib/">ana-lib</a> <a href="/project/ana-cli/">ana-cli</a>
+<a href="/project/ana-lib/">ana-lib otra vez</a> <a href="/project/&lt;script&gt;/">raro</a>
+</body></html>"""
+
+
+@respx.mock
+async def test_dev_registries_reads_the_public_pypi_profile(ctx):
+    respx.get("https://registry.npmjs.org/-/v1/search").mock(
+        return_value=httpx.Response(200, json={"objects": []})
+    )
+    respx.get("https://crates.io/api/v1/users/ana").mock(return_value=httpx.Response(404))
+    respx.get("https://hub.docker.com/v2/users/ana/").mock(return_value=httpx.Response(404))
+    respx.get(STACK).mock(return_value=httpx.Response(200, json={"items": []}))
+    respx.get(PYPI_ANA).mock(return_value=httpx.Response(200, text=PYPI_PAGE))
+    [profile] = await DevRegistries(ctx).run(USER)
+    assert profile.value == "https://pypi.org/user/ana/"
+    assert profile.data["site"] == "PyPI" and profile.data["name"] == "Ana García"
+    assert profile.data["packages"] == ["ana-lib", "ana-cli"]  # sin repetidos ni nombres raros
+    assert profile.data["package_count"] == 2
+
+
+@respx.mock
+async def test_dev_registries_pypi_page_of_another_user_is_ignored(ctx):
+    respx.get("https://registry.npmjs.org/-/v1/search").mock(
+        return_value=httpx.Response(200, json={"objects": []})
+    )
+    respx.get("https://crates.io/api/v1/users/ana").mock(return_value=httpx.Response(404))
+    respx.get("https://hub.docker.com/v2/users/ana/").mock(return_value=httpx.Response(404))
+    respx.get(STACK).mock(return_value=httpx.Response(200, json={"items": []}))
+    respx.get(PYPI_ANA).mock(
+        return_value=httpx.Response(200, text="<title>Profile of bob · PyPI</title>")
+    )
+    assert await DevRegistries(ctx).run(USER) == []
+
+
+STACK_ITEMS = {
+    "items": [
+        {
+            "display_name": "Ana",
+            "link": "https://stackoverflow.com/users/1/ana",
+            "user_id": 1,
+            "reputation": 4200,
+            "location": "Madrid",
+            "creation_date": 1293376027,
+        },
+        {"display_name": "Ana Maria", "link": "https://stackoverflow.com/users/2/ana-maria"},
+    ]
+}
+
+
+@respx.mock
+async def test_dev_registries_stack_exchange_only_keeps_exact_display_name_matches(ctx):
+    respx.get("https://registry.npmjs.org/-/v1/search").mock(
+        return_value=httpx.Response(200, json={"objects": []})
+    )
+    respx.get("https://crates.io/api/v1/users/ana").mock(return_value=httpx.Response(404))
+    respx.get("https://hub.docker.com/v2/users/ana/").mock(return_value=httpx.Response(404))
+    respx.get(PYPI_ANA).mock(return_value=httpx.Response(404))
+    route = respx.get(STACK).mock(return_value=httpx.Response(200, json=STACK_ITEMS))
+    [profile] = await DevRegistries(ctx).run(USER)
+    params = route.calls[0].request.url.params
+    assert params["inname"] == "ana" and params["site"] == "stackoverflow"
+    assert profile.value == "https://stackoverflow.com/users/1/ana"
+    assert profile.data["site"] == "Stack Overflow" and profile.data["reputation"] == 4200
+    assert profile.data["created_at"] == "2010-12-26T15:07:07+00:00"
+    assert profile.data["match"] == "display_name"  # coincidencia de nombre, no de identidad
+    assert "verified" not in profile.data
 
 
 # --- discord_snowflake -----------------------------------------------------------------------

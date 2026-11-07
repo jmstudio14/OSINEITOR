@@ -13,12 +13,12 @@ en [API.md](API.md#plugins).
 
 Hay dos tipos especiales de módulo: los **analizadores** (`analyzer = True`) leen lo ya recogido
 en un pase final, sin red (`saas_footprint` y `cloud_attribution`), y los adaptadores de
-**herramientas externas** (`ExternalToolModule`; por ahora `ext_subfinder`) ejecutan un binario
+**herramientas externas** (`ExternalToolModule`; por ahora `ext_subfinder` y `ext_maigret`) ejecutan un binario
 instalado por el usuario y quedan `omitido` si falta. Ver [Arquitectura](ARCHITECTURE.md).
 
 Pesan más en la [confianza](ARCHITECTURE.md) de un dato los módulos **autoritativos**, cuya respuesta
 viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `http_fingerprint`,
-`email_validate`, `ptr`, `web_meta`, `takeover` y `tech_detect`. El resto son bases de terceros (`aggregated`).
+`email_validate`, `ptr`, `web_meta`, `analytics_ids`, `takeover` y `tech_detect`. El resto son bases de terceros (`aggregated`).
 
 ## Dominio
 
@@ -41,6 +41,10 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 - **Fuente:** resolver DNS del sistema (dnspython). Con `--proxy` se omite (consulta DNS directa).
 - **Datos:** A, AAAA, CNAME, MX, NS, TXT, CAA, política SPF y DMARC (`_dmarc.<dominio>`).
 - **Pivote:** cada IP de A/AAAA pasa al siguiente nivel.
+- **Wildcard (F1.15):** en un subdominio, sondea una etiqueta aleatoria de su zona (una vez por zona
+  y escaneo). Si el subdominio solo resuelve a las IP del wildcard lo marca `wildcard: true` (en el
+  `record` y en el propio `domain`) y **no pivota** a esas IP. Un subdominio con una IP propia, o
+  una zona sin wildcard, no cambia. El dominio raíz no se sondea.
 - **Errores:** si ningún tipo de registro obtiene respuesta, falla en vez de devolver un vacío.
   El mensaje distingue `REFUSED` (el servidor rechaza el nombre) de un tiempo agotado.
 
@@ -129,6 +133,16 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
   salen. Si falla la descarga de un certificado se conservan los demás; si fallan todos, error.
   Censys como segunda fuente queda para F4.15.
 - **Términos y datos:** crt.sh no publica cuota; los logs de CT son públicos.
+
+### `analytics_ids` (activo)
+- **Consume:** dominio raíz. **Produce:** `record` `analytics:<ID>`.
+- **Fuente:** la página de inicio del propio dominio (HTTPS y, si no responde, HTTP).
+- **Datos:** IDs de Google Analytics 4 (`G-`), Universal Analytics (`UA-`), Google Ads (`AW-`),
+  Tag Manager (`GTM-`) y AdSense (`ca-pub-`), con su tipo y el dominio donde aparecen. Los
+  patrones de `G-` y `GTM-` exigen un dígito para no confundirse con clases CSS.
+- **Límites:** solo lee el HTML de la portada, no los scripts que carga ni otras páginas. No
+  busca otros dominios con el mismo ID: ninguna fuente gratuita de esa búsqueda inversa se ha
+  verificado. Cada ID es un `record`, no se pivota.
 
 ### `web_meta` (activo)
 - **Consume:** dominio raíz. **Produce:** `record` `web_meta:<dominio>`, `url`, `email`.
@@ -227,7 +241,9 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 - **Términos y datos:** una petición al sitio y una a Shodan por dominio.
 
 ### `lookalike_domains`
-- **Consume:** dominio raíz. **Produce:** `record` `lookalike:<dominio>`.
+- **Consume:** dominio raíz. **Produce:** `record` `lookalike:<dominio>` (resumen, con la lista
+  `registered`) y un `record` `lookalike:<parecido>` por cada dominio registrado, para que `watch`
+  (reglas `new-lookalike-domain*`) detecte uno nuevo por su clave.
 - **Fuente:** solo DNS (NS, A, AAAA y MX) al resolvedor del sistema; con `--proxy` se omite. No
   hace ninguna petición HTTP.
 - **Datos:** hasta 300 permutaciones (omisión, repetición, transposición, teclas vecinas,
@@ -341,6 +357,18 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 - **Límites:** sin coincidencias, vacío. Un IOC puede ser un falso positivo o estar caducado.
 - **Términos y datos:** datos de abuse.ch bajo CC0; el uso de la API sigue sus términos.
 
+### `reverse_ip`
+- **Consume:** IP pública. **Produce:** `domain`, `record`.
+- **Fuente:** `api.hackertarget.com/reverseiplookup/`, la API gratuita de HackerTarget (cuota
+  diaria limitada por IP de origen; al agotarla el módulo queda en `cuota`).
+- **Datos:** los hostnames que comparten la IP, como `domain` con `via: reverse_ip`. Si son más de
+  50 es un alojamiento compartido o una CDN: no se emiten dominios (el motor pivotaría sobre
+  terceros sin relación con el objetivo) y queda un `record` `reverse_ip:<ip>` con el recuento y
+  una muestra de 20.
+- **Límites:** las IP privadas se omiten sin enviarlas. Los errores de la API llegan como texto
+  con código 200; se reconocen el de cuota agotada, el de «sin registros» y los que empiezan por
+  `error`. La cobertura es la de HackerTarget: un hostname que no conozca no aparece.
+
 ### `ptr`
 - **Consume:** IP pública. **Produce:** `record` `ptr:<ip>`, `domain` (marcado `subdomain`).
 - **Fuente:** consulta DNS PTR (`in-addr.arpa` o `ip6.arpa`) al resolvedor del sistema; con
@@ -409,6 +437,28 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 - **Fuente:** API `email-verifier` de [Hunter](https://hunter.io).
 - **Datos:** estado (`valid`, `invalid`, `accept_all`…), puntuación, webmail o desechable, y
   páginas públicas donde aparece el email.
+
+### `leakcheck`
+- **Consume:** email. **Produce:** `breach`.
+- **Fuente:** API pública de [LeakCheck](https://leakcheck.io) (`/api/public`), sin key. Su
+  documentación la describe como gratuita también para uso comercial, con 1 petición por segundo y
+  con la condición de enlazar «Powered by LeakCheck» en un sitio web; devuelve solo los nombres de
+  las fuentes y las categorías de datos, nunca los datos.
+- **Datos:** un `breach` por fuente, con su fecha (`AAAA-MM`) y `via: leakcheck`. No guarda las
+  categorías de datos: la API las da en conjunto, no por filtración. Un mismo incidente puede
+  llamarse distinto aquí y en `hibp`, así que puede aparecer dos veces.
+- **Límites:** «Not found» es «sin resultados»; cualquier otro error de la API es un error del
+  módulo. Se limita a 200 filtraciones.
+
+### `pgp_keyserver`
+- **Consume:** email. **Produce:** `record` `pgp:<huella>`.
+- **Fuente:** `keys.openpgp.org/pks/lookup?op=index&options=mr`. Ese servidor solo devuelve una
+  clave por email si el dueño verificó esa dirección y autorizó publicarla.
+- **Datos:** huella (40 o 64 hexadecimales), algoritmo (RSA, DSA, ECDH, ECDSA, EdDSA), bits, fecha
+  de creación y hasta 10 identidades (`Nombre <email>`).
+- **Límites:** el servidor admite una consulta por email y minuto. El formato de la respuesta es
+  el del borrador HKP que documenta el servidor; la prueba usa ese formato, porque no se ha
+  observado una respuesta real con clave. Una clave sin identidad verificada no aparece.
 
 ### `hibp_pastes` (key `hibp`)
 - **Consume:** email. **Produce:** `record` `hibp_pastes:<email>`.
@@ -486,14 +536,61 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 - **Límites:** solo los últimos eventos públicos, así que los emails son los de la actividad
   reciente.
 
+### `ext_maigret` (herramienta externa)
+- **Consume:** username. **Produce:** `profile`.
+- **Fuente:** el binario `maigret` ([soxoj/maigret](https://github.com/soxoj/maigret)) que instala
+  el usuario, ejecutado sin shell como `maigret --json simple -fo <carpeta temporal>
+  --no-progressbar --no-color --no-recursion --no-extracting -- <usuario>`. Maigret no imprime el
+  informe por stdout: lo escribe en `<carpeta>/report_<usuario>_simple.json`, que el módulo lee y
+  borra. Queda `omitido` si no está instalado y, con `--proxy`, también (su tráfico no pasa por
+  `ctx.http`).
+- **Datos:** un perfil por cada sitio que Maigret da por `Claimed`, con `site` y `via: maigret`.
+  Se descartan las URL que no sean http(s). No lleva `verified`: Maigret no confirma que sea la
+  misma persona.
+- **Límites:** desactiva la recursión y la extracción de Maigret para que no investigue por su
+  cuenta otros usernames; los pivotes los decide el motor. No se comprueba la versión mínima, porque
+  no se ha verificado cuál es. Tiene un timeout de 600 s. Su tráfico no deja evidencia
+  (`--evidence`) ni cuenta en el presupuesto de peticiones. Las firmas de sitios que usa son las
+  suyas, no las de `username_sites`, así que puede repetir hallazgos. Para importar un informe ya
+  generado sin ejecutarlo, usa `osineitor import maigret`.
+
+### `bluesky`
+- **Consume:** username. **Produce:** `profile`.
+- **Fuente:** API pública de Bluesky (`public.api.bsky.app`), sin sesión ni clave.
+- **Datos:** un username sin punto se consulta como `<usuario>.bsky.social`; uno con puntos, como
+  handle completo (dominio propio). Emite el perfil con nombre, bio, fecha de alta, seguidores,
+  seguidos, publicaciones y el DID.
+- **Límites:** solo comprueba que existe el handle, no que sea la misma persona. Un username con
+  guion bajo u otro carácter que un handle no admite se omite. Un 429 es una cuota agotada.
+
 ### `dev_registries`
 - **Consume:** username. **Produce:** `profile`.
-- **Fuente:** búsqueda por mantenedor de npm, usuarios de crates.io y de Docker Hub.
+- **Fuente:** búsqueda por mantenedor de npm, usuarios de crates.io y de Docker Hub, la página
+  pública de perfil de PyPI (no tiene API de usuarios) y la API de Stack Exchange.
 - **Datos:** hasta 20 paquetes o repositorios por registro y, según el registro, nombre, empresa,
-  ubicación y fecha de alta. No emite los emails de los mantenedores de npm.
-- **Límites:** el nombre de usuario de un registro no tiene por qué ser la misma persona. Si una
-  fuente falla, las demás se conservan; solo es un error si fallan todas. PyPI y Stack Exchange
-  quedan pendientes.
+  ubicación y fecha de alta. No emite los emails de los mantenedores de npm. De Stack Overflow,
+  hasta 3 perfiles cuyo nombre visible coincide exactamente, con reputación, ubicación y fecha de
+  alta, marcados `match: display_name` y sin `verified`.
+- **Límites:** el nombre de usuario de un registro no tiene por qué ser la misma persona, y en
+  Stack Overflow no hay usernames: un nombre repetido no prueba nada. Si una fuente falla, las
+  demás se conservan; solo es un error si fallan todas.
+
+### `profile_extract`
+- **Consume:** username. **Produce:** `profile`, `username` y `url`.
+- **Fuente:** las APIs públicas oficiales de DEV Community (`/api/users/by_username`) y de Codeberg
+  (`/api/v1/users/<usuario>`). No lee páginas HTML. GitLab no se incluye: su API pública de
+  usuarios solo confirma que la cuenta existe.
+- **Datos:** el perfil (`https://dev.to/<usuario>` o `https://codeberg.org/<usuario>`, el mismo
+  que dan Sherlock y WhatsMyName, así que se fusionan) con nombre visible, bio, ubicación y fecha
+  de alta; la web declarada como `url`; y, en DEV Community, los usernames de X y de GitHub que el
+  dueño enlazó, como `username` con `platform` y `declared_on`. La bio de Codeberg se reduce a
+  texto plano y se recorta a 300 caracteres.
+- **Pivote recursivo:** esos `username` los investiga el motor en el siguiente nivel, dentro del
+  límite de profundidad del scan. Es una hipótesis: que alguien enlace una cuenta en su perfil no
+  prueba que el perfil de partida sea de la persona investigada, y los datos se arrastran con la
+  misma duda. Un handle igual al username investigado no se repite.
+- **Límites:** nunca guarda el email que devuelva una API (Codeberg lo expone a veces). Si una
+  fuente falla, la otra se conserva; solo es un error si fallan las dos.
 
 ### `discord_snowflake`
 - **Consume:** username numérico de 17 a 20 dígitos. **Produce:** `record` `discord:<id>`.
@@ -607,3 +704,32 @@ fichero salen del equipo (hay un test que lo comprueba interceptando la red). Su
   **Produce:** `record` `image_links:<url>`.
 - **Datos:** enlaces de búsqueda inversa de Google Lens, Yandex, TinEye y Bing con la URL
   codificada. Solo genera enlaces: no descarga ni sube la imagen.
+
+## Fuentes evaluadas y no incluidas
+
+Entregables del [ROADMAP](../ROADMAP.md) que se evaluaron en el cierre del 07-11-2026 y no se
+implementaron. Un módulo que no se puede probar contra su fuente, o cuyos términos de uso no se
+han podido leer, no se añade: sus tests solo comprobarían lo que uno mismo supone de la respuesta.
+
+| ID | Fuente | Por qué no |
+|---|---|---|
+| F4.17 (rangos) | Feeds de rangos de AWS, GCP, Azure y Cloudflare | Cambian a diario y `update-data` fija el SHA-256 de cada fichero; no se han comprobado sus licencias |
+| F4.23 `geoip_offline` | GeoLite2 | Exige que cada usuario descargue la base (licencia de MaxMind) y no hay forma de probar el módulo sin ella |
+| F4.24 `ext_amass` | Amass | No hay un formato de salida estable verificado (el mismo motivo por el que `import` no lee Amass) |
+| F5.6 `--tags`, `--top` | Categorías y popularidad | Sherlock no trae ni lo uno ni lo otro y solo WhatsMyName trae categorías; un filtro que solo afectase a una de las dos fuentes de usernames daría una idea falsa de la cobertura. `--only username_wmn` ya limita a una fuente |
+| F5.8 `hudsonrock` | Infostealers | La clave gratuita se pide con un correo corporativo y la API documentada devuelve credenciales; no se han podido verificar ni los términos ni una respuesta que demuestre que solo se guardarían metadatos |
+| F6.1 `opensanctions` | Sanciones y PEP | Exige una key y no se ha podido verificar su respuesta |
+| F6.3 `librebor`, F6.4 `opencorporates` | Registros mercantiles | API de pago o por solicitud, sin acceso para probarla |
+| F6.8 `eth_explorer` | Etherscan | Exige una key y no se ha verificado la versión actual de su API |
+| F6.10 (reputación) | VirusTotal, abuse.ch | Exigen keys y sacan el hash del equipo; el hash sigue siendo un pivote que se lanza a mano |
+| F6.12 `capture` | Navegador *headless* | Necesita un navegador que los tests no pueden ejecutar; una captura sin probar no sirve como evidencia |
+| F6.13 `search_dorks`, F6.14 `doc_harvest` | API de búsqueda y descarga de documentos | Exigen una key y una decisión sobre el proveedor; `doc_harvest` depende de `search_dorks` y descarga ficheros del objetivo |
+| F6.15 `github_code` | Búsqueda de código de GitHub | Exige una key y una detección de secretos que no se puede validar sin ver contenido real; el criterio de no guardar nunca el valor no se puede demostrar con datos inventados |
+| F6.16 `cloud_storage_refs` | Buckets de S3, GCS y Azure | No se ha verificado cómo responde cada proveedor al sondear un bucket |
+| F6.18 `ext_exiftool` | ExifTool | Depende de cómo `file_meta` acepta rutas locales y de la política de lectura de ficheros |
+| F11.5 | Internacionalización | Traducir la interfaz y toda la documentación excede el cierre; el proyecto está en español por convención |
+
+Sí se verificaron contra el servicio antes de implementarse: la API pública de LeakCheck (respuesta
+con resultados y sin ellos, límites y condiciones de uso), la de DEV Community y la de Codeberg, la
+de Bluesky, el listado de HackerTarget y el índice de `keys.openpgp.org` (documentación y 404);
+GitLab se descartó porque su API pública de usuarios solo confirma que la cuenta existe.

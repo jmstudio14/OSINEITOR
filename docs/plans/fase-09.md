@@ -18,9 +18,9 @@ Sale del [ROADMAP](../../ROADMAP.md) (fase 9). Criterios comunes, de
 | F9.2 | M | Reglas de alerta | ✅ | `alerts.yml` con el motor de hallazgos + hallazgos nuevos |
 | F9.3 | M | Notificaciones | ✅ | Webhook (generic, Slack, Discord, Teams), correo SMTP y fichero NDJSON |
 | F9.5 | S | Retención | ✅ | `osineitor purge --older-than 90d [--dry-run]` |
-| F9.4 | S | Supresión de ruido | ⬜ | Aplazado: umbrales por notificador (`min_severity`) ya existen; faltan ventanas de silencio y confirmación en dos ejecuciones |
-| F9.6 | S | Dominios parecidos | ⬜ | Aplazado: `lookalike_domains` emite un único `record`, hay que decidir cómo detectar «uno nuevo» dentro de él |
-| F9.7 | S | Nuevas filtraciones | ⬜ | Aplazado: la regla `new-breach` cubre `hibp`; faltan infostealers (F5.8, bloqueado) |
+| F9.4 | S | Supresión de ruido | ✅ | Cierre del roadmap: `confirm: N` por objetivo y `quiet` por notificador. |
+| F9.6 | S | Dominios parecidos | ✅ | Cierre del roadmap: regla de alerta para dominios parecidos nuevos de `lookalike_domains`. |
+| F9.7 | S | Nuevas filtraciones | ✅ | Cierre del roadmap: la regla `new-breach` alerta de las filtraciones nuevas de un email vigilado (`leakcheck`, `hibp`); los infostealers no están cubiertos. |
 
 ## Decisiones
 

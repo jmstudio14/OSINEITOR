@@ -85,7 +85,8 @@ class ExternalToolModule(Module, ABC):
     def parse(self, entity: Entity, documents: list[Any]) -> list[Entity]:
         """Entidades a partir de los documentos JSON que imprimió la herramienta."""
 
-    async def run(self, entity: Entity) -> list[Entity]:
+    def _executable(self, entity: Entity) -> str:
+        """Ruta del binario, o `ModuleSkipped` si no se puede ejecutar con este valor."""
         if entity.value.startswith("-"):
             raise ModuleSkipped("el valor empieza por «-» y la herramienta lo leería como opción")
         if reason := self.unavailable():
@@ -93,6 +94,10 @@ class ExternalToolModule(Module, ABC):
         path = shutil.which(self.binary)
         if path is None:
             raise ModuleSkipped(f"{self.binary} no está instalado")
+        return path
+
+    async def run(self, entity: Entity) -> list[Entity]:
+        path = self._executable(entity)
         stdout = await self._exec([path, *self.args(entity)])
         return self.parse(entity, json_documents(stdout))
 

@@ -18,14 +18,14 @@ Sale del [ROADMAP](../../ROADMAP.md) (fase 7). Criterios comunes, de
 | F7.3 | M | `osineitor diff A B` | ✅ | Compara por clave de entidad; salida `--json` en el contrato |
 | F7.11 | M | Exportación CSV | ✅ | Tres formatos (`csv`, `csv-relations`, `csv-findings`) |
 | F7.1 | M | Grafo en el informe HTML | ✅ | JS propio en línea con `<canvas>`; sin librería ni CDN |
-| F7.2 | S | Casos | ⬜ | Aplazado: necesita migración 8 de la base y tres subcomandos |
-| F7.4 | S | Línea temporal | ⬜ | Aplazado: hay que decidir qué campos de fecha cuentan |
-| F7.5 | S | Búsqueda global | ⬜ | Aplazado: necesita índice por valor en la base |
-| F7.6 | S | Correlación entre scans | ⬜ | Depende de F7.2 y F7.5 |
-| F7.7 | S | Informe ejecutivo | ⬜ | Aplazado: plantilla y texto a decidir con quien lo va a usar |
-| F7.9 | S | Puntuación de riesgo | ⬜ | Aplazado: la fórmula debe validarse con scans reales |
-| F7.10 | S | Resolución de entidades | ⬜ | Aplazado: siempre como hipótesis; requiere diseño de evidencias |
-| F7.12 | S | Informe de superficie de ataque | ⬜ | Aplazado: depende de F7.9 |
+| F7.2 | S | Casos | ✅ | Cierre del roadmap: `osineitor case new/add/note/show/list`. |
+| F7.4 | S | Línea temporal | ✅ | Cierre del roadmap: `osineitor timeline N`. |
+| F7.5 | S | Búsqueda global | ✅ | Cierre del roadmap: `osineitor search VALOR`. |
+| F7.6 | S | Correlación entre scans | ✅ | Cierre del roadmap: `case add` y `case show` avisan de datos identificadores ya vistos en otro caso. |
+| F7.7 | S | Informe ejecutivo | ✅ | Cierre del roadmap: formato de exportación `executive`. |
+| F7.9 | S | Puntuación de riesgo | ✅ | Cierre del roadmap: `osineitor risk N`; es una heurística de priorización sin contrastar con scans reales. |
+| F7.10 | S | Resolución de entidades | ✅ | Cierre del roadmap: `osineitor resolve N`: hipótesis con señales y puntuación, calculadas al consultar. |
+| F7.12 | S | Informe de superficie de ataque | ✅ | Cierre del roadmap: formato de exportación `attack-surface`. |
 
 Los *S* no están bloqueados por nada externo: se dejan por prioridad. Los cuatro *M* cumplen los
 criterios de aceptación de la fase salvo el último punto, que depende de F7.10.

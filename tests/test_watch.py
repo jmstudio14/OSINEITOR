@@ -470,3 +470,206 @@ def test_purge_removes_old_scans_only(tmp_path):
         assert storage.load(old_id) is None and storage.load(new_id) is not None
     bad = runner.invoke(app, ["purge", "--older-than", "ayer", "--db", str(db)])
     assert bad.exit_code == 2
+
+
+# --- F9.4: supresión de ruido --------------------------------------------------------------------
+
+
+def with_extra(tmp_path: Path, target_extra: str = "", notifier_extra: str = "") -> tuple:
+    log = tmp_path / "alerts.ndjson"
+    text = BASE.replace("LOGPATH", log.as_posix())
+    text = text.replace("    notify: [log]\n", f"    notify: [log]\n{target_extra}")
+    text = text.replace(f"path: {log.as_posix()}}}", f"path: {log.as_posix()}{notifier_extra}}}")
+    return watch.load_config(write(tmp_path, text)), log
+
+
+async def test_confirm_two_alerts_only_when_seen_in_two_consecutive_runs(tmp_path):
+    cfg, log = with_extra(tmp_path, "    confirm: 2\n")
+    with Storage(tmp_path / "s.db") as storage:
+        await run(storage, cfg, T0)
+        World.subdomains = ["www.example.com", "vpn.example.com"]
+        [second] = await run(storage, cfg, T0 + timedelta(days=1))
+        assert second.alerts == [] and second.pending == 1 and lines(log) == []
+        [third] = await run(storage, cfg, T0 + timedelta(days=2))
+        assert [a.entity for a in third.alerts] == ["domain:vpn.example.com"]
+        assert len(lines(log)) == 1
+        [fourth] = await run(storage, cfg, T0 + timedelta(days=3))
+        assert fourth.alerts == [] and len(lines(log)) == 1  # ya conocida: no se repite
+
+
+async def test_confirm_resets_when_the_entity_disappears_between_runs(tmp_path):
+    cfg, log = with_extra(tmp_path, "    confirm: 2\n")
+    with Storage(tmp_path / "s.db") as storage:
+        await run(storage, cfg, T0)
+        World.subdomains = ["www.example.com", "flaky.example.com"]
+        await run(storage, cfg, T0 + timedelta(days=1))  # primera vez: pendiente
+        World.subdomains = ["www.example.com"]
+        await run(storage, cfg, T0 + timedelta(days=2))  # no aparece: se descarta
+        World.subdomains = ["www.example.com", "flaky.example.com"]
+        [again] = await run(storage, cfg, T0 + timedelta(days=3))
+    assert again.alerts == [] and again.pending == 1 and lines(log) == []  # vuelve a empezar
+
+
+async def test_confirm_one_is_the_default_and_alerts_at_once(tmp_path, config):
+    cfg, log = config
+    with Storage(tmp_path / "s.db") as storage:
+        await run(storage, cfg, T0)
+        World.subdomains = ["www.example.com", "vpn.example.com"]
+        [second] = await run(storage, cfg, T0 + timedelta(days=1))
+    assert len(second.alerts) == 1 and second.pending == 0
+
+
+async def test_confirmed_alert_that_failed_to_deliver_is_retried_not_reconfirmed(tmp_path):
+    cfg, log = with_extra(tmp_path, "    confirm: 2\n")
+    bad = tmp_path  # un directorio: no se puede abrir como fichero
+    broken = watch.Notifier("log", "file", {"path": bad.as_posix()})
+    cfg = watch.WatchConfig(targets=cfg.targets, notifiers={"log": broken})
+    with Storage(tmp_path / "s.db") as storage:
+        await run(storage, cfg, T0)
+        World.subdomains = ["www.example.com", "vpn.example.com"]
+        await run(storage, cfg, T0 + timedelta(days=1))  # pendiente
+        [third] = await run(storage, cfg, T0 + timedelta(days=2))  # confirmada, no se entrega
+        assert third.alerts and not any(d["ok"] for d in third.deliveries)
+        [fourth] = await run(storage, cfg, T0 + timedelta(days=3))
+    assert [a.entity for a in fourth.alerts] == ["domain:vpn.example.com"]  # sin reconfirmar
+
+
+@pytest.mark.parametrize(
+    "bad", ["25:00-07:00", "22:00", "22:00-22:00", "ab:cd-07:00", "22:60-07:00"]
+)
+def test_quiet_window_must_be_well_formed(tmp_path, bad):
+    with pytest.raises(watch.WatchError, match="quiet"):
+        with_extra(tmp_path, notifier_extra=f", quiet: '{bad}'")
+
+
+@pytest.mark.parametrize(
+    ("spec", "hour", "minute", "inside"),
+    [
+        ("22:00-07:00", 23, 30, True),
+        ("22:00-07:00", 3, 0, True),
+        ("22:00-07:00", 7, 0, False),  # el fin es exclusivo
+        ("22:00-07:00", 12, 0, False),
+        ("09:00-17:00", 9, 0, True),
+        ("09:00-17:00", 17, 0, False),
+        ("09:00-17:00", 20, 0, False),
+    ],
+)
+def test_quiet_window_includes_midnight_wraparound(spec, hour, minute, inside):
+    moment = datetime(2026, 11, 4, hour, minute)
+    assert watch.in_quiet_window(spec, moment) is inside
+
+
+async def test_alerts_in_a_quiet_window_are_held_and_delivered_afterwards(tmp_path, monkeypatch):
+    cfg, log = with_extra(tmp_path, notifier_extra=", quiet: '00:00-23:59'")
+    with Storage(tmp_path / "s.db") as storage:
+        await run(storage, cfg, T0)
+        World.subdomains = ["www.example.com", "vpn.example.com"]
+        [held] = await run(storage, cfg, T0 + timedelta(days=1))
+        assert held.alerts and held.held == len(held.alerts) and lines(log) == []
+        assert not any(d["ok"] and d["sent"] for d in held.deliveries)
+        # Pasada la ventana (simulada), se entrega la misma alerta una sola vez.
+        monkeypatch.setattr(watch, "in_quiet_window", lambda spec, moment: False)
+        [after] = await run(storage, cfg, T0 + timedelta(days=2))
+        assert [a.entity for a in after.alerts] == ["domain:vpn.example.com"] and after.held == 0
+        assert len(lines(log)) == 1
+        [later] = await run(storage, cfg, T0 + timedelta(days=3))
+    assert later.alerts == [] and len(lines(log)) == 1
+
+
+def test_cli_watch_run_json_reports_pending_and_held(tmp_path):
+    cfg_path = write(tmp_path, BASE.replace("LOGPATH", (tmp_path / "a.ndjson").as_posix()))
+    db = tmp_path / "cli.db"
+    result = runner.invoke(app, ["watch", "run", "-f", str(cfg_path), "--db", str(db), "--json"])
+    target = json.loads(result.stdout)["targets"][0]
+    assert target["pending"] == 0 and target["held"] == 0
+
+
+# --- F9.6: dominios parecidos nuevos -------------------------------------------------------------
+
+
+def make_lookalike_module() -> type[Module]:
+    class Lookalikes(Module):
+        name = "fake_lookalikes"
+        description = "dominios parecidos falsos"
+        consumes = frozenset({EntityType.DOMAIN})
+        produces = frozenset({EntityType.RECORD})
+        canary = "example.com"
+
+        async def run(self, entity):
+            return [
+                self.emit(
+                    entity, EntityType.RECORD, f"lookalike:{name}", technique="omisión", **extra
+                )
+                for name, extra in World.lookalikes.items()
+            ]
+
+    return Lookalikes
+
+
+World.lookalikes = {}
+
+
+async def test_a_new_lookalike_domain_alerts_with_medium_and_one_with_mail_with_high(
+    tmp_path, config, monkeypatch
+):
+    monkeypatch.setattr(registry, "discover", lambda: [make_lookalike_module()])
+    cfg, log = config
+    World.lookalikes = {"exmple.com": {"ns": ["ns.x"]}}
+    with Storage(tmp_path / "s.db") as storage:
+        [baseline] = await run(storage, cfg, T0)
+        assert baseline.baseline and baseline.alerts == []
+        World.lookalikes = {
+            "exmple.com": {"ns": ["ns.x"]},
+            "examp1e.com": {"ns": ["ns.y"]},
+            "exampl3.com": {"ns": ["ns.z"], "mx": ["mail.z"]},
+        }
+        [second] = await run(storage, cfg, T0 + timedelta(days=1))
+    assert sorted((a.entity, a.rule, a.severity) for a in second.alerts) == [
+        ("record:lookalike:examp1e.com", "new-lookalike-domain", "medium"),
+        ("record:lookalike:exampl3.com", "new-lookalike-domain-with-mail", "high"),
+    ]
+    World.lookalikes = {}
+
+
+# --- F9.7: filtraciones nuevas de un email vigilado ----------------------------------------------
+
+
+def make_breach_module() -> type[Module]:
+    class Breaches(Module):
+        name = "fake_breaches"
+        description = "filtraciones falsas"
+        consumes = frozenset({EntityType.EMAIL})
+        produces = frozenset({EntityType.BREACH})
+        canary = "ana@example.com"
+
+        async def run(self, entity):
+            return [
+                self.emit(entity, EntityType.BREACH, name, date=date)
+                for name, date in World.breaches.items()
+            ]
+
+    return Breaches
+
+
+World.breaches = {}
+
+
+async def test_a_watched_email_alerts_only_for_a_breach_it_had_not_appeared_in(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(registry, "discover", lambda: [make_breach_module()])
+    log = tmp_path / "alerts.ndjson"
+    text = BASE.replace("LOGPATH", log.as_posix()).replace("example.com", "ana@example.com")
+    cfg = watch.load_config(write(tmp_path, text))
+    World.breaches = {"Duolingo.com": "2023-08"}
+    with Storage(tmp_path / "s.db") as storage:
+        [baseline] = await run(storage, cfg, T0)
+        assert baseline.baseline and baseline.alerts == []  # lo ya filtrado no es noticia
+        World.breaches = {"Duolingo.com": "2023-08", "Trello.com": "2024-01"}
+        [second] = await run(storage, cfg, T0 + timedelta(days=1))
+        [third] = await run(storage, cfg, T0 + timedelta(days=2))
+    assert [(a.entity, a.rule, a.severity) for a in second.alerts] == [
+        ("breach:trello.com", "new-breach", "high")
+    ]
+    assert third.alerts == []  # lo ya alertado no se repite
+    World.breaches = {}

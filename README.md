@@ -46,7 +46,7 @@ Versión **0.5.0**, en desarrollo. Lo que hay y lo que no:
 
 | Área | Estado |
 |---|---|
-| CLI con 55 módulos en 9 frentes | Disponible |
+| CLI con 62 módulos en 9 frentes | Disponible |
 | Procedencia y confianza (observaciones, evidencia con hash, confianza, alcance, propósito) | Disponible desde la 0.4.0 |
 | Modelo ampliado, presets, analizadores offline, adaptadores de herramientas externas, `update-data` y filtros de salida | Disponible desde la 0.4.0 |
 | Fuentes nuevas, hallazgos con reglas, `diff`, informes CSV y de grafo, librería y plugins, vigilancia (`watch`), resúmenes con IA opcionales, paquete y documentación (fases 4 a 11 del [roadmap](ROADMAP.md)) | Hecho en el repositorio, **sin publicar** ([CHANGELOG](CHANGELOG.md)) |
@@ -60,7 +60,7 @@ Plataforma principal: **Windows 10/11**. Linux se prueba en la CI, pero no es el
 
 ## Características
 
-- **Nueve frentes, 55 módulos:** dominios e infraestructura, IPs y servicios, emails y
+- **Nueve frentes, 62 módulos:** dominios e infraestructura, IPs y servicios, emails y
   filtraciones, usernames, organizaciones, teléfonos, criptomonedas, ficheros y coordenadas. Los módulos son ficheros independientes que se descubren solos.
 - **Pivoteo configurable** (`--depth`) con deduplicación y fusión de lo que cada fuente aporta.
 - **Fiable y honesto con los fallos:** cada módulo informa de si respondió con datos, sin datos, con
@@ -209,6 +209,7 @@ están en la **[guía de uso](docs/USO.md)**.
 | Dominio | `mail_security` | MTA-STS, TLS-RPT, BIMI y selectores DKIM comunes (solo DNS) | — |
 | Dominio | `whois` | WHOIS (puerto 43) de los TLD sin RDAP: registrador, fechas, estado | — |
 | Dominio | `saas_footprint` | Proveedores de correo, DNS, identidad y colaboración deducidos del DNS | — |
+| Dominio | `analytics_ids` | IDs de Google Analytics, Tag Manager, Ads y AdSense de la página (**activo**) | — |
 | Dominio | `cert_details` | Certificados en CT: huella SHA-256, emisor, validez, SAN y aviso de caducidad | — |
 | Dominio | `web_meta` | `robots.txt`, `sitemap.xml` y `security.txt` (**activo**) | — |
 | Dominio | `takeover` | Subdominios con CNAME a un servicio sin reclamar (**activo**) | — |
@@ -223,6 +224,7 @@ están en la **[guía de uso](docs/USO.md)**.
 | IP | `censys` | Servicios, ASN y país (Censys Platform) | `censys` |
 | IP | `abusech` | IOC en ThreatFox y URLhaus (abuse.ch) | `abusech` |
 | IP | `ptr` | DNS inverso | — |
+| IP | `reverse_ip` | Hostnames alojados en la misma IP (HackerTarget) | — |
 | IP | `ripestat` | ASN, prefijo, país de registro e historial de enrutamiento (RIPEstat) | — |
 | IP | `asn_netblock` | De IP a ASN y prefijo (Team Cymru) y de ASN a sus prefijos | — |
 | IP | `dnsbl` | Listas negras DNS (Spamhaus ZEN, SpamCop, UCEPROTECT, DroneBL) | — |
@@ -236,14 +238,19 @@ están en la **[guía de uso](docs/USO.md)**.
 | Email | `gravatar` | Perfil público y cuentas enlazadas | — |
 | Email | `hibp` | Brechas de datos (Have I Been Pwned) | `hibp` |
 | Email | `hunter_verify` | Entregabilidad y fuentes públicas | `hunter` |
+| Email | `leakcheck` | Nombres de las filtraciones en las que aparece el email (LeakCheck, API pública; sin datos) | — |
+| Email | `pgp_keyserver` | Clave PGP pública con identidad verificada en keys.openpgp.org | — |
 | Email | `hibp_pastes` | Apariciones del email en *pastes* (solo un resumen, sin identificadores) | `hibp` |
 | Email | `github_email` | Commits públicos de GitHub con ese email: nombres, repositorios, logins | opcional `github` |
 | Email | `fediverse` | Cuenta de Mastodon o fediverso de `usuario@instancia` (contacta al host) | — |
 | Email | `email_candidates` | Candidatos de email de una persona sobre un dominio (sin red ni SMTP) | — |
 | Username | `username_sites` | Presencia en ~460 sitios (firmas de Sherlock) | — |
 | Username | `username_wmn` | Presencia en ~600 sitios (firmas de WhatsMyName); coincidir con Sherlock da confianza `medio` | — |
+| Username | `ext_maigret` | Cuentas con Maigret (binario del usuario; sin recursión) | — |
 | Username | `github_user` | Perfil de GitHub: nombre, empresa, blog, organizaciones y emails de commits | opcional `github` |
-| Username | `dev_registries` | Perfiles y paquetes en npm, crates.io y Docker Hub | — |
+| Username | `bluesky` | Perfil público de Bluesky: nombre, bio, fecha de alta y actividad | — |
+| Username | `dev_registries` | Perfiles y paquetes en npm, crates.io, Docker Hub y PyPI; nombres iguales en Stack Overflow | — |
+| Username | `profile_extract` | Nombre, bio, web y usernames que el dueño declaró en DEV Community y Codeberg; se pivotan | — |
 | Username | `discord_snowflake` | Fecha de creación de una cuenta de Discord a partir de su ID (sin red) | — |
 | Username | `username_variants` | Variantes de usuario a partir de un nombre completo (sin red) | — |
 | Org | `gleif` | LEI de una organización y relaciones matriz–filial (GLEIF) | — |
@@ -257,7 +264,7 @@ están en la **[guía de uso](docs/USO.md)**.
 | Geo | `geo_point` | Coordenadas: grados-minutos-segundos y enlaces a mapas (sin red) | — |
 
 Los módulos **pasivos** solo hablan con terceros. Los **activos** (`http_fingerprint`, `web_meta`,
-`takeover`, `tech_detect`, `favicon_pivot` y `fediverse`) envían tráfico al objetivo y solo se ejecutan con `--active`. Un módulo sin su API key se omite y se indica
+`analytics_ids`, `takeover`, `tech_detect`, `favicon_pivot` y `fediverse`) envían tráfico al objetivo y solo se ejecutan con `--active`. Un módulo sin su API key se omite y se indica
 en la salida. Qué datos aporta cada uno y sus límites: [referencia de módulos](docs/MODULES.md).
 
 ## Configuración
@@ -336,6 +343,7 @@ memoria. Para añadir una fuente nueva, sigue [CONTRIBUTING.md](CONTRIBUTING.md)
 | [Referencia de módulos](docs/MODULES.md) | Fuentes, datos que aportan y limitaciones |
 | [Arquitectura](docs/ARCHITECTURE.md) | Motor, pivoteo, modelo de datos y persistencia |
 | [Asistencia con IA](docs/IA.md) | `osineitor summarize`: activación, consentimiento, validación de citas y evaluación |
+| [Servidor MCP](docs/MCP.md) | `osineitor mcp`: consulta de scans y scans pasivos para agentes de IA, y lo que no pueden hacer |
 | [Vigilancia continua](docs/VIGILANCIA.md) | `osineitor watch`: alertas, notificadores y despliegue con cron o GitHub Actions |
 | [API de librería y plugins](docs/API.md) | `from osineitor import Scanner` y cómo añadir módulos desde un paquete |
 | [Contrato de la CLI](docs/CLI_CONTRACT.md) | Eventos NDJSON, salidas JSON y cancelación |

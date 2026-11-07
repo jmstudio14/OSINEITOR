@@ -13,6 +13,7 @@ class Shodan(Module):
     produces = frozenset({EntityType.SERVICE, EntityType.VULNERABILITY, EntityType.RECORD})
     requires_key = "shodan"
     canary = "1.1.1.1"
+    min_interval = 1.0  # documentado: ~1 petición/s por key
 
     async def run(self, entity: Entity) -> list[Entity]:
         response = await self.ctx.http.get(

@@ -1,6 +1,7 @@
 """Dominios parecidos al propio (typosquatting y homógrafos) ya registrados, por DNS.
 
-Es una comprobación **defensiva** del dominio investigado. Deja un único `record`: no emite
+Es una comprobación **defensiva** del dominio investigado. Deja un `record` resumen y uno por
+cada dominio parecido registrado (para que `watch` detecte uno nuevo por su clave): no emite
 `domain`, porque un dominio parecido puede ser hostil y, como entidad, se pivotaría contra él.
 """
 
@@ -172,14 +173,23 @@ class LookalikeDomains(Module):
             self.record_evidence(f"dns://{item['domain']}/NS", "\n".join(item["ns"]))
         if not registered:
             return []
-        return [
+        summary = self.emit(
+            entity,
+            EntityType.RECORD,
+            f"lookalike:{entity.value}",
+            registered=registered,
+            with_mx=sum(1 for r in registered if r.get("mx")),
+            checked=len(candidates),
+            unanswered=unknown,
+        )
+        found = [
             self.emit(
                 entity,
                 EntityType.RECORD,
-                f"lookalike:{entity.value}",
-                registered=registered,
-                with_mx=sum(1 for r in registered if r.get("mx")),
-                checked=len(candidates),
-                unanswered=unknown,
+                f"lookalike:{item['domain']}",
+                lookalike_of=entity.value,
+                **{k: v for k, v in item.items() if k != "domain"},
             )
+            for item in registered
         ]
+        return [summary, *found]

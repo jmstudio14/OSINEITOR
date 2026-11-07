@@ -105,7 +105,7 @@ Un único documento JSON por stdout.
 
 | Orden | Esquema (`$defs`) | Contenido |
 |---|---|---|
-| `scan`, `domain`, `ip`, `email`, `username`, `person`, `show`, `import nmap` | `scan_result` | Resultado completo: `target`, `entities`, `events`, `runs` (estado por módulo), `evidence` (metadatos y SHA-256 de cada respuesta guardada con `--evidence`, sin el cuerpo), `evidence_digest` (huella del conjunto o `null`), `truncated`, `status` |
+| `scan`, `domain`, `ip`, `email`, `username`, `person`, `show`, `import nmap`, `import subfinder`, `import maigret` | `scan_result` | Resultado completo: `target`, `entities`, `events`, `runs` (estado por módulo), `evidence` (metadatos y SHA-256 de cada respuesta guardada con `--evidence`, sin el cuerpo), `evidence_digest` (huella del conjunto o `null`), `truncated`, `status` |
 | `modules` | `modules_output` | Módulos: `name`, `description`, `consumes`, `produces`, `passive`, `analyzer`, `plugin`, `requires_key`, `key_configured`, `timeout` |
 | `presets` | `presets_output` | `presets[]` (`name`, `source`, `description`, `depth`, `modules`, `allow_active`, `max_*`) y `errors[]` (ficheros de preset no válidos; con alguno, código 2) |
 | `update-data` | `update_data_output` | Por dataset: `name`, `status` (`actualizado`, `sin cambios`, `rechazado`, `error`), `detail`, `license`, `version`, `sha256`. Código 3 si alguno falla o se rechaza |
@@ -119,6 +119,13 @@ Un único documento JSON por stdout.
 | `summarize` | `summary_output` | `scan_id`, `target`, `provider`, `model`, `remote`, `summary` (solo frases válidas), `sentences[]` (`text`, `citations`), `rejected[]` (`text`, `reason`), `citations` (identificador → clave de entidad, solo los citados), `facts`, `omitted`. Ver [IA.md](IA.md) |
 | `watch run` | `watch_output` | `checked_at`, `alerts` (total), `exit_code` y `targets[]` (`target`, `due`, `ran`, `scan_id`, `status`, `baseline`, `alerts[]` con `rule`, `title`, `severity`, `entity`, `value`, `recommendation`, `evidence`; `deliveries[]` con `notifier`, `ok`, `sent`, `error`; `error`). Ver [VIGILANCIA.md](VIGILANCIA.md) |
 | `watch list` | `watch_list_output` | Por objetivo: `target`, `type`, `every` (segundos), `last_run`, `last_status`, `due`, `notify` |
+| `case show` | `case_show_output` | `id`, `name`, `description`, `tags`, `created_at`, `scans[]` (`id`, `target_type`, `target`, `started_at`, `entities`), `notes[]` (`at`, `text`) y `correlations[]` (`type`, `value`, `cases`, `scans`: datos del caso que figuran también en otros casos) |
+| `case list` | `case_list_output` | Por caso: `name`, `description`, `tags`, `created_at`, `scans` (cuántos) |
+| `timeline` | `timeline_output` | `scan_id`, `target` y `events[]` en orden cronológico: `at` (UTC), `event`, `field`, `entity`, `type`, `value`, `source` (`null` si es la semilla), `future` (posterior al inicio del scan) |
+| `risk` | `risk_output` | `scan_id`, `target` y `assets[]` de mayor a menor riesgo: `asset`, `type`, `value`, `score` (0–100), `level` (`info`…`critical`), `findings` (por severidad), `exposure` (`services`, `vulnerabilities`) y `reasons` |
+| `suggest` | `suggest_output` | `scan_id`, `target` y `suggestions[]`: `entity`, `type`, `value`, `modules` (pasivos), `active_modules` (solo informativo), `sensitive` y `command` (el comando que lo investigaría; nunca se ejecuta) |
+| `resolve` | `resolve_output` | `scan_id`, `target` y `hypotheses[]` de mayor a menor puntuación: `label` (siempre `hipótesis`), `score` (0–0,95), `accounts` (claves de `profile`) y `signals[]` (`kind`, `value`, `weight`) |
+| `search` | `search_output` | Por coincidencia: `scan_id`, `type`, `value`, `source` (`null` si es la semilla), `confidence`, `target`, `started_at`, `cases` |
 | `purge` | `purge_output` | `before` (fecha de corte), `deleted`, `dry_run` |
 | `verify` | `verify_output` | `scan_id`, `checked`, `ok`, `mismatches` (evidencias alteradas), `evidence_digest` recalculada, `digest_match` (`null` si no se pasó `--digest`). Sale con `5` si algo no coincide |
 

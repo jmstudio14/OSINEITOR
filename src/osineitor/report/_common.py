@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from osineitor import resolve
 from osineitor.models import Entity, ScanResult
 
 
@@ -75,3 +76,29 @@ def evidence_hint(result: ScanResult) -> str:
         f"en la base de datos y `osineitor verify {scan}` recalcula estos hashes "
         f"(`--digest HUELLA` compara con la huella anotada fuera de la base)."
     )
+
+
+def hypothesis_lines(result: ScanResult) -> list[str]:
+    """Sección Markdown de resolución de entidades; vacía si no hay hipótesis."""
+    found = resolve.hypotheses(result)
+    if not found:
+        return []
+
+    def cell(text: object) -> str:
+        return str(text).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
+    lines = [
+        "",
+        "## Hipótesis de identidad",
+        "",
+        "Cuentas que podrían ser de la misma persona. Son hipótesis con su evidencia, no una "
+        "identidad confirmada: dos cuentas con el mismo username o nombre pueden ser de personas "
+        "distintas.",
+        "",
+        "| Puntuación | Cuentas | Señales |",
+        "|---|---|---|",
+    ]
+    for h in found:
+        signals = "; ".join(f"{s['kind']}: {s['value']}" for s in h["signals"])
+        lines.append(f"| {h['score']} | {cell(', '.join(h['accounts']))} | {cell(signals)} |")
+    return lines

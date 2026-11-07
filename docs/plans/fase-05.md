@@ -20,17 +20,17 @@ Sale del [ROADMAP](../../ROADMAP.md) (fase 5). Criterios comunes a todo módulo 
 | F5.2 | S | `github_email` | ✅ | Búsqueda de commits por email; logins como `username` |
 | F5.3 | S | `username_wmn` | ✅ | `wmn.json` sin modificar; «confirmado» = fusión por URL |
 | F5.7 | S | `github_user` | ✅ | Perfil, organizaciones, blog y emails de commits |
-| F5.10 | S | `fediverse` | 🟡 | Mastodon y WebFinger; falta Bluesky (spike); módulo activo |
-| F5.11 | S | `dev_registries` | 🟡 | npm, crates.io y Docker Hub; faltan PyPI y Stack Exchange |
+| F5.10 | S | `fediverse` | ✅ | Cierre del roadmap: `bluesky` (API pública, handle `usuario.bsky.social` o con dominio propio) junto a `fediverse`. |
+| F5.11 | S | `dev_registries` | ✅ | Cierre del roadmap: `dev_registries` añade PyPI (página pública de perfil) y Stack Overflow (solo nombres visibles idénticos, sin `verified`). |
 | F5.13 | C | `hibp_pastes` | ✅ | Resumen del endpoint `pasteaccount`, misma key `hibp` |
 | F5.14 | C | `discord_snowflake` | ✅ | En local |
-| F5.8 | S | `hudsonrock` | ⛔ | Bloqueado por *spike* (ver más abajo) |
-| F5.4 | S | extracción de perfil | ⛔ | Aplazado: parsers de terceros sin red |
-| F5.5 | S | pivote recursivo | ⛔ | Depende de F5.4 |
-| F5.1 | C | `leakcheck` | ⛔ | *Spike* sin hacer |
-| F5.12 | C | `pgp_keyserver` | ⛔ | *Spike* sin hacer |
-| F5.6 | C | `--tags` y `--top` | ⬜ | Aplazado |
-| F5.15 | C | `ext_maigret` | ⬜ | Aplazado: sin formato de salida verificado |
+| F5.8 | S | `hudsonrock` | ⛔ | Evaluado y no incluido (ver más abajo) |
+| F5.4 | S | extracción de perfil | ✅ | Cierre del roadmap: `profile_extract` lee las APIs oficiales de DEV Community y Codeberg (nombre, bio, web, usernames declarados); no extrae nada de páginas HTML. |
+| F5.5 | S | pivote recursivo | ✅ | Cierre del roadmap: los usernames que declara `profile_extract` se emiten como entidades y el motor los pivota hasta la profundidad del scan. |
+| F5.1 | C | `leakcheck` | ✅ | Cierre del roadmap: `leakcheck` con la API pública, que solo devuelve nombres de fuentes y fechas. |
+| F5.12 | C | `pgp_keyserver` | ✅ | Cierre del roadmap: `pgp_keyserver` con `keys.openpgp.org` (índice legible por máquina, solo identidades verificadas). |
+| F5.6 | C | `--tags` y `--top` | ⬜ | Evaluado y no incluido (ver más abajo) |
+| F5.15 | C | `ext_maigret` | ✅ | Cierre del roadmap: `ext_maigret` lee el informe `--json simple` que Maigret escribe en una carpeta temporal. |
 
 ## Decisiones
 
@@ -58,17 +58,18 @@ Sale del [ROADMAP](../../ROADMAP.md) (fase 5). Criterios comunes a todo módulo 
 
 ## Entregables bloqueados o aplazados
 
-- **F5.8 `hudsonrock`.** La API documentada es de pago y su respuesta incluye contraseñas; los
-  endpoints gratuitos, la URL base y los términos no están verificados. No se implementa hasta
-  poder comprobarlos: el criterio del roadmap exige un test que demuestre que no se guardan
-  secretos, y sin la respuesta real ese test no prueba nada.
-- **F5.4 y F5.5.** Extraer nombre, biografía y enlaces de páginas de terceros exige parsers que no
-  se pueden validar sin red (ver [`CLAUDE.md`](../../CLAUDE.md), sección de límites).
-- **F5.1 y F5.12.** *Spikes* de fuente sin hacer.
-- **F5.6.** Las categorías de WhatsMyName permitirían `--tags`; no se hace porque es una opción
-  nueva de la CLI y exige ampliar el contrato (`docs/CLI_CONTRACT.md`).
-- **F5.15.** Maigret no tiene un formato de salida estable verificado.
-- **Bluesky, PyPI y Stack Exchange** (partes de F5.10 y F5.11).
+Revisado en el cierre del roadmap (07-11-2026; ver [`cierre-roadmap.md`](cierre-roadmap.md)):
+
+- **F5.8 `hudsonrock`.** La API documentada es de pago y su respuesta incluye contraseñas; la
+  clave gratuita se pide con un correo corporativo. Los términos y una respuesta real no están
+  verificados. No se implementa: el criterio del roadmap exige un test que demuestre que no se
+  guardan secretos, y sin la respuesta real ese test no prueba nada.
+- **F5.6.** Sherlock no tiene categorías ni popularidad y solo WhatsMyName tiene categorías; un
+  filtro que afectase a una sola fuente daría una idea falsa de la cobertura. `--only username_wmn`
+  ya limita a una fuente.
+- Hechos en el cierre: F5.1, F5.4, F5.5, F5.10 (Bluesky), F5.11 (PyPI y Stack Overflow), F5.12 y
+  F5.15. F5.4 y F5.5 se resolvieron con APIs oficiales (DEV Community y Codeberg) y no con parsers
+  de páginas HTML de terceros.
 
 ## Verificación
 
