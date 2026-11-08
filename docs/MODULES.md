@@ -848,7 +848,7 @@ fichero salen del equipo (hay un test que lo comprueba interceptando la red). Su
 
 ## Fuentes evaluadas y no incluidas
 
-Entregables del [ROADMAP](../ROADMAP.md) que se evaluaron y no se implementaron. Un módulo cuya
+Entregables del [ROADMAP](https://github.com/jmstudio14/OSINEITOR/blob/main/ROADMAP.md) que se evaluaron y no se implementaron. Un módulo cuya
 fuente no se puede probar y cuya documentación no permite escribirlo con garantías no se añade: sus
 tests solo comprobarían lo que uno mismo supone de la respuesta.
 

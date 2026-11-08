@@ -38,7 +38,7 @@ protocolo; nada más.
 - **Pedir módulos activos.** `run_passive_scan` no tiene parámetro `active`, rechaza cualquier
   argumento que no declare y crea siempre el `Scanner` con `active=False`. Los módulos activos
   (los que contactan con el objetivo) no se pueden activar por MCP. A diferencia de lo que
-  contemplaba el [ROADMAP](../ROADMAP.md) («excluidos por defecto»), tampoco hay un interruptor
+  contemplaba el [ROADMAP](https://github.com/jmstudio14/OSINEITOR/blob/main/ROADMAP.md) («excluidos por defecto»), tampoco hay un interruptor
   para activarlos: si los necesitas, usa la CLI y confirma tú.
 - **Investigar ficheros locales.** Un objetivo que sea la ruta de un fichero se rechaza: un agente
   no debe poder hacer leer los metadatos de ficheros de tu equipo.

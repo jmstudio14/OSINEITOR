@@ -56,7 +56,11 @@ class PgpKeyserver(Module):
                 if key:
                     keys.append(key)
                     identities = key.data["identities"] = []
-            elif fields[0] == "uid" and keys and len(identities) < MAX_IDENTITIES:
-                if uid := unquote(fields[1]).strip():
-                    identities.append(uid[:200])
+            elif (
+                fields[0] == "uid"
+                and keys
+                and len(identities) < MAX_IDENTITIES
+                and (uid := unquote(fields[1]).strip())
+            ):
+                identities.append(uid[:200])
         return keys
