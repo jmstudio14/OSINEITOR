@@ -1,5 +1,10 @@
 # Plan G8 · Instalador de Windows (Hito G)
 
+> **Estado (07-11-2026):** escrito (✅ en el ROADMAP), pero sin ejecutar del todo: el paquete de
+> PyInstaller y `smoke.py` pasaron en local; no se ha compilado el `.iss`, ni instalado, ni ejecutado
+> el job `windows` de `release.yml` (ver «Qué no está verificado» en [GUI.md](../GUI.md)). Las
+> casillas de abajo son la lista de ejecución original y no se marcaron.
+
 > **Para quien lo ejecute:** hazlo tarea a tarea (`superpowers:executing-plans` o
 > `superpowers:subagent-driven-development`). Los pasos usan casillas `- [ ]`.
 
@@ -36,7 +41,7 @@ Inno Setup empaqueta esa carpeta. Todo se construye en un job de `windows-latest
 
 - **Descubrimiento de módulos congelado:** el registro descubre módulos por el sistema de ficheros
   o `importlib`; dentro de PyInstaller eso puede devolver cero módulos sin error. La prueba de humo
-  exige 55 módulos (el recuento de `osineitor modules --json`, que `tests/test_docs.py` ya compara
+  exige todos los módulos (62 hoy; el recuento de `osineitor modules --json`, que `tests/test_docs.py` ya compara
   con el README).
 - Ficheros de datos ausentes en el bundle: la prueba de humo ejecuta un `doctor`/`presets` real
   y comprueba el preset `passive`.
@@ -90,7 +95,7 @@ Inno Setup empaqueta esa carpeta. Todo se construye en un job de `windows-latest
   en stderr.
 
 Comprobaciones, en este orden: existen ambos `.exe`; `osineitor.exe version --json` == versión de
-`pyproject.toml`; `modules --json` devuelve 55 módulos y valida contra `modules_output`;
+`pyproject.toml`; `modules --json` devuelve todos los módulos (62 hoy) y valida contra `modules_output`;
 `presets --json` contiene `passive`; una ejecución real **sin red** con el módulo local
 `discord_snowflake` (el humo no sale a Internet); y `osineitor-gui.exe` arranca con
 `QT_QPA_PLATFORM=offscreen`: se lanza el proceso, se comprueba a los 3 s que sigue vivo y se
@@ -99,7 +104,7 @@ plan y pediría tu OK).
 
 - [ ] **Paso 1: tests** `tests/test_packaging.py::test_smoke_*` sobre una carpeta falsa con scripts
   `.bat` como ejecutables (solo Windows, `skipif` en otros): falta el `.exe` → código 1 y mensaje;
-  versión distinta → código 1; menos de 55 módulos → código 1.
+  versión distinta → código 1; menos módulos de los esperados → código 1.
 - [ ] **Paso 2-4:** falla → implementa → pasa.
 - [ ] **Paso 5:** ejecuta el humo sobre el `dist` real (Windows) y anota la salida.
 - [ ] **Paso 6:** commit `Añade la prueba de humo del paquete de Windows (G8)`.

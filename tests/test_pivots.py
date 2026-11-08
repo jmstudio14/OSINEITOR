@@ -81,6 +81,23 @@ def test_the_command_never_includes_active_modules_and_quotes_the_value():
     assert "--active" not in s["command"]
 
 
+def test_the_command_is_safe_to_paste_in_cmd_powershell_and_posix(monkeypatch):
+    """La URL es de terceros: un `&` en cmd.exe lanzaría un segundo comando."""
+    from types import SimpleNamespace
+
+    urls = make("urls", [EntityType.URL])
+    plain = ent(EntityType.URL, "https://example.com/a?x=1&calc")
+    hostile = ent(EntityType.URL, 'https://example.com/"&calc&"')
+    monkeypatch.setattr(pivots, "os", SimpleNamespace(name="nt"))
+    [s] = pivots.suggest(scan(plain, hostile), [urls], Config())  # sin forma segura: no se propone
+    assert s["command"].startswith('osineitor scan "https://example.com/a?x=1&calc" --depth 1')
+    monkeypatch.setattr(pivots, "os", SimpleNamespace(name="posix"))
+    found = {
+        x["value"]: x["command"] for x in pivots.suggest(scan(plain, hostile), [urls], Config())
+    }
+    assert found[hostile.value].startswith("osineitor scan 'https://example.com/\"&calc&\"' ")
+
+
 def test_personal_data_is_flagged_as_sensitive():
     mail = ent(EntityType.EMAIL, "ana@example.com")
     [s] = pivots.suggest(scan(mail), CLASSES, Config())

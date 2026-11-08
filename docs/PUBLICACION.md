@@ -60,8 +60,8 @@ aparece como «Provenance». Para comprobarlas desde fuera se puede usar la herr
 
 - **Probado en local:** que el wheel y el sdist se construyen sin avisos, pasan `twine check`, incluyen
   los ficheros de datos (presets, reglas, firmas) y que el wheel instalado en un entorno limpio
-  ejecuta `osineitor version`, lista los 55 módulos y carga los presets.
-- **Instalador de Windows, probado en local:** PyInstaller 6.22 (Python 3.14) construyó `dist/OSINEITOR` (134,8 MB; el ZIP, 66 MB) y `smoke.py` salió con 0: versión, 55 módulos, presets, un scan sin red y la GUI viva a los 3 s.
+  ejecuta `osineitor version`, lista todos los módulos y carga los presets.
+- **Instalador de Windows, probado en local:** PyInstaller 6.22 (Python 3.14) construyó `dist/OSINEITOR` (134,8 MB; el ZIP, 66 MB) y `smoke.py` salió con 0: versión, 55 módulos (los que había entonces), presets, un scan sin red y la GUI viva a los 3 s.
 - **Instalador de Windows, no probado:** compilar el `.iss`, instalar y desinstalar, el job `windows` en la CI (allí es Python 3.13), la creación de la Release, SmartScreen y los antivirus.
 - **No probado:** el flujo `release.yml` completo, la publicación en PyPI y la comprobación de las
   atestaciones. Necesitan la cuenta de PyPI y los pasos de «Una sola vez». Hasta publicar una versión

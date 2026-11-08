@@ -24,8 +24,8 @@ pip install -e '.[dev]'
 
 ## Comprobaciones obligatorias
 
-Lo mismo que ejecuta la CI, en Windows y Linux con Python 3.11 y 3.13 (Windows es la plataforma
-principal):
+Lo mismo que ejecuta la CI, en Windows y Linux con Python 3.11 y 3.13 y en macOS con 3.13 (Windows
+es la plataforma principal):
 
 ```bash
 ruff check .

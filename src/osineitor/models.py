@@ -197,6 +197,10 @@ def _is_file_path(value: str) -> bool:
     no debe tomarse por un fichero que casualmente esté en la carpeta actual."""
     if "/" not in value and "\\" not in value:
         return False
+    # Una ruta UNC (`\\host\share`, `//host/share`) haría que Windows abra SMB con las
+    # credenciales del usuario (fuga del hash NTLM) solo por comprobar si existe.
+    if value[:2] in ("\\\\", "//", "\\/", "/\\"):
+        return False
     try:
         return os.path.isfile(value)
     except (OSError, ValueError):

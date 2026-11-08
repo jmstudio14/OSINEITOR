@@ -16,6 +16,7 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from osineitor import logs
 from osineitor.config import Config
 from osineitor.http import HttpClient
 
@@ -64,9 +65,12 @@ def _secret(options: dict[str, Any], key: str) -> str:
 
 def payload(fmt: str, target: str, scan_id: int | None, alerts: list[Alert]) -> dict[str, Any]:
     text = message(target, alerts)
+    # Los valores son de terceros: un `@everyone` o `<!channel>` no debe avisar a todo el canal.
     if fmt == "discord":
-        return {"content": text[:DISCORD_LIMIT]}
-    if fmt in ("slack", "teams"):
+        return {"content": text[:DISCORD_LIMIT], "allowed_mentions": {"parse": []}}
+    if fmt == "slack":  # Slack interpreta `<…>` como mención o enlace; así se pide escaparlo
+        return {"text": text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")}
+    if fmt == "teams":
         return {"text": text}
     return {
         "text": text,
@@ -82,6 +86,9 @@ async def _webhook(
     url = _secret(notifier.options, "url")
     if not url.startswith(("https://", "http://")):
         raise NotifyError("la URL del webhook debe empezar por https:// o http://")
+    # El token va en la ruta (Slack, Discord, Teams), y la ruta sí llega al registro.
+    logs.mask_secret(url)
+    logs.mask_secret(logs.redact_url(url))
     body = payload(notifier.options.get("format", "generic"), target, scan_id, alerts)
     private = bool(notifier.options.get("allow_private", False))
     async with HttpClient(Config.load(), allow_private=private, retries=1) as http:
@@ -95,6 +102,10 @@ async def _webhook(
 
 def _send_mail(notifier: Notifier, subject: str, text: str) -> None:
     opts = notifier.options
+    if opts.get("username") and not opts.get("ssl") and not opts.get("starttls", True):
+        raise NotifyError(
+            "con `username`, SMTP necesita `ssl` o `starttls`: la contraseña iría en claro"
+        )
     msg = EmailMessage()
     msg["Subject"] = " ".join(subject.split())  # sin saltos de línea: no se inyectan cabeceras
     msg["From"] = opts["from"]

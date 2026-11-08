@@ -11,9 +11,94 @@ las fases 5 a 11 (v0.6.0 a v1.0.0) en lo que no depende de cuentas o de red real
 publicado ni se ha probado contra los servicios reales; el detalle de cada fase y sus límites está
 en `docs/plans/fase-NN.md`. Las secciones van de la fase más reciente a la más antigua.
 
+### GUI: rediseño visual tipo centro de operaciones
+
+- **Sistema de diseño:** tokens de color (tema oscuro por defecto para instalaciones nuevas;
+  claro y sistema siguen disponibles), hoja de estilo global, Inter y JetBrains Mono (OFL) e
+  iconos Lucide (ISC) incluidos en el paquete.
+- **Navegación:** barra lateral contraíble (Panel, Scans, Historial, Búsqueda, Salud, Ajustes)
+  y barra superior con la sección, la búsqueda y el estado real de la CLI. El dock de historial
+  pasa a ser una página.
+- **Panel principal nuevo**, solo con datos de la CLI: indicadores, scans por día, hallazgos por
+  scan y por severidad, tipos de entidad, estado de los módulos, hallazgos más graves y actividad
+  reciente. Las cifras de hallazgos salen de los últimos 10 scans y lo dicen.
+- **Búsqueda global** en todos los scans guardados (`Ctrl+K`, `osineitor search`).
+- **Tablas:** ordenación con valor numérico real, filtros en el historial, insignias de severidad
+  con texto, columnas Severidad y Confianza en las entidades y menú contextual.
+- **Seguridad:** el banner de un scan y los errores de los diálogos dejan de interpretar HTML del
+  stderr o de datos de terceros, y los tooltips con esos datos se muestran escapados.
+
+### GUI: arreglos tras las pruebas
+
+- Un scan acabado muestra «sin ejecutar» (no «pendiente») en los módulos que nunca corrieron, y la
+  barra de estado dice «completo, con errores en módulos» si la CLI salió con código 3 (en un scan
+  guardado no se sabe el código y sigue en «completo»).
+- Al cerrar la aplicación con una llamada a la CLI en curso ya no sale `RuntimeError: Signal
+  source has been deleted`. El proceso sigue tardando lo que tarde esa llamada en acabar.
+
+### GeoIP local (F4.23)
+
+- **Módulo nuevo (de 70 a 71):** `geoip_offline`, analizador que geolocaliza las IP con un fichero
+  `GeoLite2-City.mmdb` local, sin enviarlas a terceros. OSINEITOR no incluye ni descarga la base: la
+  colocas en `geoip/` dentro de tu directorio de datos; sin ella el módulo queda `omitido`. Avisa con
+  `stale_database` si tiene más de 30 días. Probado en vivo con la base real.
+- **Dependencia nueva:** `maxminddb`.
+
+### Fase 6: nuevos frentes (F6.1, F6.8, F6.10, F6.12 a F6.16 y F6.18)
+
+- **Módulos nuevos (de 62 a 70):** `opensanctions`, `eth_explorer`, `capture`, `search_dorks`,
+  `doc_harvest`, `github_code`, `cloud_storage_refs` y `ext_exiftool`. Keys nuevas: `opensanctions`,
+  `etherscan`, `brave` y, opcional, `archive_org`.
+- **Reputación de un fichero:** `virustotal` y `abusech` consultan el SHA-256 del `record` de `file_hash`.
+  **Cambia lo que sale del equipo:** con su key configurada y la profundidad por defecto, el hash de un
+  fichero local se envía a esos servicios; el fichero y su ruta, no. `-d 1` lo evita.
+- **`capture`** guarda cuerpo, cabeceras, WARC y pantallazo; el extra `capture` añade Playwright.
+  `osineitor verify` comprueba también estos ficheros (cambio aditivo en `verify_output`).
+- **`github_code`** no guarda nunca el valor de un secreto, ni con `--evidence`: `ctx.http` admite
+  `evidence_body=False`. Guía de divulgación en `docs/USO_RESPONSABLE.md`.
+- **Verificación:** `capture`, `doc_harvest`, `cloud_storage_refs` y `ext_exiftool`, en vivo; el resto, con
+  la documentación oficial y respuestas simuladas (D1). `eth_explorer` no trae etiquetas (plan Pro Plus).
+
+### Auditoría de seguridad
+
+Auditoría completa de la rama `feat/roadmap-f4-s`: sin hallazgos críticos, 8 medios y 18 bajos,
+corregidos salvo lo indicado al final.
+
+- **Denegación de servicio:** el cuerpo de las respuestas se lee por partes y se corta a 64 MiB ya
+  descomprimidos (`ResponseTooLarge`, sin reintento), contra bombas gzip. Las regex de
+  `tech_detect`, `http_fingerprint`, `web_meta` y del lector de PDF (`files_meta`) eran cuadráticas
+  con HTML o PDF hostil: ahora usan cuantificadores posesivos y longitudes acotadas (los tests
+  están en `tests/test_redos.py`); el lector de PDF de `file_meta` intenta como máximo 20 objetos
+  (`PDF_TRIES`) y `web_meta` deduplica los sitemaps en tiempo lineal.
+- **Red:** `ensure_public` bloquea (fail-closed) un nombre que no resuelve; `is_public` desenvuelve
+  la IPv4 de NAT64 e IPv4-compatible y bloquea `fec0::/10`. `HttpClient` ignora `HTTP_PROXY`,
+  `HTTPS_PROXY` y `ALL_PROXY` del entorno: solo cuenta `--proxy`. `hibp` codifica el email con
+  `quote_segment`.
+- **Windows:** una ruta UNC como objetivo (`\\host\share`) ya no llega a `os.path.isfile` (evita
+  una conexión SMB que filtra el hash NTLM). Los ejecutables externos y `icacls` no se buscan en la
+  carpeta actual, la GUI en modo desarrollo lanza `python -P -m osineitor` y su localizador de la
+  CLI (`which_on_path`) solo mira carpetas absolutas del PATH y exige el `osineitor.exe` exacto.
+- **Ficheros y secretos:** el nombre por defecto de `export` sale de un slug (no escapa de
+  `reports/`); los nombres de clave de `config.toml` se citan y los caracteres de control se
+  escapan; `osineitor.db` y `cache.db` se crean con permisos `0600` en POSIX; el token de un webhook
+  se enmascara en los logs y los errores inesperados de un módulo se limpian de URLs y claves
+  (`logs.scrub`); SMTP con `username` rechaza enviar la contraseña sin TLS.
+- **Salida:** la CLI neutraliza markup de Rich y secuencias de escape de terminal en valores de
+  terceros; los informes Markdown escapan HTML y enlaces; los comandos de `suggest` se citan
+  también para `cmd.exe` y se omiten si no hay forma segura; los avisos de Discord y Slack no
+  mencionan a todo el canal; la GUI muestra los errores de la CLI como texto plano; el cuerpo del
+  issue de `doctor` no menciona usuarios.
+- **CI y empaquetado:** acciones fijadas por SHA, `permissions` mínimos por workflow y job, token
+  solo en el paso que lo usa; el desinstalador de Windows quita del PATH solo la entrada exacta; el
+  dataset `sherlock-sites` va fijado a un commit y a su SHA-256.
+- **Sin cambiar (decisión o fuera de alcance):** DNS rebinding sin fijar la IP resuelta, binarios
+  sin firmar ni attestation, builds no reproducibles, plugins por *entry point* sin aislar.
+
 ### Cierre del roadmap (pendientes y parciales)
 
-Plan en `docs/plans/cierre-roadmap.md`. Se rellena según se cierra cada bloque.
+Plan en `docs/plans/cierre-roadmap.md`. Quedan fuera, tras evaluarse, las fuentes de F5.6,
+F5.8, F6.1, F6.3, F6.4, F6.8, F6.12 a F6.16, F6.18 y F11.5 y `ext_amass`
+(F4.24, F8.7): ver `docs/MODULES.md#fuentes-evaluadas-y-no-incluidas`.
 
 - **DNS wildcard (F1.15):** `dns` sondea una etiqueta aleatoria de la zona de cada subdominio; si el
   subdominio solo resuelve a las IP del wildcard, lo marca (`wildcard: true`) y no pivota a esas
@@ -100,8 +185,16 @@ Plan en `docs/plans/cierre-roadmap.md`. Se rellena según se cierra cada bloque.
   de Spamhaus (resolvedor público rechazado) se informa como cuota, no como «listada».
 - **`asn_netblock` (F4.16):** de IP a ASN y prefijo (Team Cymru, por DNS) y de ASN a hasta 50
   prefijos (RIPEstat), los más amplios primero.
-- **`cloud_attribution` (F4.17, parcial):** analizador que etiqueta CDN y nube a partir del CNAME y
-  de la huella HTTP. **Falta** el etiquetado de IP con los rangos publicados por los proveedores.
+- **`cloud_attribution` (F4.17):** analizador que etiqueta CDN y nube a partir del CNAME y de la
+  huella HTTP, y las IP con los rangos de AWS, GCP, Azure y Cloudflare que instala `update-data`
+  (`aws-ip-ranges`, `gcp-ip-ranges`, `azure-ip-ranges`, `cloudflare-ips-v4` y `cloudflare-ips-v6`,
+  licencia `public-feed` y sin hash fijo porque cambian a diario).
+- **Comprobación de Azure al arrancar:** el fichero de Azure cambia de URL cada semana. La CLI la
+  lee de la página de descarga de Microsoft al arrancar cualquier orden, como mucho una vez al día:
+  si es la instalada no descarga nada y si ha cambiado sustituye los rangos. Si la página deja de
+  traer el enlace, prueba la ruta de descarga conocida con las fechas de los últimos 14 días. Un
+  fallo no interrumpe la orden pero se avisa por stderr, y con rangos de más de 14 días se avisa
+  en cada arranque. No se hace con `--proxy`, en `mcp` ni con `OSINEITOR_NO_AUTO_UPDATE=1`.
 - **`urlscan` (F4.1):** escaneos públicos de urlscan.io; solo cuentan los hosts del objetivo. Key
   opcional.
 - **`otx` (F4.2):** pulses y DNS pasivo de AlienVault OTX (key gratuita `otx`).
@@ -123,7 +216,8 @@ Plan en `docs/plans/cierre-roadmap.md`. Se rellena según se cierra cada bloque.
   pendiente: no hay un formato JSON estable verificado.
 - `attack-surface` y `domain-recon` incluyen los módulos nuevos que les corresponden.
 - `docs/plans/fase-04.md`: plan de la fase con las decisiones y los entregables bloqueados
-  (F4.21, F4.22, F4.23 y los rangos de IP de F4.17).
+  (F4.21, F4.22, F4.23 y los rangos de IP de F4.17). F4.21, F4.22 y los rangos de AWS, GCP y
+  Cloudflare de F4.17 se hicieron después (ver «Cierre del roadmap»).
 
 ### Hito G del roadmap (aplicación de escritorio)
 
@@ -173,7 +267,8 @@ Plan en `docs/plans/cierre-roadmap.md`. Se rellena según se cierra cada bloque.
   números están en `docs/IA.md`. No se ha probado contra ningún modelo real.
 - Código de salida nuevo `12` (solo `summarize`) y salida `--json` `summary_output` (cambio
   aditivo del contrato).
-- `docs/IA.md` y `docs/plans/fase-10.md`: quedan sin hacer F10.4 (servidor MCP) y F10.5.
+- `docs/IA.md` y `docs/plans/fase-10.md`: quedaban sin hacer F10.4 (servidor MCP) y F10.5; se
+  hicieron después (ver «Cierre del roadmap»).
 
 ### Fase 9 del roadmap (monitorización, v0.10.0)
 
@@ -190,8 +285,8 @@ Plan en `docs/plans/cierre-roadmap.md`. Se rellena según se cierra cada bloque.
 - **Códigos de salida nuevos de `watch run`:** `10` (hay alertas) y `11` (alguna no se entregó);
   salidas `--json` `watch_output`, `watch_list_output` y `purge_output` (cambio aditivo).
 - **`osineitor purge --older-than 90d` (F9.5):** retención de scans, con `--dry-run`.
-- `docs/VIGILANCIA.md` (formato, funcionamiento y despliegue) y `docs/plans/fase-09.md`: quedan
-  sin hacer F9.4, F9.6 y F9.7.
+- `docs/VIGILANCIA.md` (formato, funcionamiento y despliegue) y `docs/plans/fase-09.md`: quedaban
+  sin hacer F9.4, F9.6 y F9.7; se hicieron después (ver «Cierre del roadmap»).
 
 ### Fase 8 del roadmap (interoperabilidad, v0.9.0)
 
@@ -210,8 +305,9 @@ Plan en `docs/plans/cierre-roadmap.md`. Se rellena según se cierra cada bloque.
   32 MiB, sin `DOCTYPE` ni entidades); no ejecuta Nmap, no pivota y no guarda la línea de comandos
   de Nmap. El objetivo es un `record` con el SHA-256 del fichero. Su `--json` usa el esquema
   `scan_result` ya existente (sin cambios en el contrato).
-- `docs/plans/fase-08.md`: plan de la fase. Quedan sin hacer F8.1 (STIX), el resto de F8.7
-  (`--targets-file`, Subfinder, Amass y Maigret) y F8.2 (MISP).
+- `docs/plans/fase-08.md`: plan de la fase. Quedaban sin hacer F8.1 (STIX), el resto de F8.7
+  (`--targets-file`, Subfinder, Amass y Maigret) y F8.2 (MISP); se hicieron después, salvo Amass
+  (ver «Cierre del roadmap»).
 
 ### Fase 7 del roadmap (hallazgos y análisis, v0.8.0)
 
@@ -228,8 +324,8 @@ Plan en `docs/plans/cierre-roadmap.md`. Se rellena según se cierra cada bloque.
 - **Grafo interactivo en el informe HTML (F7.1):** nodos por entidad y aristas por pivoteo, con
   filtros por tipo y fuente, arrastre y zoom. JavaScript propio y en línea, sin librerías ni CDN;
   los datos van con `<` escapado. Probado con 500 entidades. Dibuja como máximo 1500.
-- `docs/plans/fase-07.md`: plan de la fase. Quedan sin hacer los entregables *S* (F7.2, F7.4,
-  F7.5, F7.6, F7.7, F7.9, F7.10 y F7.12).
+- `docs/plans/fase-07.md`: plan de la fase. Quedaban sin hacer los entregables *S* (F7.2, F7.4,
+  F7.5, F7.6, F7.7, F7.9, F7.10 y F7.12); se hicieron después (ver «Cierre del roadmap»).
 
 ### Fase 6 del roadmap (nuevos frentes, v0.7.0)
 
@@ -269,13 +365,15 @@ Plan en `docs/plans/cierre-roadmap.md`. Se rellena según se cierra cada bloque.
 - **`fediverse` (F5.10, activo):** Mastodon `accounts/lookup` y WebFinger sobre el host del email.
   Bluesky queda pendiente (spike).
 - **`dev_registries` (F5.11):** perfiles y paquetes en npm, crates.io y Docker Hub. No emite los
-  emails de los mantenedores. PyPI y Stack Exchange quedan pendientes.
+  emails de los mantenedores. PyPI y Stack Exchange se añadieron después (ver «Cierre del
+  roadmap»).
 - **`hibp_pastes` (F5.13):** resumen de los *pastes* del email (nº, fuentes, fechas); no guarda los
   identificadores. Misma key `hibp`.
 - **`discord_snowflake` (F5.14):** fecha de creación de la cuenta a partir de su ID, en local.
 - El preset `person` incluye los módulos nuevos.
 - `docs/plans/fase-05.md`: plan de la fase con los entregables bloqueados o aplazados (F5.1, F5.4,
-  F5.5, F5.6, F5.8, F5.12, F5.15).
+  F5.5, F5.6, F5.8, F5.12, F5.15). Después se hicieron todos salvo F5.6 y F5.8 (ver «Cierre del
+  roadmap»).
 
 ### Fase 0 del roadmap (validación en campo, v0.1.1)
 

@@ -90,6 +90,7 @@ def test_every_module_declares_a_valid_authority():
         "tech_detect",
         "analytics_ids",
         "ptr",
+        "capture",
     }
 
 

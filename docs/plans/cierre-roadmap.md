@@ -74,7 +74,8 @@ El orden va de lo que no depende de nadie ni de ningún servicio externo a lo qu
 
 ## Estado final
 
-Cerrados: bloques A, B, C, D y E; del bloque F, F4.21, F4.22, F5.1 y F5.12; del G, F9.7 (con la
+Cerrados, con las excepciones de F8.7 (no se importa Amass) y F5.6 (`--tags`/`--top`, evaluado y no
+incluido): bloques A, B, C, D y E; del bloque F, F4.21, F4.22, F5.1 y F5.12; del G, F9.7 (con la
 regla `new-breach` ya existente y un test de extremo a extremo) y el recuento del ROADMAP.
 Evaluados y no incluidos: el resto del bloque F y F11.5. Sin tocar: lo de la tabla «Lo que no se
 puede cerrar desde el código».

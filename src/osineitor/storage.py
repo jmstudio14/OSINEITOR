@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from osineitor.config import data_dir
+from osineitor.config import data_dir, private_file
 from osineitor.models import Entity, Evidence, ModuleRun, ScanEvent, ScanResult
 
 # Migraciones por `PRAGMA user_version`: la posición en la lista (empezando en 1) es la versión.
@@ -171,6 +171,7 @@ class Storage:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or default_db_path()
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        private_file(self.path)
         self._conn = sqlite3.connect(self.path)
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._migrate()

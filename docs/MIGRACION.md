@@ -12,7 +12,7 @@ añadirán aquí.
 2. Actualiza: `pip install --upgrade osineitor`.
 3. Ejecuta `osineitor doctor`.
 
-La base de datos se **migra sola** la primera vez que se abre (hoy está en la versión 8), sin perder
+La base de datos se **migra sola** la primera vez que se abre (hoy está en la versión 10), sin perder
 scans. Es una migración solo hacia delante: una base creada por una versión más nueva se rechaza en
 una más antigua. Por eso la copia del paso 1.
 
@@ -26,6 +26,12 @@ una más antigua. Por eso la copia del paso 1.
 | 0.2.0 | `dns` falla con error si el resolvedor no responde (antes devolvía un vacío que parecía «sin registros») | Un `error` en `runs` ya no significa «sin datos» |
 | 0.4.0 | `scan` interpreta un username con forma `AS1234` como un ASN | Para tratarlo como username usa `osineitor username` |
 | 0.4.0 | Con `--proxy`, los módulos de conexión directa quedan omitidos con un mensaje | Si procesabas ese texto, ha cambiado |
+| Sin publicar | `HTTP_PROXY`, `HTTPS_PROXY` y `ALL_PROXY` del entorno ya no se usan: solo cuenta `--proxy` (o `OSINEITOR_PROXY`) | Si dependías del proxy del entorno, pásalo con `--proxy` |
+| Sin publicar | Una notificación SMTP con `username` y `starttls: false` sin `ssl` se rechaza (la contraseña iría en claro) | Activa `starttls` o `ssl` |
+| Sin publicar | El nombre por defecto de `export` sale de un slug del objetivo: ya no conserva `:` ni `/` | Si buscabas el informe por su nombre, usa `-o` o la ruta que imprime |
+| Sin publicar | Una ruta UNC (`\\servidor\recurso`) ya no se toma por un fichero local | Copia el fichero a una ruta local |
+| Sin publicar | Una respuesta de más de 64 MiB descomprimidos falla (`ResponseTooLarge`) y no se reintenta | Ninguna fuente documentada se acerca a ese tamaño |
+| Sin publicar | `update-data` rechaza una descarga cuyo SHA-256 no coincide con el fijado (`sherlock-sites` va fijado a un commit) | Actualiza OSINEITOR para obtener un dataset más nuevo |
 
 ## Cambios aditivos que no rompen nada
 
@@ -36,7 +42,8 @@ Se listan para saber qué hay de nuevo, no porque haya que hacer algo:
 - Campos nuevos y opcionales en las salidas `--json` y NDJSON (`observations`, `purpose`, `plugin`…).
   Los consumidores deben ignorar los campos desconocidos.
 - Órdenes nuevas: `presets`, `diff`, `verify`, `export` con más formatos, `update-data`, `watch`,
-  `purge` y `summarize`.
+  `purge`, `summarize`, `case`, `search`, `timeline`, `risk`, `resolve`, `suggest`, `mcp`, `import`
+  y `person`.
 - Tipos de entidad nuevos (`asn`, `netblock`, `certificate`, `technology`, `phone`, `finding`…): un
   consumidor que filtre por tipo no los verá hasta que los pida.
 

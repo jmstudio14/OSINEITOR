@@ -1,10 +1,25 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from osineitor import resolve
 from osineitor.models import Entity, ScanResult
+
+# Lo que en Markdown abre HTML, enlaces o imágenes, código o una celda nueva.
+_MD_SPECIAL = re.compile(r"([\\`\[\]<>|])")
+
+
+def md(value: object) -> str:
+    """Texto de terceros en Markdown: sin HTML (`<img onerror>`), enlaces (`[x](javascript:)`)
+    ni saltos o `|` que cambien la estructura del documento o de la tabla."""
+    return _MD_SPECIAL.sub(r"\\\1", " ".join(str(value).splitlines()))
+
+
+def md_code(value: object) -> str:
+    """`value` como código en línea; dentro no valen los escapes, así que el backtick se cambia."""
+    return "`" + " ".join(str(value).splitlines()).replace("`", "'").replace("|", "\\|") + "`"
 
 
 def fmt_value(value: Any) -> str:
@@ -84,9 +99,6 @@ def hypothesis_lines(result: ScanResult) -> list[str]:
     if not found:
         return []
 
-    def cell(text: object) -> str:
-        return str(text).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
-
     lines = [
         "",
         "## Hipótesis de identidad",
@@ -100,5 +112,5 @@ def hypothesis_lines(result: ScanResult) -> list[str]:
     ]
     for h in found:
         signals = "; ".join(f"{s['kind']}: {s['value']}" for s in h["signals"])
-        lines.append(f"| {h['score']} | {cell(', '.join(h['accounts']))} | {cell(signals)} |")
+        lines.append(f"| {h['score']} | {md(', '.join(h['accounts']))} | {md(signals)} |")
     return lines

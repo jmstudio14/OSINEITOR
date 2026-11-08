@@ -43,13 +43,14 @@ def test_save_warns_but_keeps_the_keys_when_chmod_is_not_supported(monkeypatch, 
 
 def test_save_restricts_the_acl_with_icacls_on_windows(monkeypatch, tmp_path):
     calls = []
-    monkeypatch.setattr(config, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(config, "os", SimpleNamespace(name="nt", environ={"SYSTEMROOT": "D:\\Win"}))
     monkeypatch.setattr(config.getpass, "getuser", lambda: "ana")
     monkeypatch.setattr(config.subprocess, "run", lambda cmd, **kw: calls.append((cmd, kw)))
     path = Config(keys={"shodan": "abc"}).save(tmp_path / "c.toml")
     assert calls == [
         (
-            ["icacls", str(path), "/inheritance:r", "/grant:r", "ana:(R,W)"],
+            # Por ruta absoluta: un icacls.exe plantado en la carpeta actual no se ejecuta.
+            ["D:\\Win\\System32\\icacls.exe", str(path), "/inheritance:r", "/grant:r", "ana:(R,W)"],
             {"check": True, "capture_output": True},
         )
     ]
@@ -59,7 +60,7 @@ def test_save_warns_when_icacls_fails(monkeypatch, tmp_path):
     def fail(cmd, **kwargs):
         raise subprocess.CalledProcessError(5, cmd)
 
-    monkeypatch.setattr(config, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(config, "os", SimpleNamespace(name="nt", environ={}))
     monkeypatch.setattr(config.subprocess, "run", fail)
     with pytest.warns(UserWarning, match="No se pudieron restringir"):
         path = Config(keys={"shodan": "abc"}).save(tmp_path / "c.toml")
@@ -84,6 +85,33 @@ def test_config_file_acl_is_limited_to_the_current_user_on_windows(tmp_path):
     assert getpass.getuser().lower() in acl.lower()
     for other in ("Everyone", "BUILTIN\\Users", "Authenticated Users"):
         assert other not in acl
+
+
+@pytest.mark.skipif(os.name == "nt", reason="el modo POSIX no aplica en Windows")
+def test_scan_and_cache_databases_are_private_on_posix(tmp_path):
+    from osineitor.cache import ResponseCache
+    from osineitor.storage import Storage
+
+    with Storage(tmp_path / "s.db"), ResponseCache(tmp_path / "c.db"):
+        pass
+    for name in ("s.db", "c.db"):
+        assert stat.S_IMODE((tmp_path / name).stat().st_mode) == 0o600
+
+
+def test_private_file_restricts_on_posix_and_only_there(monkeypatch, tmp_path):
+    modes = []
+    monkeypatch.setattr(Path, "chmod", lambda self, mode: modes.append(mode))
+    monkeypatch.setattr(config, "os", SimpleNamespace(name="posix"))
+    config.private_file(tmp_path / "a.db")
+    monkeypatch.setattr(config, "os", SimpleNamespace(name="nt"))
+    config.private_file(tmp_path / "b.db")
+    assert modes == [0o600] and (tmp_path / "a.db").exists() and not (tmp_path / "b.db").exists()
+
+
+def test_odd_key_names_and_control_characters_keep_the_file_readable(tmp_path):
+    keys = {"con espacio]=x": "valor", "ctrl": "a\x01b\tc\x7f"}
+    path = Config(keys=keys).save(tmp_path / "c.toml")
+    assert Config.load(path).keys == keys
 
 
 def test_config_is_written_as_utf8(tmp_path):

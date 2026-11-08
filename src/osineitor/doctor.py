@@ -42,8 +42,8 @@ def seed_entity(cls: type[Module]) -> Entity:
     # Un nombre de persona o de empresa se detectaría como username: se siembra con el tipo que
     # consume el módulo.
     free_text = {EntityType.PERSON, EntityType.ORGANIZATION}
-    if len(cls.consumes) == 1 and cls.consumes <= free_text:
-        return Entity(type=next(iter(cls.consumes)), value=cls.canary)
+    if cls.consumes <= free_text:
+        return Entity(type=min(cls.consumes), value=cls.canary)
     return Entity(type=detect_type(cls.canary), value=cls.canary)
 
 

@@ -7,7 +7,7 @@ from typing import Any
 
 from osineitor import risk
 from osineitor.models import Entity, EntityType, ScanResult
-from osineitor.report._common import evidence_hint, hypothesis_lines, title
+from osineitor.report._common import evidence_hint, hypothesis_lines, md, md_code, title
 
 SEVERITY_ORDER = ("critical", "high", "medium", "low", "info")
 KEY_SEVERITIES = ("critical", "high", "medium")
@@ -16,8 +16,8 @@ TOP_ASSETS = 5
 
 
 def _cell(value: object) -> str:
-    """Texto de una celda de tabla: los datos son de terceros, así que sin `|` ni saltos."""
-    return str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ").strip()
+    """Texto de una celda de tabla: los datos son de terceros (ver `md`)."""
+    return md(value).strip()
 
 
 def _table(headers: tuple[str, ...], rows: list[tuple[object, ...]]) -> list[str]:
@@ -80,9 +80,9 @@ def to_attack_surface(result: ScanResult) -> str:
 
     seed = [result.target] if result.target.type == EntityType.DOMAIN else []
     domains = seed + [e for e in of(EntityType.DOMAIN) if e.key != result.target.key]
-    lines = [f"# Superficie de ataque — {title(result)}", ""]
+    lines = [f"# Superficie de ataque — {md(title(result))}", ""]
     lines += [
-        f"Objetivo: `{_cell(result.target.value)}` · Inicio: "
+        f"Objetivo: {md_code(result.target.value)} · Inicio: "
         f"{result.started_at.strftime('%Y-%m-%d %H:%M UTC')} · Estado: {result.status}",
     ]
     if result.purpose:
@@ -191,9 +191,9 @@ def to_executive(result: ScanResult) -> str:
     urgent = counts.get("critical", 0) + counts.get("high", 0)
     assets = risk.score(result)
 
-    lines = [f"# Informe ejecutivo — {title(result)}", ""]
+    lines = [f"# Informe ejecutivo — {md(title(result))}", ""]
     lines.append(
-        f"Análisis de fuentes abiertas sobre `{_cell(result.target.value)}` realizado el "
+        f"Análisis de fuentes abiertas sobre {md_code(result.target.value)} realizado el "
         f"{result.started_at.strftime('%d/%m/%Y')}."
         + (f" Propósito: {_cell(result.purpose)}." if result.purpose else "")
     )

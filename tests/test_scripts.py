@@ -110,6 +110,12 @@ def test_doctor_issue_lists_only_failures_and_escapes_pipes():
         assert f"`{module}`" not in text
 
 
+def test_doctor_issue_does_not_mention_people_named_in_remote_text():
+    checks = [{"module": "x", "verdict": "fail", "detail": "contacta con @octocat"}]
+    text = doctor_issue.render(checks)
+    assert "@octocat" not in text and "@​octocat" in text
+
+
 def test_doctor_issue_is_empty_when_nothing_fails():
     assert doctor_issue.render([{"module": "dns", "verdict": "ok", "detail": ""}]) == ""
 

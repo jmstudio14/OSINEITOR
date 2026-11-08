@@ -22,6 +22,8 @@ Por cada respuesta, en la tabla `evidence` de la base de datos del scan:
   `NOANSWER`) también constan.
 - Un cuerpo de más de 2 MB se guarda recortado (`truncated`) y la huella es la del trozo guardado.
 - No se guardan cabeceras. Las respuestas de error de la red (sin respuesta) no dejan evidencia.
+- `github_code` guarda un texto fijo («cuerpo omitido») en lugar de la respuesta, que trae fragmentos
+  de código que pueden contener secretos de terceros: queda constancia de la consulta, no del contenido.
 
 ## Cómo se comprueba
 
@@ -35,6 +37,10 @@ Sale con `0` si todo coincide y con `5` si alguna evidencia o la huella indicada
 sin evidencias sale con `0` y avisa. La **huella de evidencias** (`evidence_digest`) es el SHA-256 de
 las huellas ordenadas: aparece al final del scan, en `show --json`, en el evento `scan.end` y en
 `verify`.
+
+Los ficheros que guarda el módulo [`capture`](MODULES.md#capture-activo) también se comprueban: `verify`
+los lee de su carpeta, sin necesidad de `--evidence`, y un fichero alterado o ausente (`actual: "ausente"`)
+cuenta como alterado. La huella de evidencias no los cubre, porque no están en la base.
 
 ## Anexo en los informes
 

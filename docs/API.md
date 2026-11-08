@@ -71,7 +71,8 @@ open("informe.html", "w", encoding="utf-8").write(report.render(result, "html"))
 ```
 
 `report.FORMATS` lista los formatos (`json`, `md`, `html`, `csv`, `csv-relations`, `csv-findings`,
-`graphml`, `gexf`, `cypher`).
+`graphml`, `gexf`, `cypher`, `stix`, `misp`, `attack-surface`, `executive`). `stix` y `misp`
+necesitan los extras `osineitor[stix]` y `osineitor[misp]`.
 
 ### Qué es estable
 

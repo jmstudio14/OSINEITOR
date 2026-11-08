@@ -176,10 +176,14 @@ más simple de que GitHub avise por correo. Si no se quiere, añade `|| [ $? -eq
 
 ## Notificadores
 
-- **webhook:** `POST` JSON. `slack` y `teams` envían `{"text": …}`; `discord`, `{"content": …}`
-  (recortado a 1900 caracteres); `generic`, `text` más `target`, `scan_id` y la lista `alerts`. Sale
-  por el mismo cliente HTTP que los módulos (no llega a redes privadas salvo `allow_private: true`).
-- **email:** SMTP con STARTTLS (587) o SSL (465). La contraseña solo se lee de `password_env`.
+- **webhook:** `POST` JSON. `teams` envía `{"text": …}`; `slack` también, con `&`, `<` y `>`
+  escapados para que un valor de terceros no mencione al canal; `discord`, `{"content": …}`
+  (recortado a 1900 caracteres) con `allowed_mentions: {"parse": []}`; `generic`, `text` más
+  `target`, `scan_id` y la lista `alerts`. Sale por el mismo cliente HTTP que los módulos (no llega a
+  redes privadas salvo `allow_private: true`). El token de la URL se enmascara en los logs.
+- **email:** SMTP con STARTTLS (587, por defecto) o SSL (465). La contraseña se lee de
+  `password_env` (mejor) o de `password`. Con `username` y `starttls: false` sin `ssl` el aviso se
+  rechaza: la contraseña iría en claro.
 - **file:** una línea JSON por alerta, con `ts`, `target`, `scan_id` y los campos de la alerta.
 - Un error de entrega nunca incluye la URL del webhook ni la contraseña.
 

@@ -6,7 +6,7 @@ Generado con `scripts/rdap_coverage.py` (entregable F0.6 del [roadmap](https://g
 - **Publicación del bootstrap:** 2026-10-28T22:00:04Z
 - **TLD con servidor RDAP:** 1203
 
-El módulo `rdap` consulta rdap.org, que redirige al servidor RDAP del TLD según este bootstrap. **Si el TLD no aparece aquí, el módulo no puede obtener datos de registro**: queda omitido con un aviso en lugar de devolver un resultado vacío (F1.18). El WHOIS de respaldo para esos TLD llega con F4.11.
+El módulo `rdap` consulta rdap.org, que redirige al servidor RDAP del TLD según este bootstrap. **Si el TLD no aparece aquí, el módulo no puede obtener datos de registro**: queda omitido con un aviso en lugar de devolver un resultado vacío (F1.18). El módulo `whois` (F4.11) hace de respaldo para parte de esos TLD.
 
 ## TLD frecuentes
 

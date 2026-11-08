@@ -37,7 +37,8 @@ SIGNATURES = (
     ("PHP", "headers", r"php"),
     ("ASP.NET", "headers", r"asp\.net|x-aspnet-version"),
 )
-TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+# Sin `.*?`: con muchos `<title>` sin cerrar, cada intento recorrería el resto del HTML.
+TITLE = re.compile(r"<title[^<>]*+>([^<]*+)</title>", re.IGNORECASE)
 
 
 class HttpFingerprint(Module):

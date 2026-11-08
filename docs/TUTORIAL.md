@@ -68,14 +68,15 @@ osineitor export 1 -f html
 osineitor export 1 -f md -o informe.md
 ```
 
-Los informes HTML no cargan nada de Internet. Hay también `json`, `csv`, `graphml`, `gexf` y
-`cypher` para llevar el resultado a otras herramientas (hojas de cálculo, Gephi, Neo4j).
+Los informes HTML no cargan nada de Internet. Hay también `json`, `csv`, `graphml`, `gexf`,
+`cypher`, `stix`, `misp`, `attack-surface` y `executive` para llevar el resultado a otras
+herramientas (hojas de cálculo, Gephi, Neo4j, plataformas de inteligencia de amenazas).
 
 ## 6. Dejar constancia: evidencias
 
 ```bash
 osineitor domain example.com --evidence
-osineitor verify 2
+osineitor verify 3
 ```
 
 Con `--evidence` se guarda cada respuesta original con su huella SHA-256. `verify` comprueba más
@@ -87,7 +88,7 @@ Pasado un tiempo, repite el scan y compáralo con el anterior:
 
 ```bash
 osineitor domain example.com --preset quick
-osineitor diff 1 3
+osineitor diff 1 4
 ```
 
 `diff` lista las entidades y los hallazgos nuevos, los desaparecidos y los modificados.

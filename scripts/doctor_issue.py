@@ -20,7 +20,8 @@ NOTE = (
 
 
 def _cell(text: str) -> str:
-    return text.replace("|", "\\|").replace("\n", " ")
+    # El detalle lo escribe una fuente remota: un `@usuario` en la issue avisaría a esa persona.
+    return text.replace("|", "\\|").replace("\n", " ").replace("@", "@\u200b")
 
 
 def render(checks: list[dict]) -> str:

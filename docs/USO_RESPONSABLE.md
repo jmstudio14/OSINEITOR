@@ -52,6 +52,21 @@ Fuera de la UE aplica la legislación local (p. ej. la Ley 25.326 en Argentina).
 - Verifica los hallazgos antes de actuar sobre ellos: las fuentes se equivocan y la búsqueda de
   usernames produce falsos positivos.
 
+## Si encuentras un secreto
+
+`github_code` puede señalar lo que parece una credencial en código público. Su valor no se guarda y el
+módulo no comprueba si funciona.
+
+1. **No lo uses ni lo pruebes.** Ni para confirmar que es real: acceder con una credencial ajena puede ser
+   delito aunque esté publicada.
+2. **No la copies ni la publiques** en informes, tiques o chats. Basta con el repositorio, la ruta y el
+   tipo de regla; la huella permite referirse a ella sin escribirla.
+3. **Avisa a quien pueda retirarla:** a la organización dueña del dominio, por su `security.txt` o su
+   canal de seguridad, y al dueño del repositorio, de forma privada si tiene *security advisories*.
+4. **Da tiempo antes de hablar en público**, y déjale decidir la solución: hay que revocar la credencial,
+   porque borrarla del repositorio no basta (sigue en el historial).
+5. **Si es tuya,** revócala primero y limpia el historial después.
+
 ## Si eres el objetivo
 
 Para reducir tu exposición: [JustDeleteMe](https://justdeleteme.xyz/es) para borrar cuentas,

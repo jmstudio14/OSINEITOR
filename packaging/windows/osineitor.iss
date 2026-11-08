@@ -58,7 +58,7 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  Current, Entry: string;
+  Current, Entry, Padded: string;
   P: Integer;
 begin
   if CurUninstallStep <> usPostUninstall then
@@ -66,9 +66,12 @@ begin
   if not RegQueryStringValue(HKCU, 'Environment', 'Path', Current) then
     Exit;
   Entry := ExpandConstant('{app}');
-  P := Pos(';' + Lowercase(Entry), ';' + Lowercase(Current));
+  // La entrada entera, entre `;`: buscar solo el prefijo recortaría también `...\OSINEITOR2`.
+  Padded := ';' + Current + ';';
+  P := Pos(';' + Lowercase(Entry) + ';', Lowercase(Padded));
   if P = 0 then
     Exit;
-  Delete(Current, P, Length(Entry) + 1);
+  Delete(Padded, P, Length(Entry) + 1);
+  Current := Copy(Padded, 2, Length(Padded) - 2);
   RegWriteExpandStringValue(HKCU, 'Environment', 'Path', Current);
 end;

@@ -1,4 +1,7 @@
-"""IOC asociados a un dominio o IP en ThreatFox y URLhaus, de abuse.ch (requiere Auth-Key)."""
+"""IOC asociados a un dominio o IP en ThreatFox y URLhaus, de abuse.ch (requiere Auth-Key).
+
+Sobre el `record` de `file_hash`, busca el hash en MalwareBazaar: solo sale la huella.
+"""
 
 from __future__ import annotations
 
@@ -9,19 +12,23 @@ from osineitor.modules.base import Module, ModuleError, status_error
 
 THREATFOX = "https://threatfox-api.abuse.ch/api/v1/"
 URLHAUS = "https://urlhaus-api.abuse.ch/v1/host/"
+BAZAAR = "https://mb-api.abuse.ch/api/v1/"
 MAX_ITEMS = 20
+FILE_HASH = "file_hash:"
 
 
 class AbuseCh(Module):
     name = "abusech"
-    description = "IOC asociados en ThreatFox y URLhaus (abuse.ch)"
-    consumes = frozenset({EntityType.DOMAIN, EntityType.IP})
+    description = "IOC en ThreatFox y URLhaus y hash de fichero en MalwareBazaar (abuse.ch)"
+    consumes = frozenset({EntityType.DOMAIN, EntityType.IP, EntityType.RECORD})
     produces = frozenset({EntityType.RECORD})
     requires_key = "abusech"
     canary = "example.com"
     min_interval = 1.0
 
     def accepts(self, entity: Entity) -> bool:
+        if entity.type == EntityType.RECORD:
+            return entity.value.startswith(FILE_HASH)
         return entity.type == EntityType.IP or (
             entity.type == EntityType.DOMAIN and not entity.data.get("subdomain")
         )
@@ -30,8 +37,41 @@ class AbuseCh(Module):
         if status in (401, 403):
             raise ModuleError(f"Auth-Key de abuse.ch inválida o sin acceso a {service}")
 
+    async def _sample(self, entity: Entity, headers: dict[str, str]) -> list[Entity]:
+        sha256 = entity.value.removeprefix(FILE_HASH)
+        response = await self.ctx.http.post(
+            BAZAAR, data={"query": "get_info", "hash": sha256}, headers=headers
+        )
+        self._check("MalwareBazaar", response.status_code)
+        if response.status_code != 200:
+            raise status_error("mb-api.abuse.ch", response)
+        body = response.json()
+        status = body.get("query_status")
+        if status == "hash_not_found":
+            return []
+        if status != "ok":
+            raise ModuleError(f"mb-api.abuse.ch respondió {status}")
+        samples = [s for s in body.get("data") or [] if isinstance(s, dict)]
+        if not samples:
+            return []
+        sample = samples[0]
+        return [
+            self.emit(
+                entity,
+                EntityType.RECORD,
+                f"abusech:{sha256}",
+                malware=sample.get("signature"),
+                file_type=sample.get("file_type"),
+                first_seen=sample.get("first_seen"),
+                last_seen=sample.get("last_seen"),
+                tags=(sample.get("tags") or [])[:MAX_ITEMS],
+            )
+        ]
+
     async def run(self, entity: Entity) -> list[Entity]:
         headers = {"Auth-Key": self.api_key or ""}
+        if entity.type == EntityType.RECORD:
+            return await self._sample(entity, headers)
         value = entity.value
 
         fox = await self.ctx.http.post(

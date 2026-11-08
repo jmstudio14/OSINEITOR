@@ -15,11 +15,10 @@ jobs:
   doctor:
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ github.token }}
       LABEL: salud-fuentes
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.13"
       - run: pip install -e .
@@ -30,11 +29,14 @@ jobs:
           # 3 = alguna fuente falla (lo gestiona el issue); cualquier otro código es un fallo real.
           if [ "$code" -ne 0 ] && [ "$code" -ne 3 ]; then exit "$code"; fi
           python scripts/doctor_issue.py doctor.json > cuerpo.md
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: doctor
           path: doctor.json
       - name: Abrir, actualizar o cerrar el issue
+        # Solo este paso ve el token (issues: write): ni `pip install` ni doctor lo necesitan.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh label create "$LABEL" --force --color D93F0B \
             --description "Health check semanal: fuentes que no responden"

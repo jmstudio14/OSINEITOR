@@ -4,7 +4,7 @@ Para cada módulo: qué consume, qué produce, de dónde saca los datos y sus li
 `osineitor modules` muestra el estado actual (incluido si falta la API key) y `osineitor doctor`
 prueba cada uno contra su fuente (valor de prueba: `example.com`, `1.1.1.1` o `test@example.com`;
 `whois` usa `google.io`; `username_sites` y `username_wmn` solo comprueban que `github.com` responde, porque sus
-~460 y ~590 peticiones no son una prueba de salud, y `cve_enrich` consulta la API de EPSS). Todos los módulos pasivos y sin key cachean sus respuestas 6 horas, salvo
+~460 y ~590 peticiones no son una prueba de salud, y `cve_enrich` y `reverse_ip` consultan una URL de comprobación de su API). Todos los módulos pasivos y sin key cachean sus respuestas 6 horas, salvo
 `username_sites` y `username_wmn`.
 
 Los módulos de plugins externos (paquetes que declaran el grupo de *entry points*
@@ -12,13 +12,13 @@ Los módulos de plugins externos (paquetes que declaran el grupo de *entry point
 en [API.md](API.md#plugins).
 
 Hay dos tipos especiales de módulo: los **analizadores** (`analyzer = True`) leen lo ya recogido
-en un pase final, sin red (`saas_footprint` y `cloud_attribution`), y los adaptadores de
-**herramientas externas** (`ExternalToolModule`; por ahora `ext_subfinder` y `ext_maigret`) ejecutan un binario
+en un pase final, sin red (`findings`, `saas_footprint`, `cloud_attribution` y `geoip_offline`), y los adaptadores de
+**herramientas externas** (`ExternalToolModule`; por ahora `ext_subfinder`, `ext_maigret` y `ext_exiftool`) ejecutan un binario
 instalado por el usuario y quedan `omitido` si falta. Ver [Arquitectura](ARCHITECTURE.md).
 
 Pesan más en la [confianza](ARCHITECTURE.md) de un dato los módulos **autoritativos**, cuya respuesta
 viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `http_fingerprint`,
-`email_validate`, `ptr`, `web_meta`, `analytics_ids`, `takeover` y `tech_detect`. El resto son bases de terceros (`aggregated`).
+`email_validate`, `ptr`, `web_meta`, `analytics_ids`, `takeover`, `tech_detect` y `capture`. El resto son bases de terceros (`aggregated`).
 
 ## Dominio
 
@@ -131,7 +131,7 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
   certificados que no lleguen a tiempo se omiten sin perder los ya bajados.
   Un precertificado y su certificado final comparten serie pero tienen huella distinta, y los dos
   salen. Si falla la descarga de un certificado se conservan los demás; si fallan todos, error.
-  Censys como segunda fuente queda para F4.15.
+  Censys, como segunda fuente, está en el módulo `censys` (F4.15).
 - **Términos y datos:** crt.sh no publica cuota; los logs de CT son públicos.
 
 ### `analytics_ids` (activo)
@@ -143,6 +143,76 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 - **Límites:** solo lee el HTML de la portada, no los scripts que carga ni otras páginas. No
   busca otros dominios con el mismo ID: ninguna fuente gratuita de esa búsqueda inversa se ha
   verificado. Cada ID es un `record`, no se pivota.
+
+### `capture` (activo)
+- **Consume:** url, solo la que indicas como objetivo. **Produce:** `record` `capture:<url>`.
+- **Guarda** en `<datos>/captures/<fecha>-<huella>/`: el cuerpo (`page.html` o `body.bin`),
+  `headers.json`, `capture.warc` (WARC 1.1) y `screenshot.png`. El `record` lleva la carpeta, el SHA-256
+  de cada fichero, la URL final, el estado y la hora. Se comprueba con `osineitor verify`
+  ([Evidencia](EVIDENCIA.md)).
+- **Pantallazo:** opcional, con `pip install 'osineitor[capture]'` y `playwright install chromium`. Sin
+  ellos, o con `--proxy` (el tráfico del navegador no pasaría por él), `screenshot_skipped` dice por qué
+  no se ha hecho y el resto de la captura sigue valiendo.
+- **Save Page Now:** solo con la key opcional `archive_org`, porque **publica la URL en la Wayback
+  Machine**. Queda el `save_page_now_job`, o `save_page_now_error` si falla, sin invalidar la captura.
+  Sin verificar en vivo (D1).
+- **Límites:** el WARC guarda la respuesta final con el cuerpo ya descomprimido; cada salto de una
+  redirección deja su propia evidencia con `--evidence`. El navegador queda fuera de `ctx.http`: se
+  comprueba cada petición con la guardia de red y se bloquean los *service workers*, pero Playwright no
+  deja interceptar los saltos de una redirección: si uno apunta a una red privada, el pantallazo se
+  descarta, aunque la petición ya haya salido. Sus peticiones no cuentan en el presupuesto ni dejan
+  evidencia. Probado en vivo.
+
+### `cloud_storage_refs` (activo)
+- **Consume:** url que cite un bucket de S3, GCS o Azure Blob. **Produce:** `record`
+  `cloud_storage:<proveedor>:<bucket>`.
+- **Datos:** `access`: `public_list` (cualquiera puede listarlo), `denied` (existe y es privado),
+  `absent` (no existe: si tu web lo cita, alguien podría registrarlo) o `unknown`.
+- **Límites:** **no adivina nombres**: solo prueba el bucket que aparece en una URL ya recogida, una vez
+  por scan, y pide una clave como máximo. Azure contesta igual a un contenedor privado y a uno
+  inexistente, y eso da `unknown`; solo una cuenta sin DNS da `absent`. Un bucket de S3 consultado en
+  otra región también da `unknown`. La URL de origen no se copia al `record`, porque puede traer un
+  token. Con `--evidence` se guarda la respuesta, que puede citar el nombre de un objeto. Probado en
+  vivo contra los tres proveedores, salvo un contenedor privado de Azure, indistinguible.
+
+### `doc_harvest` (activo)
+- **Consume:** dominio raíz y url marcada como documento. **Produce:** `url`, `record`
+  `doc_harvest:<url>`, `location`.
+- **Cómo:** en un nivel consulta en el CDX de la Wayback Machine hasta 20 documentos (PDF, Office,
+  OpenDocument) y en el siguiente los descarga **del objetivo** y lee sus metadatos con el código de
+  `file_meta`. También analiza las URL de documentos de `search_dorks`. Hace falta `-d 2` o más (el
+  valor por defecto).
+- **Datos:** los de `file_meta` (autor, software, fechas…), el SHA-256 y el tamaño. **No se conserva el
+  documento**: pasa por un fichero temporal que se borra siempre, aunque con `--evidence` se guardan
+  hasta 2 MB de la respuesta.
+- **Límites:** un documento que ya no está (no 200) da vacío. El CDX no acepta bien filtros costosos: se
+  filtra por tipo MIME y solo sobre el dominio y `www`, no los demás subdominios. Los metadatos pueden
+  nombrar a personas: trátalos como datos personales. Probado en vivo.
+
+### `search_dorks` (key `brave`)
+- **Consume:** dominio raíz. **Produce:** `url`, con `document` si es un documento.
+- **Fuente:** [API oficial de Brave Search](https://api-dashboard.search.brave.com/documentation/services/web-search).
+  **Nunca se hace scraping de buscadores.**
+- **Plantillas** (fijas, 5 peticiones por dominio): `site:` con `filetype:pdf`, `docx`, `xlsx` y `pptx`, e
+  `intitle:"index of"`. Solo se conservan las URL del dominio.
+- **Límites y coste:** Brave ya no tiene plan gratuito: da 5 $ de crédito al mes, unas 1.000 búsquedas a
+  5 $ cada 1.000, y hay que dar de alta una tarjeta. **Sin verificar en vivo (D1):** hecho con la
+  documentación oficial.
+
+### `github_code` (key `github`)
+- **Consume:** dominio raíz. **Produce:** `record` `github_code:<repo>/<ruta>`.
+- **Fuente:** [búsqueda de código de GitHub](https://docs.github.com/en/rest/search/search#search-code):
+  exige autenticación y permite 10 peticiones por minuto.
+- **Datos:** repositorio, ruta, enlace, nombre de las reglas que saltan (`aws_access_key`, `github_token`,
+  `slack_token`, `google_api_key`, `private_key`, `url_credentials`, `assignment`) y una huella parcial
+  (SHA-256 de 16 caracteres) de cada coincidencia. **Nunca se guarda el valor del secreto:** ni en la
+  base, ni en los informes, ni con `--evidence`, que en esta consulta guarda un texto fijo en lugar de
+  la respuesta. Un test lo comprueba leyendo los bytes de la base.
+- **Límites:** las reglas solo ven el fragmento que GitHub devuelve alrededor de la coincidencia, no el
+  fichero entero, y son heurísticas: hay falsos positivos (sobre todo `assignment`) y falsos negativos.
+  Hasta 30 resultados. Antes de avisar a nadie, lee la
+  [guía de divulgación](USO_RESPONSABLE.md#si-encuentras-un-secreto). **Sin verificar en vivo (D1):** hecho
+  con la documentación oficial.
 
 ### `web_meta` (activo)
 - **Consume:** dominio raíz. **Produce:** `record` `web_meta:<dominio>`, `url`, `email`.
@@ -198,9 +268,12 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
   redistribuyen los *pulses*.
 
 ### `virustotal` (key `virustotal`)
-- **Consume:** dominio raíz o IP. **Produce:** `record` `virustotal:<valor>` y `domain`.
+- **Consume:** dominio raíz, IP o el `record` de `file_hash`. **Produce:** `record`
+  `virustotal:<valor>` y `domain`.
 - **Fuente:** API v3 de [VirusTotal](https://docs.virustotal.com/reference/overview): `domains/<d>`,
-  `domains/<d>/subdomains?limit=40` e `ip_addresses/<ip>`.
+  `domains/<d>/subdomains?limit=40`, `ip_addresses/<ip>` y `files/<sha256>`.
+- **Hash de un fichero:** detecciones, nombre, tipo, tamaño y primera subida. Solo sale el
+  SHA-256, nunca el fichero ni su ruta; sin verificar en vivo (D1).
 - **Datos:** detecciones (`malicious`, `suspicious`, `harmless`), reputación, fecha del último
   análisis, registrador y categorías (dominio), propietario del AS, ASN y país (IP), y hasta 40
   subdominios.
@@ -268,16 +341,25 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
   (`--evidence`). `ext_amass` queda pendiente.
 
 ### `cloud_attribution` (analizador)
-- **Consume:** `record` de `dns` y de `http_fingerprint`. **Produce:** `technology`.
-- **Fuente:** nada nuevo: lee el `CNAME` del DNS y las tecnologías de la huella HTTP ya recogidos.
-  No hace ninguna petición.
+- **Consume:** `record` de `dns` y de `http_fingerprint`, e `ip`. **Produce:** `technology`.
+- **Fuente:** nada nuevo: lee el `CNAME` del DNS, las tecnologías de la huella HTTP y las IP ya
+  recogidos, y para las IP los rangos que publican AWS, GCP, Azure y Cloudflare, que instala
+  `osineitor update-data` (`aws-ip-ranges`, `gcp-ip-ranges`, `azure-ip-ranges`,
+  `cloudflare-ips-v4` y `cloudflare-ips-v6`). El módulo no hace ninguna petición; los rangos de
+  Azure los comprueba la CLI al arrancar (ver [Datasets en USO](USO.md#datasets)).
 - **Datos:** proveedor (CloudFront, Cloudflare, Akamai, Fastly, Azure CDN y Front Door, Imperva,
   Sucuri, Bunny, StackPath, ELB, S3, Traffic Manager, App Service, App Engine, Heroku, Vercel,
-  Netlify, GitHub Pages), categoría `cdn` o `cloud` y la evidencia.
-- **Límites:** **sin los rangos de IP de los proveedores.** El roadmap (F4.17) pide etiquetar IP
-  con los rangos que publican AWS, GCP, Azure y Cloudflare; quedan pendientes hasta resolver el
-  *spike* de sus feeds y su licencia (ver `docs/plans/fase-04.md`). Hoy solo detecta por CNAME y
-  por la huella HTTP.
+  Netlify, GitHub Pages) y, por rango de IP, Amazon Web Services, Google Cloud, Microsoft Azure
+  (etiqueta `AzureCloud`) y Cloudflare; categoría `cdn` o `cloud` y la evidencia (`CNAME …`,
+  `huella HTTP` o `IP … en <red>`).
+- **Límites:** las IP de AWS, GCP y Cloudflare solo se etiquetan si has ejecutado
+  `osineitor update-data`; sin un dataset, sus IP no producen nada y el módulo sigue detectando por
+  CNAME y huella HTTP. Solo da proveedor y categoría, no servicio ni región. Los feeds cambian a
+  diario, así que los datasets no llevan hash fijo y se instalan con la licencia `public-feed`. La
+  URL del fichero de Azure cambia cada semana: se lee de la página de descarga de Microsoft y, si
+  la página deja de traerla, se busca en la ruta de descarga conocida con las fechas de los
+  últimos 14 días. Si ambas fallan se conserva la copia instalada y se avisa por stderr; con
+  rangos de más de 14 días se avisa en cada arranque.
 
 ## IP
 
@@ -286,6 +368,26 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 - **Fuente:** [ipinfo.io](https://ipinfo.io). Sin token funciona con cuota reducida.
 - **Datos:** hostname, ciudad, región, país, coordenadas, organización/ASN, zona horaria, anycast.
   Las IP privadas o reservadas se marcan como `bogon`.
+
+### `geoip_offline` (analizador)
+- **Consume:** IP. **Produce:** `record` `geoip:<ip>`.
+- **Fuente:** el fichero `GeoLite2-City.mmdb` en la carpeta `geoip/` de tu directorio de datos (en
+  Windows, `%LOCALAPPDATA%\osineitor\geoip\`). El módulo no hace ninguna petición: la IP no sale del
+  equipo. Sin el fichero queda `omitido` y el mensaje indica la ruta exacta.
+- **Cómo conseguir la base:** OSINEITOR no la incluye ni la descarga. Puedes bajarla de
+  [MaxMind](https://www.maxmind.com/en/geolite-free-ip-geolocation-data) con una cuenta gratuita, o de
+  [P3TERX/GeoLite.mmdb](https://github.com/P3TERX/GeoLite.mmdb), un espejo no oficial que no pide
+  cuenta y se actualiza cada 3 días, pero no publica sumas de verificación: confías en quien lo
+  mantiene.
+- **Datos:** ciudad, región, país (ISO), coordenadas, zona horaria, `accuracy_radius` (radio de
+  incertidumbre en km), `database_date` y, si la base tiene más de 30 días, `stale_database`.
+- **Límites:** una IP sin ubicación en la base no produce nada. Es el caso de 1.1.1.1 y otras IP
+  anycast, que solo traen el país donde se registró el bloque. Probado en vivo en Windows con la base
+  real del 06-11-2026.
+- **Licencia:** [EULA de GeoLite](https://www.maxmind.com/en/geolite/eula) y CC BY-SA 4.0; al
+  descargar o usar la base los aceptas. Exige atribuir a MaxMind (§3), dejar de usar una versión a los
+  30 días de salir la siguiente (§6.3) y no usar los datos para identificar o localizar a una persona,
+  un hogar o una dirección (§5).
 
 ### `internetdb`
 - **Consume:** IP. **Produce:** `record`, `service` (`<ip>:<puerto>`), `vulnerability` (CVE).
@@ -348,9 +450,12 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 - **Términos y datos:** sujeto a los términos de Censys y al consumo de créditos de la cuenta.
 
 ### `abusech` (key `abusech`)
-- **Consume:** dominio raíz o IP. **Produce:** `record` `abusech:<valor>`.
+- **Consume:** dominio raíz, IP o el `record` de `file_hash`. **Produce:** `record`
+  `abusech:<valor>`.
 - **Fuente:** `POST` a ThreatFox (`search_ioc`, coincidencia exacta) y a URLhaus (`host`), de
-  [abuse.ch](https://abuse.ch). Desde 2025 ambas exigen una `Auth-Key` gratuita.
+  [abuse.ch](https://abuse.ch). Desde 2025 ambas exigen una `Auth-Key` gratuita. El hash de un
+  fichero se busca en MalwareBazaar (`get_info`): familia, tipo, fechas y etiquetas. Solo sale el
+  SHA-256; sin verificar en vivo (D1).
 - **Datos:** número de IOC en ThreatFox, familias de malware, tipos de amenaza, fechas y
   etiquetas; URL maliciosas en URLhaus y cuántas siguen en línea. Solo metadatos: no se descargan
   muestras ni se siguen las URL.
@@ -624,6 +729,20 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
 
 ## Organización
 
+### `opensanctions` (key `opensanctions`)
+- **Consume:** organization (no las de GitHub) y person. **Produce:** `record` `opensanctions:<id>`.
+- **Fuente:** `POST /match/default` de la [API de OpenSanctions](https://api.opensanctions.org/), con
+  `schema` `Organization` o `Person`. No se siguen relaciones.
+- **Datos:** nombre, esquema, puntuación, temas (`sanction`, `role.pep`…), listas de origen, fechas y
+  enlace a la ficha. Solo los resultados que la API marca con `match: true`, hasta 5.
+- **Límites:** **una coincidencia de nombre no prueba que sea la misma persona o empresa**: compruébala
+  en la ficha antes de sacar conclusiones. **Sin verificar en vivo (D1):** hecho con la documentación
+  oficial.
+- **Términos y datos:** datos bajo [CC BY-NC 4.0](https://www.opensanctions.org/licensing/): gratis para
+  uso no comercial; una empresa necesita licencia. La key gratuita se concede a periodismo, ONG e
+  investigación académica; con una de pago, cada consulta se cobra, y un scan con pivoteo puede hacer
+  varias.
+
 ### `gleif`
 - **Consume:** organization (no las de GitHub). **Produce:** `record` `gleif:<LEI>`, `organization`.
 - **Fuente:** API pública de [GLEIF](https://www.gleif.org) (`/api/v1/lei-records`), sin key. Los
@@ -660,6 +779,16 @@ viene de quien administra el dato: `dns`, `rdap`, `whois`, `mail_security`, `htt
   Keccak-256.
 - **Límites:** sin red. Una dirección de otra cadena (Solana, Tron...) no se reconoce.
 
+### `eth_explorer` (key `etherscan`)
+- **Consume:** crypto_address (solo Ethereum). **Produce:** `record` `eth:<dirección>`.
+- **Fuente:** [Etherscan API V2](https://docs.etherscan.io) (`chainid=1`, acciones `balance` y `txlist`).
+  Plan gratuito: 3 peticiones por segundo y 100.000 al día.
+- **Datos:** saldo en wei y en ether, y fecha de la primera y la última transacción normal.
+- **Límites:** las etiquetas públicas no están: `getaddresstag` solo existe en el plan Pro Plus (por eso
+  F6.8 consta como parcial). La actividad no cuenta las transacciones internas. Una dirección no
+  identifica a nadie por sí sola. **Sin verificar en vivo (D1):** hecho con la documentación oficial.
+- **Términos y datos:** [términos de la API de Etherscan](https://etherscan.io/terms).
+
 ### `btc_explorer`
 - **Consume:** crypto_address (solo Bitcoin). **Produce:** `record` `btc:<dirección>`.
 - **Fuente:** API de [mempool.space](https://mempool.space/docs/api/rest), sin key.
@@ -683,7 +812,7 @@ fichero salen del equipo (hay un test que lo comprueba interceptando la red). Su
 - **Datos:** autor, último autor, software, empresa, fechas de creación y modificación, y, si hay
   GPS, una entidad `location` que pivota a `geo_point`.
 - **Límites:** no lee PDF que guarden el Info en flujos comprimidos, ni XMP, IPTC, PNG ni TIFF
-  (el adaptador `ext_exiftool` del roadmap cubriría el resto). Lee como mucho 512 KiB al principio
+  (para eso está el adaptador `ext_exiftool`). Lee como mucho 512 KiB al principio
   y 64 KiB al final del fichero y 1 MiB de cada miembro de un zip; rechaza el XML con `DOCTYPE` o
   entidades. Los metadatos revelan quién y con qué creó el fichero: úsalo solo con ficheros
   propios o de los que tengas derecho a analizar.
@@ -691,8 +820,20 @@ fichero salen del equipo (hay un test que lo comprueba interceptando la red). Su
 ### `file_hash`
 - **Consume:** file. **Produce:** `record` `file_hash:<sha256>`.
 - **Datos:** MD5, SHA-1, SHA-256 y tamaño, leídos por bloques de 1 MiB.
-- **Límites:** la consulta de reputación por hash (VirusTotal, abuse.ch) no está: el hash es un
-  pivote que se puede lanzar a mano. Pendiente en el roadmap (F6.10).
+- **Pivote a reputación:** en el siguiente nivel (`-d 2`, el valor por defecto), `virustotal` y
+  `abusech` consultan el SHA-256 si tienes su key configurada. **El hash sale del equipo; el fichero
+  y su ruta no.** Para que no salga, usa `-d 1` o `-m file_hash`.
+
+### `ext_exiftool` (binario del usuario)
+- **Consume:** file. **Produce:** `record` `ext_exiftool:<ruta>`, `location`.
+- **Fuente:** [ExifTool](https://exiftool.org), instalado por el usuario; sin él, `omitido`. No usa la
+  red, así que corre también con `--proxy`.
+- **Datos:** hasta 100 campos con su grupo (`EXIF:Make`, `XMP:Title`…), de 500 caracteres como
+  máximo, y el GPS como `location`. Se descartan los datos del equipo del analista (carpeta, nombre,
+  fechas y permisos del fichero).
+- **Límites:** un formato que ExifTool no conoce o sin metadatos del documento da vacío. La ruta se
+  le pasa en UTF-8 por la entrada estándar: como argumento, en Windows, no encuentra las que llevan
+  tildes. Probado con ExifTool 13.61.
 
 ### `geo_point`
 - **Consume:** location con forma `lat,lon`. **Produce:** `record` `geo:<lat,lon>`.
@@ -707,26 +848,20 @@ fichero salen del equipo (hay un test que lo comprueba interceptando la red). Su
 
 ## Fuentes evaluadas y no incluidas
 
-Entregables del [ROADMAP](../ROADMAP.md) que se evaluaron en el cierre del 07-11-2026 y no se
-implementaron. Un módulo que no se puede probar contra su fuente, o cuyos términos de uso no se
-han podido leer, no se añade: sus tests solo comprobarían lo que uno mismo supone de la respuesta.
+Entregables del [ROADMAP](../ROADMAP.md) que se evaluaron y no se implementaron. Un módulo cuya
+fuente no se puede probar y cuya documentación no permite escribirlo con garantías no se añade: sus
+tests solo comprobarían lo que uno mismo supone de la respuesta.
+
+Hay dos niveles de verificación, y cada módulo dice el suyo. **Probado en vivo:** contra el servicio
+real. **D1:** hecho con la documentación oficial y tests con respuestas simuladas, porque exige una
+key que no se tiene; en esos, `osineitor doctor` con tu key es la primera prueba real.
 
 | ID | Fuente | Por qué no |
 |---|---|---|
-| F4.17 (rangos) | Feeds de rangos de AWS, GCP, Azure y Cloudflare | Cambian a diario y `update-data` fija el SHA-256 de cada fichero; no se han comprobado sus licencias |
-| F4.23 `geoip_offline` | GeoLite2 | Exige que cada usuario descargue la base (licencia de MaxMind) y no hay forma de probar el módulo sin ella |
 | F4.24 `ext_amass` | Amass | No hay un formato de salida estable verificado (el mismo motivo por el que `import` no lee Amass) |
 | F5.6 `--tags`, `--top` | Categorías y popularidad | Sherlock no trae ni lo uno ni lo otro y solo WhatsMyName trae categorías; un filtro que solo afectase a una de las dos fuentes de usernames daría una idea falsa de la cobertura. `--only username_wmn` ya limita a una fuente |
 | F5.8 `hudsonrock` | Infostealers | La clave gratuita se pide con un correo corporativo y la API documentada devuelve credenciales; no se han podido verificar ni los términos ni una respuesta que demuestre que solo se guardarían metadatos |
-| F6.1 `opensanctions` | Sanciones y PEP | Exige una key y no se ha podido verificar su respuesta |
 | F6.3 `librebor`, F6.4 `opencorporates` | Registros mercantiles | API de pago o por solicitud, sin acceso para probarla |
-| F6.8 `eth_explorer` | Etherscan | Exige una key y no se ha verificado la versión actual de su API |
-| F6.10 (reputación) | VirusTotal, abuse.ch | Exigen keys y sacan el hash del equipo; el hash sigue siendo un pivote que se lanza a mano |
-| F6.12 `capture` | Navegador *headless* | Necesita un navegador que los tests no pueden ejecutar; una captura sin probar no sirve como evidencia |
-| F6.13 `search_dorks`, F6.14 `doc_harvest` | API de búsqueda y descarga de documentos | Exigen una key y una decisión sobre el proveedor; `doc_harvest` depende de `search_dorks` y descarga ficheros del objetivo |
-| F6.15 `github_code` | Búsqueda de código de GitHub | Exige una key y una detección de secretos que no se puede validar sin ver contenido real; el criterio de no guardar nunca el valor no se puede demostrar con datos inventados |
-| F6.16 `cloud_storage_refs` | Buckets de S3, GCS y Azure | No se ha verificado cómo responde cada proveedor al sondear un bucket |
-| F6.18 `ext_exiftool` | ExifTool | Depende de cómo `file_meta` acepta rutas locales y de la política de lectura de ficheros |
 | F11.5 | Internacionalización | Traducir la interfaz y toda la documentación excede el cierre; el proyecto está en español por convención |
 
 Sí se verificaron contra el servicio antes de implementarse: la API pública de LeakCheck (respuesta

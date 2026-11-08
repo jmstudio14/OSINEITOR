@@ -124,7 +124,9 @@ PDF_KEYS = {
     "CreationDate": "created",
     "ModDate": "modified",
 }
-PDF_VALUE = r"(\((?:\\.|[^\\)])*\)|<[0-9A-Fa-f\s]*>)"
+# Longitud acotada: sin cierre, cada intento recorrería el resto del fichero (coste cuadrático).
+PDF_VALUE = r"(\((?:\\.|[^\\)]){0,4096}+\)|<[0-9A-Fa-f\s]{0,8192}+>)"
+PDF_TRIES = 20  # apariciones de cada clave que se prueban, de la última hacia atrás
 ESCAPES = {b"n": b"\n", b"r": b"\r", b"t": b"\t", b"b": b"\b", b"f": b"\f"}
 
 
@@ -158,14 +160,27 @@ def _pdf_date(value: str) -> str:
     return f"{year}-{month}-{day}T{hour}:{minute}:{second}"
 
 
+def _last_pdf_value(key: str, head: bytes, tail: bytes) -> bytes | None:
+    """Valor de la última aparición de `/key` que se pueda leer.
+
+    El último ejemplar manda: una actualización incremental sustituye al Info anterior. Solo se
+    prueban las `PDF_TRIES` últimas: un PDF hostil con miles de `/Title(` no cuesta más.
+    """
+    prefix = re.compile(rb"/" + key.encode())
+    value = re.compile(rb"/" + key.encode() + rb"\s*+" + PDF_VALUE.encode())
+    starts = [(tail, m.start()) for m in prefix.finditer(tail)]
+    starts = [(head, m.start()) for m in prefix.finditer(head)] + starts
+    for chunk, start in reversed(starts[-PDF_TRIES:]):
+        if match := value.match(chunk, start):
+            return match[1]
+    return None
+
+
 def parse_pdf(head: bytes, tail: bytes) -> dict[str, Any]:
     found: dict[str, Any] = {}
     for key, name in PDF_KEYS.items():
-        pattern = re.compile(rb"/" + key.encode() + rb"\s*" + PDF_VALUE.encode())
-        # El último ejemplar manda: una actualización incremental sustituye al Info anterior.
-        matches = pattern.findall(head) + pattern.findall(tail)
-        if matches:
-            text = _pdf_string(matches[-1]).strip("\x00 ")
+        if (token := _last_pdf_value(key, head, tail)) is not None:
+            text = _pdf_string(token).strip("\x00 ")
             found[name] = _pdf_date(text) if name in ("created", "modified") else text
     return {k: v for k, v in found.items() if v}
 
@@ -255,6 +270,24 @@ def read_metadata(path: str) -> dict[str, Any]:
     return {}
 
 
+def metadata_entities(
+    module: Module, entity: Entity, value: str, found: dict[str, Any], **extra: object
+) -> list[Entity]:
+    """`record` con los metadatos leídos y `location` si traen GPS; vacío si no hay metadatos."""
+    if len(found) <= 1:  # solo el formato, o nada: sin metadatos que informar
+        return []
+    gps = found.pop("gps", None)
+    data = {k: (v[:MAX_VALUE] if isinstance(v, str) else v) for k, v in found.items()}
+    out = [module.emit(entity, EntityType.RECORD, value, **data, **extra)]
+    if gps:
+        location = module.try_emit(
+            entity, EntityType.LOCATION, f"{gps[0]:.6f},{gps[1]:.6f}", source_field="exif_gps"
+        )
+        if location:
+            out.append(location)
+    return out
+
+
 class FileMeta(Module):
     name = "file_meta"
     description = "Metadatos de un fichero local: EXIF, PDF, Office y OpenDocument (sin red)"
@@ -266,15 +299,4 @@ class FileMeta(Module):
         if not os.path.isfile(entity.value):
             raise ModuleSkipped("el fichero no existe en este equipo")
         found = await asyncio.to_thread(read_metadata, entity.value)
-        if len(found) <= 1:  # solo el formato, o nada: sin metadatos que informar
-            return []
-        gps = found.pop("gps", None)
-        data = {k: (v[:MAX_VALUE] if isinstance(v, str) else v) for k, v in found.items()}
-        out = [self.emit(entity, EntityType.RECORD, f"file_meta:{entity.value}", **data)]
-        if gps:
-            location = self.try_emit(
-                entity, EntityType.LOCATION, f"{gps[0]:.6f},{gps[1]:.6f}", source_field="exif_gps"
-            )
-            if location:
-                out.append(location)
-        return out
+        return metadata_entities(self, entity, f"file_meta:{entity.value}", found)

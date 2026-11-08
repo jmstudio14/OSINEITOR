@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterator
 from dataclasses import dataclass, field
+from pathlib import Path
 from urllib.parse import unquote
 
 from osineitor.cache import MAX_BODY
@@ -68,8 +70,27 @@ class Verification:
         return not self.mismatches and self.digest_match is not False
 
 
+def _capture_files(result: ScanResult) -> Iterator[tuple[str | None, Path, str]]:
+    """(entidad consultada, ruta, huella esperada) de cada fichero guardado por `capture`."""
+    for entity in result.entities:
+        if entity.source == "capture":
+            for name, expected in (entity.data.get("sha256") or {}).items():
+                yield entity.parent, Path(str(entity.data.get("directory"))) / name, expected
+
+
+def _file_sha256(path: Path) -> str:
+    try:
+        with path.open("rb") as handle:
+            return hashlib.file_digest(handle, "sha256").hexdigest()
+    except OSError:
+        return "ausente"
+
+
 def verify(result: ScanResult, expected_digest: str | None = None) -> Verification:
-    """Recalcula la huella de cada cuerpo y la compara con la guardada."""
+    """Recalcula la huella de cada cuerpo y de cada fichero capturado y la compara con la guardada.
+
+    `evidence_digest` cubre solo los cuerpos: los ficheros de `capture` no están en la base.
+    """
     actual = [hashlib.sha256(e.body).hexdigest() for e in result.evidence]
     mismatches = []
     for number, (e, now) in enumerate(zip(result.evidence, actual, strict=True), start=1):
@@ -85,8 +106,23 @@ def verify(result: ScanResult, expected_digest: str | None = None) -> Verificati
                     "actual": now,
                 }
             )
+    checked = len(actual)
+    for entity, path, expected in _capture_files(result):
+        checked += 1
+        now = _file_sha256(path)
+        if now != expected:
+            mismatches.append(
+                {
+                    "number": checked,
+                    "module": "capture",
+                    "entity": entity,
+                    "url": str(path),
+                    "expected": expected,
+                    "actual": now,
+                }
+            )
     recomputed = digest(actual) if actual else None
     match = None
     if expected_digest is not None:
         match = recomputed is not None and recomputed == expected_digest.strip().lower()
-    return Verification(result.scan_id, len(actual), mismatches, recomputed, match)
+    return Verification(result.scan_id, checked, mismatches, recomputed, match)

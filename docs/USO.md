@@ -39,7 +39,7 @@ osineitor domain example.com --preset quick   # con un preset (ver Presets)
 
 osineitor history --limit 50          # scans guardados (20 por defecto)
 osineitor show 3                      # volver a ver el scan 3
-osineitor export 3 -f html            # informe en reports/ (json | md | html | csv | graphml | gexf | cypher | executive | attack-surface)
+osineitor export 3 -f html            # informe en reports/ (json | md | html | csv | csv-relations | csv-findings | graphml | gexf | cypher | stix | misp | attack-surface | executive)
 osineitor export 3 -f md -o informe.md  # en el fichero indicado
 osineitor diff 3 7                    # qué cambió entre dos scans (--json para máquinas)
 osineitor verify 3                    # comprueba las evidencias del scan 3 (ver Evidencia)
@@ -58,9 +58,9 @@ osineitor scan --targets-file lista.txt  # un scan por objetivo de la lista
 
 osineitor modules                     # módulos disponibles y estado de sus API keys
 osineitor presets                     # perfiles de escaneo disponibles
-osineitor update-data                 # descarga los datasets de terceros (ver Datasets)
+osineitor update-data                 # descarga los datasets de terceros (ver Datasets); admite --proxy y --allow-private
 osineitor doctor                      # prueba cada módulo contra su fuente real
-osineitor doctor -m dns --json        # solo esos módulos (-m, repetible); --active y --allow-private como en los scans
+osineitor doctor -m dns --json        # solo esos módulos (-m, repetible); --active, --allow-private y --proxy como en los scans
 osineitor cache info                  # respuestas cacheadas (cache clear las borra)
 osineitor summarize 3                 # resumen con IA del scan 3 (desactivado hasta crear ai.yml)
 osineitor watch run                   # vigilancia: ejecuta lo que toca y avisa de lo nuevo (ver Vigilancia)
@@ -76,7 +76,9 @@ empiece por `AS` y números (`AS1234`), que `scan` toma por un ASN.
 `scan` reconoce IP, red CIDR, ASN, URL, email, teléfono (con prefijo `+` o `00`), dirección de
 criptomoneda (Bitcoin, Ethereum, Litecoin, Dogecoin y Monero), coordenadas (`40.4168,-3.7038`),
 ruta de un fichero local, dominio y username. La ruta debe contener `/` o `\` y existir: un
-`foto.jpg` suelto en la carpeta actual se tomaría por un dominio, así que escribe `./foto.jpg`.
+`foto.jpg` suelto en la carpeta actual se tomaría por un dominio, así que escribe `./foto.jpg`. Una
+ruta UNC (`\\servidor\recurso` o `//servidor/recurso`) no se trata como fichero: abrirla provocaría
+una conexión SMB que filtra el hash NTLM del usuario.
 Los ficheros se leen **en local**: ni su contenido ni su ruta salen del equipo. De una URL se investiga su host
 (dominio o IP); un ASN se acepta como objetivo (`asn_netblock` saca sus prefijos) y una red CIDR
 también, pero ningún módulo consume aún una red, así que ese resultado queda vacío.
@@ -182,8 +184,7 @@ require_purpose = true
 
 Con eso, `email`, `username`, `person`, los teléfonos y los `scan` que resulten de uno de ellos sin `--purpose` terminan con
 código 2 antes de consultar nada. Los de dominio e IP no se ven afectados. La aplicación de
-escritorio aún no pasa `--purpose`: con `require_purpose` activo sus scans de email y username
-fallarán.
+escritorio sí pasa `--purpose`: el diálogo «Nuevo scan» tiene un campo para el propósito.
 
 ## Opciones de los scans
 
@@ -200,7 +201,7 @@ Valen para `scan`, `domain`, `ip`, `email`, `username` y `person`.
 | `--proxy` | Envía todo el tráfico por un proxy (ver [Proxy y Tor](#proxy-y-tor)); también `OSINEITOR_PROXY` |
 | `--evidence` | Guarda la respuesta original de cada fuente con su SHA-256 (ver [Evidencia](#evidencia)) |
 | `--scope` | Limita el scan a los dominios y redes de un YAML (ver [Alcance](#alcance)); también `OSINEITOR_SCOPE` |
-| `--purpose` | Anota para qué haces el scan; se puede exigir en emails y usernames (ver [Propósito](#propósito)); también `OSINEITOR_PURPOSE` |
+| `--purpose` | Anota para qué haces el scan; se puede exigir en emails, usernames, personas y teléfonos (ver [Propósito](#propósito)); también `OSINEITOR_PURPOSE` |
 | `--preset` | Aplica un perfil de escaneo (ver [Presets](#presets)) |
 | `--only-types`, `--exclude` | Recortan los tipos de entidad que se muestran (ver [Filtros de salida](#filtros-de-salida)) |
 | `--no-save` | No guarda el scan en el historial |
@@ -284,11 +285,17 @@ el stream `--ndjson` emite todas las entidades y el código de salida no cambia.
 ## Datasets
 
 `osineitor update-data` descarga los datasets de terceros a la carpeta `datasets/` de tu directorio
-de datos y anota en `manifest.json` la versión, el SHA-256 y la licencia de cada uno. Hoy solo
-hay uno, `sherlock-sites` (las firmas de `username_sites`, licencia MIT): si lo actualizas, el módulo
-usa tu copia en lugar de la del paquete, siempre que su hash coincida con el registrado.
+de datos y anota en `manifest.json` la versión, el SHA-256 y la licencia de cada uno. Hay dos
+clases. `sherlock-sites` (las firmas de `username_sites`, licencia MIT): si lo actualizas, el módulo
+usa tu copia en lugar de la del paquete, siempre que su hash coincida con el registrado. Y los
+rangos de IP de AWS, GCP, Azure y Cloudflare (`aws-ip-ranges`, `gcp-ip-ranges`, `azure-ip-ranges`,
+`cloudflare-ips-v4` y `cloudflare-ips-v6`), que `cloud_attribution` usa para etiquetar IP: sin ellos
+solo detecta por CNAME y huella HTTP.
 Las firmas de WhatsMyName (`username_wmn`, CC BY-SA 4.0) vienen solo en el paquete: esa licencia
-no es compatible con el catálogo de `update-data`.
+no es compatible con el catálogo de `update-data`. La base GeoLite2 de `geoip_offline` tampoco pasa
+por `update-data`: la descargas tú y la copias como `geoip/GeoLite2-City.mmdb` en tu directorio de
+datos (en Windows, `%LOCALAPPDATA%\osineitor\geoip\GeoLite2-City.mmdb`). De dónde sacarla y qué exige
+su licencia está en la [referencia de módulos](MODULES.md).
 
 ```bash
 osineitor update-data
@@ -296,7 +303,47 @@ osineitor update-data sherlock-sites --json
 ```
 
 Solo se instalan datasets con licencia compatible con MIT; los demás se rechazan sin descargarlos
-(código de salida `3`). Si una descarga no es válida se conserva la copia anterior.
+(código de salida `3`). Si una descarga no es válida se conserva la copia anterior. Las firmas de
+Sherlock van fijadas a un commit y a su SHA-256: una descarga que no coincida se rechaza, y para
+adoptar una versión nueva hay que actualizar el catálogo (`datasets.py`) con el commit y el hash.
+Los rangos de IP cambian a diario, así que no llevan hash fijo: se comprueba su formato (una lista
+de redes válida), se anota el SHA-256 de lo instalado y se registran con la licencia `public-feed`
+(feeds públicos sin licencia declarada, la única excepción a la regla anterior). Vuelve a ejecutar
+`update-data` cuando quieras refrescarlos.
+
+**Azure se comprueba solo.** Microsoft publica cada semana el fichero con otra URL
+(`ServiceTags_Public_<fecha>.json`), así que OSINEITOR la lee de su
+[página de descarga](https://www.microsoft.com/en-us/download/details.aspx?id=56519). Si es la misma
+que la instalada, no descarga nada; si ha cambiado, descarga el fichero (unos 4,5 MB) y sustituye
+los rangos. Esa comprobación se hace **al arrancar cualquier orden de la CLI** (también desde la
+aplicación de escritorio, que usa la CLI), **como mucho una vez al día**. Si se instala o se
+actualiza, lo avisa en una línea por stderr; `--json` y el código de salida no cambian. La primera
+vez instala Azure aunque no hayas ejecutado `update-data`.
+
+Si la página deja de traer el enlace, OSINEITOR prueba la ruta de descarga conocida
+(`download.microsoft.com/download/7/1/d/…/ServiceTags_Public_<fecha>.json`, o la del fichero que
+tengas instalado) con las fechas de los últimos 14 días, de la más reciente a la más antigua, y se
+queda con la primera que exista. Si aun así falla (sin red, o Microsoft cambió también la ruta), la
+orden sigue, se conserva la copia que hubiera, se reintenta al día siguiente y se avisa por stderr:
+
+```text
+Aviso: no se pudo comprobar azure-ip-ranges (…); se siguen usando los rangos del 2026-11-02
+```
+
+Y si los rangos instalados tienen más de 14 días, se avisa en **cada** arranque hasta que se
+actualicen (también con `--proxy`, porque ese aviso no usa la red):
+
+```text
+Aviso: los rangos de IP de Azure son del 2026-10-19; ejecuta «osineitor update-data azure-ip-ranges»
+```
+
+La comprobación **sale directa a microsoft.com con tu IP**, no por `--proxy`. Por eso no se hace si
+la orden lleva `--proxy`, ni en `mcp` ni en `update-data` (que ya lo hace). Para desactivarla
+siempre (también apaga los avisos):
+
+```bash
+export OSINEITOR_NO_AUTO_UPDATE=1          # PowerShell: $env:OSINEITOR_NO_AUTO_UPDATE = "1"
+```
 
 ## Estado de cada módulo
 
@@ -349,6 +396,10 @@ red. Queda un riesgo residual de *DNS rebinding* documentado en [SECURITY.md](ht
 username admite letras, números, `.`, `_` y `-` (hasta 64); un valor no válido se rechaza antes de
 lanzar nada (código de salida `2`).
 
+**Tamaño de las respuestas.** El cliente HTTP lee el cuerpo por partes y corta a los 64 MiB ya
+descomprimidos: una respuesta mayor (por ejemplo, una bomba gzip) falla con `ResponseTooLarge` y no
+se reintenta.
+
 ## Proxy y Tor
 
 `--proxy` (o la variable `OSINEITOR_PROXY`) envía las peticiones de los módulos por un proxy
@@ -368,6 +419,8 @@ osineitor domain example.com --proxy=socks5://127.0.0.1:9050
   registros DNS y el MX del email mientras uses proxy. Lo mismo vale para cualquier módulo que
   ejecute una herramienta externa.
 - Si el proxy no responde, el módulo falla: **nunca se vuelve a conectar sin proxy**.
+- **Solo cuenta `--proxy`**: `HTTP_PROXY`, `HTTPS_PROXY` y `ALL_PROXY` del entorno se ignoran,
+  porque desviarían el tráfico sin que la guardia de red lo supiera.
 - Con credenciales en la URL (`socks5://usuario:clave@host:puerto`) mejor usa `OSINEITOR_PROXY`
   para que no queden en la línea de comandos; el registro nunca las incluye.
 
@@ -453,7 +506,8 @@ registro DNS de `www.example.com` va a ese dominio y uno sobre el puerto 443 de 
 
 `osineitor suggest N` lista los datos del scan que ningún módulo investigó (por ejemplo, los que
 quedaron en el último nivel de profundidad) con los módulos **pasivos** que podrían hacerlo y el
-comando para lanzarlos (`--json` para máquinas). **Solo propone: no ejecuta nada**; copiar el comando
+comando para lanzarlos (`--json` para máquinas). Si no hay forma segura de citar el comando en
+Windows (`cmd.exe`), esa sugerencia se omite. **Solo propone: no ejecuta nada**; copiar el comando
 y lanzarlo es decisión tuya. Solo se sugieren módulos que pueden correr en tu equipo (con su API key y
 su herramienta); los activos salen aparte en `active_modules`, como información, y nunca van en el
 comando. Los datos personales (email, username, teléfono) llevan `sensitive: true` y el comando incluye
@@ -594,17 +648,21 @@ export OSINEITOR_SHODAN_KEY=TU_KEY      # alternativa: variable de entorno (tien
 Para que la key no aparezca en la línea de comandos (la ven otros procesos), pásala por stdin:
 `echo TU_KEY | osineitor config set shodan --stdin`.
 
-Nombres de key: `shodan`, `abuseipdb`, `greynoise`, `hibp`, `hunter`, `ipinfo`.
+Nombres de key: `shodan`, `abuseipdb`, `greynoise`, `hibp`, `hunter`, `abusech`, `censys`,
+`censys_org`, `otx`, `virustotal`, `opensanctions`, `etherscan`, `brave`; opcionales: `ipinfo`,
+`urlscan`, `github` (obligatoria para `github_code`), `nvd`, `archive_org` (`clave:secreto` de
+archive.org, para que `capture` pida además Save Page Now).
 
 **Dónde se guarda todo** (`OSINEITOR_CONFIG_DIR` y `OSINEITOR_DATA_DIR` lo sobrescriben):
 
 | | Windows | Linux |
 |---|---|---|
 | Configuración y keys | `%APPDATA%\osineitor\config.toml` | `~/.config/osineitor/config.toml` |
-| Historial (SQLite) y cachés | `%LOCALAPPDATA%\osineitor\` | `~/.local/share/osineitor/` |
+| Historial (SQLite) y cachés (`osineitor.db`, `cache.db`; `0600` en Linux y macOS) | `%LOCALAPPDATA%\osineitor\` | `~/.local/share/osineitor/` |
 | Vigilancia (`watch.yml`) y IA (`ai.yml`), si los creas | `%APPDATA%\osineitor\` | `~/.config/osineitor/` |
 
-El fichero de keys **no se cifra**: en Windows hereda los permisos de tu carpeta de usuario.
+El fichero de keys **no se cifra**: en Windows se restringe a tu usuario con `icacls` y en Linux y
+macOS se crea con `0600`.
 
 ## Barra de progreso
 
@@ -617,7 +675,8 @@ reciben el mismo avance como eventos `progress` con `--ndjson`.
 
 `--ndjson` emite un evento JSON por línea (inicio, cada módulo, cada entidad, progreso, fin);
 `--json` un único documento (también en `modules`, `presets`, `history`, `show`, `diff`, `verify`,
-`export`, `summarize`, `watch run`, `watch list`, `purge`, `update-data`, `doctor`, `config show`,
+`export`, `summarize`, `search`, `timeline`, `risk`, `resolve`, `suggest`, `case show`, `case list`,
+`import`, `watch run`, `watch list`, `watch check`, `purge`, `update-data`, `doctor`, `config show`,
 `config set`, `config unset` y `version`); `--quiet` suprime la salida legible. `--control-stdin` permite cancelar
 escribiendo `{"cmd": "cancel"}` en stdin: se guarda lo ya obtenido.
 

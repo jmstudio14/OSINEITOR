@@ -1,10 +1,16 @@
-"""CDN y nube de un dominio, deducidos de su CNAME y de la huella HTTP ya recogidos."""
+"""CDN y nube de un dominio (por su CNAME y su huella HTTP) y de una IP (por los rangos del
+proveedor que instala `osineitor update-data`), todo a partir de lo ya recogido."""
 
 from __future__ import annotations
 
-from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module
+import ipaddress
+import json
 
+from osineitor import datasets
+from osineitor.models import Entity, EntityType
+from osineitor.modules.base import Context, Module
+
+Network = ipaddress.IPv4Network | ipaddress.IPv6Network
 SIGNATURES_VERSION = 1
 # (proveedor, categoría, sufijos del CNAME)
 CNAME_SIGNATURES = (
@@ -37,18 +43,43 @@ HTTP_TECHNOLOGIES = {
     "Netlify": "cloud",
 }
 PROVIDER_NAMES = {"AWS CloudFront": "Amazon CloudFront"}
+# (proveedor, categoría, datasets de `update-data` con sus rangos de IP)
+RANGE_DATASETS = (
+    ("Amazon Web Services", "cloud", ("aws-ip-ranges",)),
+    ("Google Cloud", "cloud", ("gcp-ip-ranges",)),
+    ("Microsoft Azure", "cloud", ("azure-ip-ranges",)),
+    ("Cloudflare", "cdn", ("cloudflare-ips-v4", "cloudflare-ips-v6")),
+)
 
 
 class CloudAttribution(Module):
     name = "cloud_attribution"
-    description = "CDN y nube deducidos del CNAME y de la huella HTTP ya recogidos"
-    consumes = frozenset({EntityType.RECORD})
+    description = "CDN y nube deducidos del CNAME, la huella HTTP y los rangos de IP ya recogidos"
+    consumes = frozenset({EntityType.RECORD, EntityType.IP})
     produces = frozenset({EntityType.TECHNOLOGY})
     analyzer = True
     canary = "example.com"
 
+    def __init__(self, ctx: Context) -> None:
+        super().__init__(ctx)
+        self._ranges: list[tuple[str, str, list[Network]]] = []
+        self._loaded = False
+
     def accepts(self, entity: Entity) -> bool:
+        if entity.type == EntityType.IP:
+            return True
         return entity.type == EntityType.RECORD and entity.value.startswith(("dns:", "http:"))
+
+    def _load_ranges(self) -> None:
+        """Rangos de los datasets instalados; los que faltan simplemente no etiquetan."""
+        self._loaded = True
+        for provider, category, names in RANGE_DATASETS:
+            networks = []
+            for name in names:
+                if path := datasets.installed_path(name):
+                    networks += [ipaddress.ip_network(c) for c in json.loads(path.read_bytes())]
+            if networks:
+                self._ranges.append((provider, category, networks))
 
     async def run(self, entity: Entity) -> list[Entity]:
         found: dict[str, tuple[str, list[str]]] = {}
@@ -56,7 +87,14 @@ class CloudAttribution(Module):
         def add(provider: str, category: str, evidence: str) -> None:
             found.setdefault(provider, (category, []))[1].append(evidence)
 
-        if entity.value.startswith("dns:"):
+        if entity.type == EntityType.IP:
+            if not self._loaded:
+                self._load_ranges()
+            address = ipaddress.ip_address(entity.value)
+            for provider, category, networks in self._ranges:
+                if network := next((n for n in networks if address in n), None):
+                    add(provider, category, f"IP {entity.value} en {network}")
+        elif entity.value.startswith("dns:"):
             for target in entity.data.get("CNAME", []):
                 host = target.lower().rstrip(".")
                 for provider, category, suffixes in CNAME_SIGNATURES:

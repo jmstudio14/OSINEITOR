@@ -26,7 +26,7 @@ Sale del [ROADMAP](../../ROADMAP.md) (fase 11). Criterios comunes, de
   vigor con esa versión.
 - **F11.2 parcial, no hecho.** Lo que se puede comprobar sin cuenta de PyPI se comprobó: el wheel y el
   sdist se construyen sin avisos, `twine check` pasa, el wheel contiene todos los ficheros de datos y,
-  instalado en un entorno limpio, ejecuta `osineitor version`, lista los 55 módulos y carga los
+  instalado en un entorno limpio, ejecuta `osineitor version`, lista todos los módulos y carga los
   presets. Un test impide que un fichero `.json` o `.yml` nuevo quede fuera de `package-data`.
 - **Firma = atestaciones PEP 740.** `pypa/gh-action-pypi-publish` genera con *trusted publishing*
   atestaciones firmadas con Sigstore y PyPI las muestra como procedencia. Alternativa descartada:
@@ -60,7 +60,7 @@ Sale del [ROADMAP](../../ROADMAP.md) (fase 11). Criterios comunes, de
 - `tests/test_release.py`: `pyproject.toml` listo para PyPI, todos los ficheros de datos declarados,
   `release.yml` sin token y con atestaciones, la etiqueta se compara con la versión, la CI construye
   paquete, documentación e imagen, el Dockerfile corre sin privilegios, cada documento está en la
-  navegación del sitio, la referencia generada lista los 55 módulos, ESTABILIDAD nombra la API
+  navegación del sitio, la referencia generada lista todos los módulos, ESTABILIDAD nombra la API
   pública y los códigos de salida, y MIGRACION cubre los cambios incompatibles del CHANGELOG.
 - `tests/test_docs.py`: también valida las órdenes del tutorial.
 - Comprobado a mano, con herramientas fuera del proyecto: `python -m build`, `twine check`,

@@ -31,7 +31,12 @@ Se intentará responder en un plazo de 7 días y publicar la corrección antes d
   también por redirecciones) o de alterar la ruta de una URL con una entrada manipulada.
 
 **Límite conocido:** entre la comprobación de la guardia y la conexión el DNS podría cambiar
-(*DNS rebinding*). Fijar la IP resuelta en la conexión está pendiente.
+(*DNS rebinding*). Fijar la IP resuelta en la conexión está pendiente. Lo que sí hace la guardia:
+bloquea un nombre que no resuelve (no deja pasar la petición) y las IPv4 escondidas en IPv6
+(NAT64, IPv4-compatible), y el cliente ignora los proxies del entorno.
+
+**Plugins:** los módulos de terceros se cargan por *entry point* y se ejecutan con tus permisos,
+sin aislamiento. Instala solo plugins que hayas revisado.
 
 ## Qué no lo es
 
@@ -41,8 +46,8 @@ Se intentará responder en un plazo de 7 días y publicar la corrección antes d
 ## Datos sensibles que gestiona la herramienta
 
 - **API keys:** `config.toml` en el directorio de configuración (`%APPDATA%\osineitor` en Windows,
-  `~/.config/osineitor` en Linux). En Linux se crea con permisos `0600`; en Windows hereda los de tu
-  carpeta de usuario y no se cifra. También se pueden pasar con variables de entorno
+  `~/.config/osineitor` en Linux). En Linux y macOS se crea con permisos `0600`; en Windows se
+  restringe a tu usuario con `icacls`. No se cifra. También se pueden pasar con variables de entorno
   `OSINEITOR_<NOMBRE>_KEY`. `osineitor config show` las muestra enmascaradas.
 - **Vigilancia e IA:** `watch.yml` y `ai.yml` van en el mismo directorio de configuración. Las URLs
   de webhook, las contraseñas SMTP y las claves de los proveedores de IA se leen de variables de
@@ -53,4 +58,7 @@ Se intentará responder en un plazo de 7 días y publicar la corrección antes d
   el repositorio; la imagen Docker corre sin privilegios. Ambos están descritos pero **sin
   ejecutar todavía** ([PUBLICACION.md](docs/PUBLICACION.md)).
 - **Resultados:** `osineitor.db` en el directorio de datos (SQLite, sin cifrar) y los informes en
-  `reports/`. Pueden contener datos personales: protégelos y bórralos cuando ya no los necesites.
+  `reports/`. `osineitor.db` y `cache.db` se crean con permisos `0600` en POSIX. Pueden contener
+  datos personales: protégelos y bórralos cuando ya no los necesites.
+- **Respuestas de las fuentes:** el cliente HTTP corta cualquier respuesta a los 64 MiB ya
+  descomprimidos (`ResponseTooLarge`, sin reintento), para que una fuente hostil no agote la memoria.

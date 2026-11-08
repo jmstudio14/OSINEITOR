@@ -7,6 +7,7 @@ import contextlib
 import dataclasses
 import functools
 import json
+import os
 import re
 import signal
 import sys
@@ -354,6 +355,70 @@ def main(
     except OSError as exc:
         raise typer.BadParameter(f"no se puede abrir el fichero de registro: {exc}") from exc
     ctx.call_on_close(logs.close)
+    if ctx.resilient_parsing or _auto_update_disabled(ctx.invoked_subcommand):
+        return
+    warned = _auto_update() if _auto_update_allowed(ctx.invoked_subcommand, sys.argv[1:]) else False
+    if not warned:
+        _warn_stale()
+
+
+def _auto_update_disabled(subcommand: str | None) -> bool:
+    """Sin comprobación ni avisos: con `OSINEITOR_NO_AUTO_UPDATE`, en `mcp` (stdio) y en
+    `update-data`, que ya actualiza."""
+    off = os.environ.get("OSINEITOR_NO_AUTO_UPDATE", "").strip().lower()
+    return off in ("1", "true", "yes", "on") or subcommand in ("mcp", "update-data")
+
+
+def _auto_update_allowed(subcommand: str | None, argv: list[str]) -> bool:
+    """La comprobación sale directa a Internet: nunca si se pidió `--proxy`. El callback no ve
+    los argumentos de la orden: van en argv."""
+    if _auto_update_disabled(subcommand):
+        return False
+    return not any(arg == "--proxy" or arg.startswith("--proxy=") for arg in argv)
+
+
+def _azure_in_use() -> str:
+    published = datasets.azure_published()
+    return f"se siguen usando los rangos del {published}" if published else "no hay rangos de Azure"
+
+
+def _auto_update() -> bool:
+    """Datasets de URL cambiante (Azure), una vez al día. Un fallo nunca interrumpe la orden, pero
+    se avisa por stderr. Devuelve si avisó de un fallo."""
+
+    async def check() -> list[datasets.Result]:
+        async with HttpClient(Config.load(), retries=0) as http:
+            return await datasets.auto_update(http)
+
+    try:
+        results = asyncio.run(check())
+    except Exception as exc:  # p. ej. config.toml ilegible: la orden sigue y lo explicará ella
+        err_console.print(
+            f"Aviso: no se pudieron comprobar los datasets ({_safe(logs.scrub(str(exc)))}); "
+            f"{_azure_in_use()}"
+        )
+        return True
+    warned = False
+    for r in results:
+        if r.status == "actualizado":
+            err_console.print(f"Dataset {r.name} actualizado ({_safe(r.version)})")
+        elif r.status == "error":
+            err_console.print(
+                f"Aviso: no se pudo comprobar {r.name} ({_safe(r.detail)}); {_azure_in_use()}"
+            )
+            warned = True
+    return warned
+
+
+def _warn_stale() -> None:
+    """Rangos de Azure con más de `AZURE_STALE_AFTER`: se avisa en cada arranque hasta que se
+    actualicen."""
+    published = datasets.azure_published()
+    if published and datetime.now(UTC).date() - published > datasets.AZURE_STALE_AFTER:
+        err_console.print(
+            f"Aviso: los rangos de IP de Azure son del {published}; ejecuta "
+            "«osineitor update-data azure-ip-ranges»"
+        )
 
 
 def _proxy(value: str | None) -> str | None:
@@ -500,9 +565,20 @@ def exit_code_for(result: ScanResult) -> int:
     return EXIT_OK
 
 
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def _safe(value: object) -> str:
+    """Texto para Rich: sin markup (`[link=…]`, `[/]`) ni secuencias de control del terminal.
+
+    Casi todo lo que se imprime viene de terceros: un ESC u OSC llegaría tal cual al terminal.
+    """
+    return escape(_CONTROL.sub("", str(value)))
+
+
 def _print_entity(entity: Entity, out: Console | None = None) -> None:
     (out or console).print(
-        f"  [cyan]{entity.type:<13}[/] {escape(entity.value)}  [dim]({entity.source})[/]"
+        f"  [cyan]{entity.type:<13}[/] {_safe(entity.value)}  [dim]({entity.source})[/]"
     )
 
 
@@ -520,7 +596,7 @@ def _summarize(entity: Entity) -> str:
 
 
 def render(result: ScanResult) -> None:
-    title = f"{result.target.type}: {result.target.value}"
+    title = f"{result.target.type}: {_safe(result.target.value)}"
     if result.scan_id:
         title += f"  (scan #{result.scan_id})"
     console.rule(title)
@@ -534,10 +610,10 @@ def render(result: ScanResult) -> None:
             level = e.confidence or ""
             style = _CONFIDENCE_STYLE.get(level, "")
             table.add_row(
-                e.value,
-                ", ".join(e.sources),
+                _safe(e.value),
+                _safe(", ".join(e.sources)),
                 f"{style}{level}[/]" if style else level,
-                _summarize(e),
+                _safe(_summarize(e)),
             )
         console.print(table)
     if not result.entities:
@@ -545,17 +621,17 @@ def render(result: ScanResult) -> None:
     _render_runs(result)
     for ev in result.events:
         color = {"error": "red", "budget": "yellow"}.get(ev.kind, "dim")
-        where = f" ({ev.entity})" if ev.entity else ""
-        console.print(f"[{color}]{ev.kind}: {ev.module}{where}: {escape(ev.message)}[/]")
+        where = f" ({_safe(ev.entity)})" if ev.entity else ""
+        console.print(f"[{color}]{ev.kind}: {ev.module}{where}: {_safe(ev.message)}[/]")
     if result.truncated:
         console.print(
             "[yellow]Resultado incompleto: el scan se detuvo al agotar su presupuesto.[/]"
         )
     if result.purpose:
-        console.print(f"Propósito: {escape(result.purpose)}", soft_wrap=True)
+        console.print(f"Propósito: {_safe(result.purpose)}", soft_wrap=True)
     if result.scope:
         declared = "; ".join(f"{k}: {', '.join(v)}" for k, v in result.scope.items())
-        console.print(f"Alcance: {escape(declared)}", soft_wrap=True)
+        console.print(f"Alcance: {_safe(declared)}", soft_wrap=True)
     if result.evidence:
         console.print(
             f"Evidencias:{len(result.evidence)} · huella {result.evidence_digest}\n"
@@ -645,7 +721,7 @@ def _run_target(
     human = not (as_json or opts.ndjson or opts.quiet)
     if human:
         _show_notice_once()
-        console.print(f"[bold]Escaneando {etype} {seed.value}[/] (profundidad {opts.depth})")
+        console.print(f"[bold]Escaneando {etype} {_safe(seed.value)}[/] (profundidad {opts.depth})")
     elif sink:
         _notice_event_once(sink)
     try:
@@ -666,7 +742,7 @@ def _run_target(
                     message=f"{type(exc).__name__}: {exc}",
                 )
             )
-        err_console.print(f"[red]Error: {type(exc).__name__}: {escape(str(exc))}[/]")
+        err_console.print(f"[red]Error: {type(exc).__name__}: {_safe(str(exc))}[/]")
         raise typer.Exit(EXIT_INTERNAL) from exc
     code = exit_code_for(result)
     if sink:
@@ -975,7 +1051,7 @@ def _run_batch(targets: list[str], opts: ScanOptions, no_save: bool, db: Path | 
                 raise
             code = exc.exit_code
         except typer.BadParameter as exc:
-            err_console.print(f"[red]{escape(value)}: {escape(exc.message)}[/]")
+            err_console.print(f"[red]{_safe(value)}: {_safe(exc.message)}[/]")
             code = events.EXIT_USAGE
         worst = max(worst, code)
     if worst:
@@ -1062,7 +1138,7 @@ def list_modules(json_out: AsJson = False) -> None:
     config = Config.load()
     classes = registry.discover()
     for problem in registry.plugin_problems:
-        err_console.print(f"[yellow]Aviso: {escape(problem)}[/]")
+        err_console.print(f"[yellow]Aviso: {_safe(problem)}[/]")
     if json_out:
         _print_json(
             [
@@ -1134,7 +1210,7 @@ def list_presets(json_out: AsJson = False) -> None:
             )
         console.print(table)
         for message in errors.values():
-            err_console.print(f"[red]Preset no válido: {escape(message)}[/]")
+            err_console.print(f"[red]Preset no válido: {_safe(message)}[/]")
     if errors:
         raise typer.Exit(events.EXIT_USAGE)
 
@@ -1154,7 +1230,7 @@ def history(limit: int = 20, db: DbPath = None, json_out: AsJson = False) -> Non
         return
     table = Table("ID", "Tipo", "Objetivo", "Entidades", "Fecha")
     for scan_id, ttype, target, count, started in scans:
-        table.add_row(str(scan_id), ttype, target, str(count), started[:19])
+        table.add_row(str(scan_id), ttype, _safe(target), str(count), started[:19])
     console.print(table)
 
 
@@ -1208,11 +1284,11 @@ def summarize_scan(
     if result is None:
         raise typer.BadParameter(f"no existe el scan {scan_id}")
     where = "en tu máquina" if config.local else f"a {config.host}"
-    err_console.print(f"[dim]Enviando el scan {scan_id} {escape(where)} ({config.provider}).[/]")
+    err_console.print(f"[dim]Enviando el scan {scan_id} {_safe(where)} ({config.provider}).[/]")
     try:
         summary = asyncio.run(ai_mod.summarize(result, config))
     except ai_mod.AiError as exc:
-        err_console.print(f"[red]{escape(str(exc))}[/]")
+        err_console.print(f"[red]{_safe(str(exc))}[/]")
         raise typer.Exit(EXIT_AI_FAILED) from exc
     if json_out:
         _print_json(
@@ -1233,12 +1309,12 @@ def summarize_scan(
             }
         )
         return
-    console.rule(f"scan #{scan_id} · {escape(result.target.value)}")
+    console.rule(f"scan #{scan_id} · {_safe(result.target.value)}")
     for sentence in summary.accepted:
-        console.print(escape(sentence.text))
+        console.print(_safe(sentence.text))
     console.print()
     for ident, key in summary.cited.items():
-        console.print(f"[dim]{ident}[/] {escape(key)}")
+        console.print(f"[dim]{ident}[/] {_safe(key)}")
     if summary.rejected:
         err_console.print(
             f"[yellow]{len(summary.rejected)} frase(s) del modelo descartadas por no tener una "
@@ -1281,7 +1357,7 @@ def diff(scan_a: int, scan_b: int, db: DbPath = None, json_out: AsJson = False) 
             detail = "; ".join(
                 f"{c['field']}: {c['before']!r} → {c['after']!r}" for c in item.get("changes", [])
             )
-            table.add_row(item["type"], item["value"], detail)
+            table.add_row(item["type"], _safe(item["value"]), _safe(detail))
         console.print(table)
     if not any(changes[k] for k in ("added", "removed", "changed")):
         console.print("Sin diferencias.")
@@ -1303,7 +1379,7 @@ def _print_correlations(found: list[dict[str, Any]]) -> None:
     table.add_column("Valor", overflow="fold")
     table.add_column("Casos", overflow="fold")
     for item in found:
-        table.add_row(item["type"], item["value"], ", ".join(item["cases"]))
+        table.add_row(item["type"], _safe(item["value"]), _safe(", ".join(item["cases"])))
     console.print(table)
 
 
@@ -1322,7 +1398,7 @@ def case_new(
             storage.case_create(name.strip(), description.strip(), tags or [])
         except StorageError as exc:
             raise typer.BadParameter(str(exc), param_hint="NAME") from exc
-    console.print(f"Caso {escape(name)} creado.")
+    console.print(f"Caso {_safe(name)} creado.")
 
 
 @case_app.command("add")
@@ -1373,9 +1449,9 @@ def case_show(
         _print_json(case)
         return
     tags = f" [{', '.join(case['tags'])}]" if case["tags"] else ""
-    console.rule(f"{escape(case['name'])}{escape(tags)}")
+    console.rule(f"{_safe(case['name'])}{_safe(tags)}")
     if case["description"]:
-        console.print(escape(case["description"]))
+        console.print(_safe(case["description"]))
     table = Table("Scan", "Tipo", "Objetivo", "Entidades", "Fecha")
     for s in case["scans"]:
         table.add_row(
@@ -1383,7 +1459,7 @@ def case_show(
         )
     console.print(table)
     for note in case["notes"]:
-        console.print(f"[dim]{note['at'][:19]}[/] {escape(note['text'])}")
+        console.print(f"[dim]{note['at'][:19]}[/] {_safe(note['text'])}")
     _print_correlations(case["correlations"])
 
 
@@ -1428,10 +1504,10 @@ def search(
         table.add_row(
             str(h["scan_id"]),
             h["type"],
-            h["value"],
+            _safe(h["value"]),
             h["source"] or "(semilla)",
-            h["target"],
-            ", ".join(h["cases"]),
+            _safe(h["target"]),
+            _safe(", ".join(h["cases"])),
         )
     console.print(table)
 
@@ -1452,7 +1528,9 @@ def risk_cmd(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> None:
         return
     table = Table("Riesgo", "Nivel", "Activo", "Por qué", title="Heurística de priorización")
     for a in assets:
-        table.add_row(str(a["score"]), a["level"], a["asset"], "; ".join(a["reasons"]))
+        table.add_row(
+            str(a["score"]), a["level"], _safe(a["asset"]), _safe("; ".join(a["reasons"]))
+        )
     console.print(table)
 
 
@@ -1484,7 +1562,7 @@ def suggest_cmd(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> No
         "Dato", "Módulos", "Para investigarlo", title="Pivotes sugeridos (no se ejecutan)"
     )
     for s in found:
-        table.add_row(s["entity"], ", ".join(s["modules"]), escape(s["command"]))
+        table.add_row(_safe(s["entity"]), ", ".join(s["modules"]), _safe(s["command"]))
     console.print(table)
 
 
@@ -1505,7 +1583,7 @@ def resolve_cmd(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> No
     table = Table("Puntuación", "Cuentas", "Señales", title="Hipótesis (sin confirmar)")
     for h in found:
         signals = "; ".join(f"{s['kind']}: {s['value']}" for s in h["signals"])
-        table.add_row(str(h["score"]), "\n".join(h["accounts"]), signals)
+        table.add_row(str(h["score"]), _safe("\n".join(h["accounts"])), _safe(signals))
     console.print(table)
 
 
@@ -1526,7 +1604,7 @@ def timeline(scan_id: int, db: DbPath = None, json_out: AsJson = False) -> None:
     table = Table("Fecha (UTC)", "Hecho", "Entidad", "Fuente")
     for e in events:
         when = e["at"][:19].replace("T", " ") + (" [dim](futuro)[/]" if e["future"] else "")
-        table.add_row(when, e["event"], e["entity"], e["source"] or "(semilla)")
+        table.add_row(when, _safe(e["event"]), _safe(e["entity"]), e["source"] or "(semilla)")
     console.print(table)
 
 
@@ -1632,7 +1710,7 @@ def verify(
     elif check.mismatches:
         for m in check.mismatches:
             console.print(
-                f"[red]Alterada[/] #{m['number']} {m['module']} {escape(m['url'])}\n"
+                f"[red]Alterada[/] #{m['number']} {m['module']} {_safe(m['url'])}\n"
                 f"  esperada {m['expected']}\n  actual   {m['actual']}"
             )
     else:
@@ -1674,7 +1752,9 @@ def export(
         raise typer.BadParameter(f"no existe el scan {scan_id}")
     result = _filtered(result, only, exclude)
     ext = report.FORMATS[fmt][0]
-    output = output or Path("reports") / f"osineitor-{scan_id}-{result.target.value}.{ext}"
+    # El objetivo puede traer `/`, `\` o `..` (una URL): el nombre no debe salir de `reports/`.
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", result.target.value)[:100]
+    output = output or Path("reports") / f"osineitor-{scan_id}-{name}.{ext}"
     try:
         content = report.render(result, fmt)
     except ExportUnavailable as exc:
@@ -1786,9 +1866,7 @@ def doctor(
         table.add_column(col, overflow="fold")
     table.add_column("Tiempo", justify="right")
     for c in checks:
-        table.add_row(
-            c.module, styles[c.verdict], escape(c.detail), f"{c.duration_ms / 1000:.1f} s"
-        )
+        table.add_row(c.module, styles[c.verdict], _safe(c.detail), f"{c.duration_ms / 1000:.1f} s")
     console.print(table)
     if failed:
         console.print(f"[red]Fallan: {', '.join(failed)}[/]")
@@ -1847,19 +1925,17 @@ def watch_run(
 def _render_watch(reports: list[watch_mod.TargetReport]) -> None:
     for r in reports:
         if r.error:
-            console.print(f"[red]{escape(r.target)}: {escape(r.error)}[/]")
+            console.print(f"[red]{_safe(r.target)}: {_safe(r.error)}[/]")
         elif not r.due:
-            console.print(f"[dim]{escape(r.target)}: aún no toca[/]")
+            console.print(f"[dim]{_safe(r.target)}: aún no toca[/]")
         elif r.baseline:
-            console.print(f"{escape(r.target)}: línea base fijada (scan #{r.scan_id}), sin alertas")
+            console.print(f"{_safe(r.target)}: línea base fijada (scan #{r.scan_id}), sin alertas")
         else:
             console.print(
-                f"{escape(r.target)}: {len(r.alerts)} alerta(s) nueva(s) (scan #{r.scan_id})"
+                f"{_safe(r.target)}: {len(r.alerts)} alerta(s) nueva(s) (scan #{r.scan_id})"
             )
         for alert in r.alerts:
-            console.print(
-                f"  [bold]{alert.severity}[/] {escape(alert.title)}: {escape(alert.value)}"
-            )
+            console.print(f"  [bold]{alert.severity}[/] {_safe(alert.title)}: {_safe(alert.value)}")
         if r.pending:
             console.print(f"  [dim]{r.pending} entidad(es) nueva(s) esperan confirmación[/]")
         if r.held:
@@ -1867,7 +1943,7 @@ def _render_watch(reports: list[watch_mod.TargetReport]) -> None:
         for d in r.deliveries:
             if not d["ok"]:
                 console.print(
-                    f"  [red]aviso por {escape(d['notifier'])} fallido: {escape(d['error'])}[/]"
+                    f"  [red]aviso por {_safe(d['notifier'])} fallido: {_safe(d['error'])}[/]"
                 )
 
 
@@ -2016,7 +2092,7 @@ def update_data(
         for col in ("Dataset", "Estado", "Licencia", "Versión", "SHA-256", "Detalle"):
             table.add_column(col, overflow="fold")
         for r in results:
-            table.add_row(r.name, r.status, r.license, r.version, r.sha256, escape(r.detail))
+            table.add_row(r.name, r.status, r.license, r.version, r.sha256, _safe(r.detail))
         console.print(table)
         console.print(f"Carpeta: {datasets.datasets_dir()}")
     if any(r.status in ("error", "rechazado") for r in results):

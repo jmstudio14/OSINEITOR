@@ -99,6 +99,18 @@ async def test_hibp(ctx):
 
 
 @respx.mock
+async def test_hibp_email_cannot_change_the_endpoint(ctx):
+    """Un email de terceros con `/../` no debe salir de `/breachedaccount/` con la key."""
+    route = respx.get(url__startswith="https://haveibeenpwned.com/").mock(
+        return_value=httpx.Response(404)
+    )
+    hostile = Entity(type=EntityType.EMAIL, value="a/../../breaches?x#y@example.com")
+    await Hibp(ctx).run(hostile)
+    raw = route.calls[0].request.url.raw_path
+    assert raw.startswith(b"/api/v3/breachedaccount/a%2F..%2F..%2Fbreaches%3Fx%23y%40example.com?")
+
+
+@respx.mock
 async def test_hibp_clean(ctx):
     respx.get(url__startswith="https://haveibeenpwned.com/").mock(return_value=httpx.Response(404))
     assert await Hibp(ctx).run(EMAIL) == []

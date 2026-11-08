@@ -242,6 +242,24 @@ async def test_webhook_formats(tmp_path, fmt, key):
     assert key in body and "new.example.com" in json.dumps(body)
 
 
+def test_webhook_payloads_do_not_ping_the_whole_channel():
+    from osineitor.notify import payload
+
+    alert = watch.Alert(
+        rule="r",
+        title="Nuevo subdominio",
+        severity="info",
+        entity="domain:x",
+        value="@everyone <!channel> <@U123> a&b",
+        recommendation="",
+    )
+    discord = payload("discord", "example.com", 1, [alert])
+    assert discord["allowed_mentions"] == {"parse": []}
+    slack = payload("slack", "example.com", 1, [alert])["text"]
+    assert "<!channel>" not in slack and "<@U123>" not in slack
+    assert "&lt;!channel&gt;" in slack and "a&amp;b" in slack
+
+
 async def test_webhook_url_from_env_and_secret_never_in_errors(tmp_path, monkeypatch):
     monkeypatch.setenv("HOOK_URL", "https://hooks.example.test/SECRETTOKEN")
     cfg = watch.load_config(
@@ -259,6 +277,35 @@ async def test_webhook_url_from_env_and_secret_never_in_errors(tmp_path, monkeyp
         World.subdomains = ["www.example.com", "new.example.com"]
         [report] = await run(storage, cfg, T0 + timedelta(days=1))
     assert "SECRETTOKEN" not in json.dumps(report.as_dict())
+
+
+async def test_webhook_token_never_reaches_the_log_file(tmp_path, monkeypatch):
+    """Slack, Discord y Teams llevan el token en la ruta, que el registro sí conserva."""
+    from osineitor import logs
+
+    log_file = tmp_path / "x.log"
+    logs.setup(log_file=log_file)
+    try:
+        monkeypatch.setenv("HOOK_URL", "https://hooks.example.test/services/T0/B0/TOKENSECRETO")
+        cfg = watch.load_config(
+            write(
+                tmp_path,
+                "targets: [{target: example.com, depth: 1}]\n"
+                "notifiers: {hook: {type: webhook, url_env: HOOK_URL}}\n",
+            )
+        )
+        with Storage(tmp_path / "s.db") as storage, respx.mock:
+            route = respx.post("https://hooks.example.test/services/T0/B0/TOKENSECRETO").mock(
+                return_value=httpx.Response(200)
+            )
+            await run(storage, cfg, T0)
+            World.subdomains = ["www.example.com", "new.example.com"]
+            await run(storage, cfg, T0 + timedelta(days=1))
+        assert route.called
+    finally:
+        logs.close()
+    text = log_file.read_text(encoding="utf-8")
+    assert '"http"' in text and "TOKENSECRETO" not in text
 
 
 async def test_missing_env_var_is_a_delivery_failure_not_a_crash(tmp_path):
@@ -335,6 +382,28 @@ async def test_email_is_sent_over_smtp(tmp_path, monkeypatch):
     assert sent["port"] == 587 and sent["tls"] and sent["login"] == ("u", "s3cret")
     assert "new.example.com" in sent["msg"].get_content() and sent["msg"]["To"] == "b@example.test"
     assert "s3cret" not in json.dumps(report.as_dict())
+
+
+async def test_smtp_login_without_tls_is_refused(tmp_path, monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("no debe conectar")
+
+    monkeypatch.setattr("osineitor.notify.smtplib.SMTP", forbidden)
+    monkeypatch.setenv("SMTP_PASS", "s3cret")
+    cfg = watch.load_config(
+        write(
+            tmp_path,
+            "targets: [{target: example.com, depth: 1}]\n"
+            "notifiers:\n  mail: {type: email, host: smtp.example.test, from: a@example.test,\n"
+            "    to: b@example.test, username: u, password_env: SMTP_PASS, starttls: false}\n",
+        )
+    )
+    with Storage(tmp_path / "s.db") as storage:
+        await run(storage, cfg, T0)
+        World.subdomains = ["www.example.com", "new.example.com"]
+        [report] = await run(storage, cfg, T0 + timedelta(days=1))
+    assert report.deliveries[0]["ok"] is False
+    assert "en claro" in report.deliveries[0]["error"]
 
 
 # --- fichero de configuración --------------------------------------------------------------------

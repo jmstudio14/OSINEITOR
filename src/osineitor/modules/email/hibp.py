@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from urllib.parse import quote
-
 from osineitor.models import Entity, EntityType
 from osineitor.modules.base import Module, ModuleError, status_error
+from osineitor.sanitize import quote_segment
 
 
 class Hibp(Module):
@@ -19,7 +18,7 @@ class Hibp(Module):
 
     async def run(self, entity: Entity) -> list[Entity]:
         response = await self.ctx.http.get(
-            f"https://haveibeenpwned.com/api/v3/breachedaccount/{quote(entity.value)}",
+            f"https://haveibeenpwned.com/api/v3/breachedaccount/{quote_segment(entity.value)}",
             params={"truncateResponse": "false"},
             headers={"hibp-api-key": self.api_key or ""},
         )

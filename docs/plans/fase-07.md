@@ -27,8 +27,8 @@ Sale del [ROADMAP](../../ROADMAP.md) (fase 7). Criterios comunes, de
 | F7.10 | S | Resolución de entidades | ✅ | Cierre del roadmap: `osineitor resolve N`: hipótesis con señales y puntuación, calculadas al consultar. |
 | F7.12 | S | Informe de superficie de ataque | ✅ | Cierre del roadmap: formato de exportación `attack-surface`. |
 
-Los *S* no están bloqueados por nada externo: se dejan por prioridad. Los cuatro *M* cumplen los
-criterios de aceptación de la fase salvo el último punto, que depende de F7.10.
+Los *S* ya están hechos (cierre del roadmap, incluido F7.10 en `resolve.py`). Los cuatro *M*
+cumplen los criterios de aceptación de la fase, también el último punto, que dependía de F7.10.
 
 ## Decisiones
 

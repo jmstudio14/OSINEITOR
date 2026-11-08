@@ -21,18 +21,18 @@ del [ROADMAP](../../ROADMAP.md):
 | F4.8 | S | `ripestat` | ✅ | Hecho en esta rama |
 | F4.9 | S | `dnsbl` | ✅ | Hecho en esta rama |
 | F4.16 | S | `asn_netblock` | ✅ | Hecho en esta rama |
-| F4.17 | S | `cloud_attribution` | 🟡 | Por CNAME y huella HTTP; faltan los rangos de IP (ver más abajo) |
-| F4.1 | S | `urlscan` | ⬜ | Se implementa |
-| F4.2 | S | `otx` | ⬜ | Se implementa |
-| F4.3 | S | `virustotal` | ⬜ | Se implementa |
-| F4.15 | S | `censys` | ⬜ | Se implementa (host); los certificados ya los cubre `cert_details` |
-| F4.18 | S | `tech_detect` | ⬜ | Se implementa con firmas propias |
-| F4.19 | S | `favicon_pivot` | ⬜ | Se implementa con Shodan; Censys queda fuera |
-| F4.20 | S | `lookalike_domains` | ⬜ | Se implementa sin dnstwist |
-| F4.10 | C | `abusech` | ⬜ | Se implementa (ThreatFox y URLhaus) |
-| F4.24 | C | `ext_subfinder` | ⬜ | Se implementa; `ext_amass` aplazado |
+| F4.17 | S | `cloud_attribution` | ✅ | Por CNAME, huella HTTP y rangos de IP de AWS, GCP, Azure y Cloudflare (`update-data`, licencia `public-feed`); la URL de Azure se lee de la página de Microsoft al arrancar, una vez al día |
+| F4.1 | S | `urlscan` | ✅ | Hecho en esta rama |
+| F4.2 | S | `otx` | ✅ | Hecho en esta rama |
+| F4.3 | S | `virustotal` | ✅ | Hecho en esta rama |
+| F4.15 | S | `censys` | ✅ | Hecho (host); los certificados ya los cubre `cert_details` |
+| F4.18 | S | `tech_detect` | ✅ | Hecho con firmas propias |
+| F4.19 | S | `favicon_pivot` | ✅ | Hecho con Shodan; Censys queda fuera |
+| F4.20 | S | `lookalike_domains` | ✅ | Hecho sin dnstwist |
+| F4.10 | C | `abusech` | ✅ | Hecho (ThreatFox y URLhaus) |
+| F4.24 | C | `ext_subfinder` | 🟡 | `ext_subfinder` hecho; `ext_amass` no, sin formato de salida estable verificado |
 | F4.22 | C | `reverse_ip` | ✅ | Cierre del roadmap: `reverse_ip` con la API gratuita de HackerTarget; si la IP aloja más de 50 hostnames deja un resumen en vez de dominios que pivotar. |
-| F4.23 | C | `geoip_offline` | ⛔ | Bloqueado por *spike* |
+| F4.23 | C | `geoip_offline` | ✅ | Analizador que lee una base GeoLite2-City colocada por el usuario; probado en vivo con la base real |
 | F4.21 | C | `analytics_ids` | ✅ | Cierre del roadmap: `analytics_ids` (activo) extrae los IDs de la portada; no busca otros dominios con el mismo ID porque no hay una fuente gratuita verificada. |
 
 ## Orden de trabajo y verificación
@@ -114,16 +114,22 @@ Cada paso termina con `pytest` del fichero nuevo en verde; al final, la batería
 
 ## Entregables bloqueados
 
-| ID | Qué falta decidir |
-|---|---|
-| F4.17 (rangos) | Los feeds de rangos de AWS, GCP, Azure y Cloudflare, su licencia y si encajan en `update-data` |
-| F4.22 | *Spike* hecho (06-11-2026, ver abajo); falta decidir si se acepta HackerTarget con sus reservas |
-| F4.23 | GeoLite2 exige cuenta y licencia por usuario, y la dependencia `maxminddb` |
-| F4.21 | Fuente de dominios relacionados por ID de analítica y sus términos |
+Ya no queda ninguno.
+
+F4.21 (`analytics_ids`) y F4.22 (`reverse_ip`) salieron de esta lista en el cierre del roadmap
+(07-11-2026): `analytics_ids` solo lee los IDs de la portada, y `reverse_ip` usa HackerTarget pese a
+la recomendación del *spike*.
+
+F4.23 (`geoip_offline`) salió el 08-11-2026. El EULA de GeoLite (12-02-2026) no obliga a que cada
+usuario descargue la base, y MaxMind publica bases de prueba que permiten probar el módulo sin ella.
+La base la coloca el usuario porque `update-data` rechaza CC BY-SA. `maxminddb` es dependencia normal
+porque el instalador no incluye extras opcionales.
 
 ### Spike F4.22 `reverse_ip` (06-11-2026)
 
-Qué se verificó y qué no. **Nada de esto está implementado.**
+Qué se verificó y qué no, antes de implementarlo. La recomendación de abajo no se siguió: `reverse_ip`
+se implementó después con la API gratuita de HackerTarget (resumen en vez de dominios si la IP aloja
+más de 50 hostnames).
 
 **HackerTarget (candidata)**
 - **Endpoint (verificado con una petición real):** `GET https://api.hackertarget.com/reverseiplookup/?q=<ip>`,

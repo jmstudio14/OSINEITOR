@@ -1,4 +1,7 @@
-"""Reputación, subdominios y resoluciones en VirusTotal (requiere key gratuita)."""
+"""Reputación, subdominios y resoluciones en VirusTotal (requiere key gratuita).
+
+Sobre el `record` de `file_hash`, pivota a la reputación del hash: solo sale la huella.
+"""
 
 from __future__ import annotations
 
@@ -14,12 +17,13 @@ from osineitor.sanitize import quote_segment
 
 BASE = "https://www.virustotal.com/api/v3"
 MAX_SUBDOMAINS = 40
+FILE_HASH = "file_hash:"
 
 
 class VirusTotal(Module):
     name = "virustotal"
-    description = "Reputación y subdominios de un dominio o IP (VirusTotal)"
-    consumes = frozenset({EntityType.DOMAIN, EntityType.IP})
+    description = "Reputación de un dominio, IP o hash de fichero y subdominios (VirusTotal)"
+    consumes = frozenset({EntityType.DOMAIN, EntityType.IP, EntityType.RECORD})
     produces = frozenset({EntityType.RECORD, EntityType.DOMAIN})
     requires_key = "virustotal"
     canary = "example.com"
@@ -27,6 +31,8 @@ class VirusTotal(Module):
     min_interval = 15.0
 
     def accepts(self, entity: Entity) -> bool:
+        if entity.type == EntityType.RECORD:
+            return entity.value.startswith(FILE_HASH)
         return entity.type == EntityType.IP or (
             entity.type == EntityType.DOMAIN and not entity.data.get("subdomain")
         )
@@ -55,6 +61,25 @@ class VirusTotal(Module):
         }
 
     async def run(self, entity: Entity) -> list[Entity]:
+        if entity.type == EntityType.RECORD:
+            sha256 = entity.value.removeprefix(FILE_HASH)
+            data = (await self._get(f"files/{quote_segment(sha256)}")).get("data")
+            if not data:
+                return []
+            attrs = data.get("attributes") or {}
+            return [
+                self.emit(
+                    entity,
+                    EntityType.RECORD,
+                    f"virustotal:{sha256}",
+                    **self._summary(attrs),
+                    meaningful_name=attrs.get("meaningful_name"),
+                    type_description=attrs.get("type_description"),
+                    size=attrs.get("size"),
+                    first_submission=attrs.get("first_submission_date"),
+                )
+            ]
+
         if entity.type == EntityType.IP:
             address = str(ipaddress.ip_address(entity.value))
             data = (await self._get(f"ip_addresses/{quote_segment(address)}")).get("data")

@@ -15,7 +15,8 @@ from osineitor.modules.domain._util import is_root_domain
 MAX_TEXT = 1_000_000
 MAX_URLS = 50
 MAX_SITEMAPS = 3
-LOC = re.compile(r"<loc>\s*([^<\s][^<]*?)\s*</loc>", re.IGNORECASE)
+# Sin `\s*` alrededor de un `*?`: se solapan y el coste crece con el cuadrado. Se recorta después.
+LOC = re.compile(r"<loc>([^<]*+)</loc>", re.IGNORECASE)
 SECURITY_TXT_PATHS = ("/.well-known/security.txt", "/security.txt")
 
 
@@ -102,7 +103,8 @@ class WebMeta(Module):
             if not text or not re.search(r"<(urlset|sitemapindex)", text, re.IGNORECASE):
                 continue
             sitemap_index = sitemap_index or "<sitemapindex" in text.lower()
-            pages += [loc for loc in LOC.findall(text) if loc not in pages]
+            known = set(pages)  # `in` sobre la lista sería cuadrático con sitemaps enormes
+            pages += [loc for raw in LOC.findall(text) if (loc := raw.strip()) and loc not in known]
 
         security: dict[str, list[str]] = {}
         security_url = None

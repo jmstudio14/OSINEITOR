@@ -7,7 +7,7 @@ abiertas y pivota automáticamente entre lo que descubre.**
 
 [![CI](https://github.com/jmstudio14/OSINEITOR/actions/workflows/ci.yml/badge.svg)](https://github.com/jmstudio14/OSINEITOR/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
-![Windows | Linux](https://img.shields.io/badge/plataforma-Windows%20%7C%20Linux-lightgrey)
+![Windows | Linux | macOS](https://img.shields.io/badge/plataforma-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 [![Licencia MIT](https://img.shields.io/badge/licencia-MIT-green)](LICENSE)
 ![Estado: en desarrollo](https://img.shields.io/badge/estado-en%20desarrollo-orange)
 
@@ -23,8 +23,8 @@ abiertas y pivota automáticamente entre lo que descubre.**
 OSINEITOR ejecuta una colección de módulos independientes, cada uno con una fuente abierta (DNS,
 RDAP, Certificate Transparency, Shodan InternetDB, Gravatar, cientos de sitios web…), y **encadena
 los resultados**: lo que un módulo descubre se convierte en el objetivo de los siguientes. Cada
-investigación se guarda y se exporta como informe (JSON, Markdown, HTML o CSV) o como grafo
-(GraphML, GEXF o Cypher).
+investigación se guarda y se exporta como informe (JSON, Markdown, HTML, CSV, STIX, MISP, superficie
+de ataque o resumen ejecutivo) o como grafo (GraphML, GEXF o Cypher).
 
 ```
 dominio ─► IPs ─► puertos y servicios        email ─► username ─► perfiles en ~460 sitios
@@ -46,22 +46,22 @@ Versión **0.5.0**, en desarrollo. Lo que hay y lo que no:
 
 | Área | Estado |
 |---|---|
-| CLI con 62 módulos en 9 frentes | Disponible |
+| CLI con 71 módulos en 10 frentes | Disponible |
 | Procedencia y confianza (observaciones, evidencia con hash, confianza, alcance, propósito) | Disponible desde la 0.4.0 |
 | Modelo ampliado, presets, analizadores offline, adaptadores de herramientas externas, `update-data` y filtros de salida | Disponible desde la 0.4.0 |
 | Fuentes nuevas, hallazgos con reglas, `diff`, informes CSV y de grafo, librería y plugins, vigilancia (`watch`), resúmenes con IA opcionales, paquete y documentación (fases 4 a 11 del [roadmap](ROADMAP.md)) | Hecho en el repositorio, **sin publicar** ([CHANGELOG](CHANGELOG.md)) |
-| Tests y CI en Windows y Linux (Python 3.11 y 3.13) | En verde (más de 1000 tests, sin red) |
-| Funcionamiento contra las fuentes reales | **Parcial**: los 10 módulos originales sin API key se probaron en vivo desde Windows y tienen fixtures reales ([detalle](docs/PRUEBAS_WINDOWS.md)); los 6 con key y las fuentes de las fases 4 a 11 solo con respuestas simuladas. `osineitor doctor` lo comprueba desde tu red |
-| Aplicación de escritorio para Windows | En curso: [capa interna, ventana principal, scan en vivo, historial y exportación listos](docs/GUI.md) (`osineitor-gui`); faltan las vistas de salud y ajustes |
+| Tests y CI en Windows, Linux y macOS (Python 3.11 y 3.13) | En verde (unos 1600 tests, sin red) |
+| Funcionamiento contra las fuentes reales | **Parcial**: los 10 módulos originales sin API key se probaron en vivo desde Windows y tienen fixtures reales ([detalle](docs/PRUEBAS_WINDOWS.md)); `capture`, `doc_harvest`, `cloud_storage_refs`, `ext_exiftool` y `geoip_offline` también se probaron en vivo; los módulos con key y el resto de fuentes de las fases 4 a 11, solo con respuestas simuladas. `osineitor doctor` lo comprueba desde tu red |
+| Aplicación de escritorio para Windows | En curso: [capa interna, ventana principal, scan en vivo, historial, exportación, salud, ajustes y avisos legales listos](docs/GUI.md) (`osineitor-gui`); faltan las pruebas manuales en Windows |
 | Paquete en PyPI | Preparado ([flujo de publicación](docs/PUBLICACION.md)), **sin publicar** |
 | Instalador de Windows | No disponible todavía |
 
-Plataforma principal: **Windows 10/11**. Linux se prueba en la CI, pero no es el objetivo.
+Plataforma principal: **Windows 10/11**. Linux y macOS se prueban en la CI, pero no son el objetivo.
 
 ## Características
 
-- **Nueve frentes, 62 módulos:** dominios e infraestructura, IPs y servicios, emails y
-  filtraciones, usernames, organizaciones, teléfonos, criptomonedas, ficheros y coordenadas. Los módulos son ficheros independientes que se descubren solos.
+- **Diez frentes, 71 módulos:** dominios e infraestructura, IPs y servicios, emails y
+  filtraciones, usernames, organizaciones, teléfonos, criptomonedas, ficheros, coordenadas y análisis offline. Los módulos son ficheros independientes que se descubren solos.
 - **Pivoteo configurable** (`--depth`) con deduplicación y fusión de lo que cada fuente aporta.
 - **Fiable y honesto con los fallos:** cada módulo informa de si respondió con datos, sin datos, con
   error o por cuota, para no confundir «no hay resultados» con «la fuente falló». `osineitor
@@ -121,7 +121,9 @@ publicada.
 
 Extras: `pip install -e ".[dev]"` (tests y linter), `".[gui]"` (PySide6, para la aplicación de
 escritorio `osineitor-gui`), `".[build]"` (PyInstaller, para construir el paquete de Windows) y
-`".[docs]"` (para construir el sitio de documentación con `mkdocs`).
+`".[docs]"` (para construir el sitio de documentación con `mkdocs`), `".[stix]"` y `".[misp]"`
+(para `export -f stix` y `export -f misp`) y `".[capture]"` (Playwright, para el pantallazo del
+módulo `capture`; además hace falta `playwright install chromium`).
 
 **Con Docker** (la imagen se construye en local; no está publicada en ningún registro). Corre sin
 privilegios y deja los scans en el volumen `/data`:
@@ -168,9 +170,14 @@ módulo.
 | Investigar un tipo concreto | `osineitor domain`, `ip`, `email` o `username` |
 | Usar un perfil de escaneo | `osineitor domain example.com --preset quick` · `osineitor presets` |
 | Actualizar los datasets de terceros | `osineitor update-data` |
-| Ver o recuperar scans anteriores | `osineitor history` · `show N` · `export N -f json\|md\|html\|csv\|graphml\|gexf\|cypher` · `diff A B` |
+| Ver o recuperar scans anteriores | `osineitor history` · `show N` · `export N -f json\|md\|html\|csv\|csv-relations\|csv-findings\|graphml\|gexf\|cypher\|stix\|misp\|attack-surface\|executive` · `diff A B` |
+| Analizar un scan guardado | `osineitor risk N` · `timeline N` · `resolve N` · `suggest N` |
+| Buscar entre los scans guardados | `osineitor search TEXTO` |
+| Agrupar scans en casos | `osineitor case new` · `case add` · `case note` · `case show` · `case list` |
+| Importar resultados de otras herramientas | `osineitor import nmap` · `import subfinder` · `import maigret` |
+| Consultar scans desde un agente de IA | `osineitor mcp` ([detalle](docs/MCP.md)) |
 | Comprobar que las evidencias no se han alterado | `osineitor verify N` |
-| Ver los módulos y mis API keys | `osineitor modules` · `config show` |
+| Ver los módulos y mis API keys | `osineitor modules` · `config show` · `config unset NOMBRE` |
 | Comprobar que las fuentes responden | `osineitor doctor` |
 | Gestionar la caché | `osineitor cache info` · `cache clear` |
 | Vigilar objetivos y recibir avisos de cambios | `osineitor watch run` · `watch list` · `watch check` |
@@ -188,7 +195,11 @@ Opciones que más se usan en los scans:
 | `--refresh` · `--no-cache` | Ignora o desactiva la caché de respuestas |
 | `--evidence` | Guarda la respuesta original de cada fuente con su SHA-256 (`osineitor verify`) |
 | `--scope scope.yml` | Limita el scan a los dominios y redes declarados (lo de fuera se descarta) |
-| `--purpose "TEXTO"` | Anota para qué haces el scan (exigible en emails y usernames) |
+| `--purpose "TEXTO"` | Anota para qué haces el scan (exigible en emails, usernames, personas y teléfonos) |
+| `--targets-file FICHERO` | Lanza el mismo scan sobre varios objetivos (`scan`) |
+| `--domain DOMINIO` | Dominio sobre el que generar emails candidatos (`person`) |
+| `--proxy URL` · `--allow-private` | Sale por un proxy · permite redes privadas (solo con tu autorización) |
+| `--db RUTA` · `--no-save` | Usa otra base de datos SQLite · no guarda el scan |
 | `--preset NOMBRE` | Aplica un perfil: módulos, profundidad y presupuesto (`osineitor presets`) |
 | `--only-types` · `--exclude` | Muestran u ocultan tipos de entidad en la salida |
 | `--json` · `--ndjson` | Salida para otros programas |
@@ -215,20 +226,26 @@ están en la **[guía de uso](docs/USO.md)**.
 | Dominio | `takeover` | Subdominios con CNAME a un servicio sin reclamar (**activo**) | — |
 | Dominio | `urlscan` | Escaneos públicos de urlscan.io: IPs, subdominios y URLs | opcional `urlscan` |
 | Dominio | `otx` | Pulses y DNS pasivo (AlienVault OTX) | `otx` |
-| Dominio | `virustotal` | Reputación y subdominios (VirusTotal) | `virustotal` |
+| Dominio | `virustotal` | Reputación de un dominio, IP o hash de fichero y subdominios (VirusTotal) | `virustotal` |
 | Dominio | `tech_detect` | Tecnologías por firmas propias: CMS, frameworks, CDN… y plugins y temas de WordPress de la portada (**activo**) | — |
 | Dominio | `favicon_pivot` | Hosts con el mismo favicon, vía Shodan (**activo**) | `shodan` |
 | Dominio | `lookalike_domains` | Dominios parecidos ya registrados (defensivo, solo DNS) | — |
 | Dominio | `ext_subfinder` | Subdominios con Subfinder (binario del usuario) | — |
-| Dominio | `cloud_attribution` | CDN y nube deducidos del CNAME y de la huella HTTP | — |
+| Dominio | `search_dorks` | Documentos e índices públicos del dominio con plantillas (API de Brave Search) | `brave` |
+| Dominio | `github_code` | Menciones del dominio en código de GitHub y reglas de secretos; nunca guarda el valor | `github` |
+| Dominio | `doc_harvest` | Descarga documentos públicos del dominio y extrae sus metadatos (**activo**) | — |
+| Dominio | `cloud_storage_refs` | Acceso público de los buckets de S3, GCS y Azure citados en URLs (**activo**) | — |
+| Dominio | `capture` | Guarda una URL como evidencia: cuerpo, cabeceras, WARC y pantallazo (**activo**) | — |
+| Dominio | `cloud_attribution` | CDN y nube deducidos del CNAME, la huella HTTP y los rangos de IP de AWS, GCP, Azure y Cloudflare | — |
 | IP | `censys` | Servicios, ASN y país (Censys Platform) | `censys` |
-| IP | `abusech` | IOC en ThreatFox y URLhaus (abuse.ch) | `abusech` |
+| IP | `abusech` | IOC en ThreatFox y URLhaus y hash de fichero en MalwareBazaar (abuse.ch) | `abusech` |
 | IP | `ptr` | DNS inverso | — |
 | IP | `reverse_ip` | Hostnames alojados en la misma IP (HackerTarget) | — |
 | IP | `ripestat` | ASN, prefijo, país de registro e historial de enrutamiento (RIPEstat) | — |
 | IP | `asn_netblock` | De IP a ASN y prefijo (Team Cymru) y de ASN a sus prefijos | — |
 | IP | `dnsbl` | Listas negras DNS (Spamhaus ZEN, SpamCop, UCEPROTECT, DroneBL) | — |
 | IP | `ipinfo` | Geolocalización, ASN, hostname | opcional `ipinfo` |
+| IP | `geoip_offline` | Geolocalización con una base GeoLite2 local, sin enviar la IP a terceros | — (colocas tú la base) |
 | IP | `internetdb` | Puertos, CPEs y CVEs (Shodan InternetDB) | — |
 | IP | `cve_enrich` | CVSS (NVD), EPSS y marca KEV de cada CVE | opcional `nvd` |
 | IP | `shodan` | Servicios con producto/versión, SO, CVEs | `shodan` |
@@ -242,7 +259,7 @@ están en la **[guía de uso](docs/USO.md)**.
 | Email | `pgp_keyserver` | Clave PGP pública con identidad verificada en keys.openpgp.org | — |
 | Email | `hibp_pastes` | Apariciones del email en *pastes* (solo un resumen, sin identificadores) | `hibp` |
 | Email | `github_email` | Commits públicos de GitHub con ese email: nombres, repositorios, logins | opcional `github` |
-| Email | `fediverse` | Cuenta de Mastodon o fediverso de `usuario@instancia` (contacta al host) | — |
+| Email | `fediverse` | Cuenta de Mastodon o fediverso de `usuario@instancia` (**activo**, contacta al host) | — |
 | Email | `email_candidates` | Candidatos de email de una persona sobre un dominio (sin red ni SMTP) | — |
 | Username | `username_sites` | Presencia en ~460 sitios (firmas de Sherlock) | — |
 | Username | `username_wmn` | Presencia en ~600 sitios (firmas de WhatsMyName); coincidir con Sherlock da confianza `medio` | — |
@@ -254,17 +271,21 @@ están en la **[guía de uso](docs/USO.md)**.
 | Username | `discord_snowflake` | Fecha de creación de una cuenta de Discord a partir de su ID (sin red) | — |
 | Username | `username_variants` | Variantes de usuario a partir de un nombre completo (sin red) | — |
 | Org | `gleif` | LEI de una organización y relaciones matriz–filial (GLEIF) | — |
+| Org | `opensanctions` | Coincidencias en listas de sanciones y de personas expuestas (OpenSanctions) | `opensanctions` |
 | Teléfono | `phone_parse` | País, región, tipo de línea, operador de origen y formatos (sin red) | — |
 | Cripto | `crypto_detect` | Cadena y formato de una dirección; valida la suma (sin red) | — |
 | Cripto | `btc_explorer` | Saldo, transacciones y actividad de una dirección de Bitcoin (mempool.space) | — |
+| Cripto | `eth_explorer` | Saldo y primera y última actividad de una dirección de Ethereum (Etherscan) | `etherscan` |
 | Fichero | `file_meta` | EXIF, PDF, Office y OpenDocument de un fichero local (sin red) | — |
 | Fichero | `file_hash` | MD5, SHA-1 y SHA-256 de un fichero local (sin red) | — |
+| Fichero | `ext_exiftool` | Metadatos con ExifTool de formatos que `file_meta` no cubre (binario del usuario, sin red) | — |
 | Fichero | `image_links` | Enlaces de búsqueda inversa de una imagen por URL (sin red) | — |
 | Análisis | `findings` | Hallazgos con severidad y recomendación según reglas YAML (sin red) | — |
 | Geo | `geo_point` | Coordenadas: grados-minutos-segundos y enlaces a mapas (sin red) | — |
 
 Los módulos **pasivos** solo hablan con terceros. Los **activos** (`http_fingerprint`, `web_meta`,
-`analytics_ids`, `takeover`, `tech_detect`, `favicon_pivot` y `fediverse`) envían tráfico al objetivo y solo se ejecutan con `--active`. Un módulo sin su API key se omite y se indica
+`analytics_ids`, `takeover`, `tech_detect`, `favicon_pivot`, `fediverse`, `capture`, `doc_harvest` y
+`cloud_storage_refs`) envían tráfico al objetivo y solo se ejecutan con `--active`. Un módulo sin su API key se omite y se indica
 en la salida. Qué datos aporta cada uno y sus límites: [referencia de módulos](docs/MODULES.md).
 
 ## Configuración
@@ -280,7 +301,8 @@ export OSINEITOR_SHODAN_KEY=TU_KEY      # alternativa: variable de entorno (tien
 | Configuración y keys | `%APPDATA%\osineitor\config.toml` | `~/.config/osineitor/config.toml` |
 | Historial (SQLite) y cachés | `%LOCALAPPDATA%\osineitor\` | `~/.local/share/osineitor/` |
 
-El fichero de keys **no se cifra**: hereda los permisos de tu carpeta de usuario. Nombres de key,
+El fichero de keys **no se cifra**: se restringe a tu usuario (`0600` en Linux y macOS, `icacls`
+en Windows). Nombres de key,
 `--stdin` para no dejar la key en la línea de comandos y rutas alternativas: [guía de
 uso](docs/USO.md#api-keys-y-rutas).
 
@@ -319,8 +341,9 @@ El plan completo, con criterios de aceptación y lo que queda fuera de alcance, 
    ejecutarlo en la CI y las pruebas manuales.
 2. **Publicar la 1.0:** paquete en PyPI e imagen Docker; el flujo está escrito y falta ejecutarlo
    ([publicación](docs/PUBLICACION.md)).
-3. Los entregables aplazados de las fases 5 a 11 y los que dependen de cuentas o de red real
-   (servidor MCP, supresión de ruido en la vigilancia, STIX/MISP…): ver el roadmap.
+3. Las fuentes evaluadas y no incluidas por depender de cuentas, claves o red real que no se han
+   podido verificar (OpenSanctions, OpenCorporates, Etherscan, captura con navegador,
+   `--tags`/`--top`…): ver el roadmap y la [referencia de módulos](docs/MODULES.md#fuentes-evaluadas-y-no-incluidas).
 
 ## Desarrollo
 
@@ -347,6 +370,8 @@ memoria. Para añadir una fuente nueva, sigue [CONTRIBUTING.md](CONTRIBUTING.md)
 | [Vigilancia continua](docs/VIGILANCIA.md) | `osineitor watch`: alertas, notificadores y despliegue con cron o GitHub Actions |
 | [API de librería y plugins](docs/API.md) | `from osineitor import Scanner` y cómo añadir módulos desde un paquete |
 | [Contrato de la CLI](docs/CLI_CONTRACT.md) | Eventos NDJSON, salidas JSON y cancelación |
+| [Evidencia](docs/EVIDENCIA.md) | `--evidence`: respuestas originales con SHA-256 y `osineitor verify` |
+| [Cobertura RDAP](docs/RDAP_COBERTURA.md) | Qué TLD tienen RDAP y cuáles cubre `whois` |
 | [Aplicación de escritorio](docs/GUI.md) | Diseño y estado de la interfaz gráfica |
 | [Compromiso de estabilidad](docs/ESTABILIDAD.md) | Qué cubre SemVer desde 1.0 y la política de obsolescencia |
 | [Migración desde 0.x](docs/MIGRACION.md) | Cambios que pueden romper scripts al actualizar |
@@ -369,3 +394,10 @@ Las contribuciones son bienvenidas: [CONTRIBUTING.md](CONTRIBUTING.md) y
 Las firmas de detección de usernames proceden de [Sherlock](https://github.com/sherlock-project/sherlock)
 (MIT) y de [WhatsMyName](https://github.com/WebBreacher/WhatsMyName) (CC BY-SA 4.0, © Micah Hoffman,
 fichero `wmn.json` sin modificar); ver `src/osineitor/modules/username/data/README.md`.
+
+La aplicación de escritorio incluye las fuentes Inter y JetBrains Mono (SIL OFL 1.1) y un
+subconjunto de los iconos Lucide (ISC); las licencias están junto a ellos en
+`src/osineitor_gui/ui/assets/`.
+
+`geoip_offline` lee una base que el paquete no incluye. This product includes GeoLite Data created by
+MaxMind, available from [https://www.maxmind.com](https://www.maxmind.com).

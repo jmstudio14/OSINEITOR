@@ -16,6 +16,8 @@ def isolated_env(tmp_path, monkeypatch):
     # Estas variables mandan en todos los sistemas (en Windows se ignora XDG).
     monkeypatch.setenv("OSINEITOR_CONFIG_DIR", str(tmp_path / "config" / "osineitor"))
     monkeypatch.setenv("OSINEITOR_DATA_DIR", str(tmp_path / "data" / "osineitor"))
+    # La CLI comprobaría los datasets de Azure al arrancar: los tests no salen a la red.
+    monkeypatch.setenv("OSINEITOR_NO_AUTO_UPDATE", "1")
     for name in ("SHODAN", "ABUSEIPDB", "GREYNOISE", "HIBP", "HUNTER", "IPINFO"):
         monkeypatch.delenv(f"OSINEITOR_{name}_KEY", raising=False)
 

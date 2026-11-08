@@ -1,5 +1,8 @@
 # Plan G6 · Ajustes y API keys (Hito G)
 
+> **Estado (07-11-2026):** hecho (✅ en el ROADMAP). Las casillas de abajo son la lista de
+> ejecución original y no se marcaron.
+
 > **Para quien lo ejecute:** hazlo tarea a tarea (`superpowers:executing-plans` o
 > `superpowers:subagent-driven-development`). Los pasos usan casillas `- [ ]`.
 

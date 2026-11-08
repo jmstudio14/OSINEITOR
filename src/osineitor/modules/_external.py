@@ -39,6 +39,21 @@ def _version(path: str, args: tuple[str, ...]) -> tuple[int, ...] | None:
     return tuple(int(n) for n in found[0].split(".")) if found else None
 
 
+def find_executable(name: str) -> str | None:
+    """`shutil.which` sin la carpeta actual.
+
+    En Windows, `shutil.which` busca primero en la carpeta actual: un `subfinder.exe` plantado en
+    la carpeta desde la que se lanza el scan se ejecutaría. Solo cuentan las carpetas absolutas
+    del PATH (o la ruta exacta, si `name` la trae).
+    """
+    if os.path.dirname(name):
+        return shutil.which(name)
+    for folder in os.environ.get("PATH", "").split(os.pathsep):
+        if os.path.isabs(folder) and (found := shutil.which(os.path.join(folder, name))):
+            return found
+    return None
+
+
 def _show(version: tuple[int, ...]) -> str:
     return ".".join(map(str, version))
 
@@ -60,12 +75,14 @@ class ExternalToolModule(Module, ABC):
     # Versión mínima, p. ej. `(2, 6)`. Con `None` no se comprueba.
     min_version: ClassVar[tuple[int, ...] | None] = None
     version_args: ClassVar[tuple[str, ...]] = ("--version",)
+    # Códigos de salida que no son un fallo (hay herramientas que usan el 1 para «sin resultado»).
+    ok_exit_codes: ClassVar[tuple[int, ...]] = (0,)
     direct_dns = True  # su tráfico no pasa por --proxy
     timeout = 300.0  # el motor cancela y se mata el proceso al agotarse
 
     @classmethod
     def unavailable(cls) -> str | None:
-        path = shutil.which(cls.binary)
+        path = find_executable(cls.binary)
         if path is None:
             return f"{cls.binary} no está instalado"
         if cls.min_version is None:
@@ -91,7 +108,7 @@ class ExternalToolModule(Module, ABC):
             raise ModuleSkipped("el valor empieza por «-» y la herramienta lo leería como opción")
         if reason := self.unavailable():
             raise ModuleSkipped(reason)
-        path = shutil.which(self.binary)
+        path = find_executable(self.binary)
         if path is None:
             raise ModuleSkipped(f"{self.binary} no está instalado")
         return path
@@ -101,22 +118,22 @@ class ExternalToolModule(Module, ABC):
         stdout = await self._exec([path, *self.args(entity)])
         return self.parse(entity, json_documents(stdout))
 
-    async def _exec(self, argv: list[str]) -> str:
+    async def _exec(self, argv: list[str], *, stdin: bytes | None = None) -> str:
         env = {k: v for k, v in os.environ.items() if not k.startswith("OSINEITOR_")}
         proc = await asyncio.create_subprocess_exec(
             *argv,
-            stdin=asyncio.subprocess.DEVNULL,
+            stdin=asyncio.subprocess.DEVNULL if stdin is None else asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
         try:
-            out, err = await proc.communicate()
+            out, err = await proc.communicate(stdin)
         except BaseException:  # timeout o cancelación del motor: no dejar el proceso huérfano
             proc.kill()
             await proc.wait()
             raise
-        if proc.returncode:
+        if proc.returncode not in self.ok_exit_codes:
             detail = err.decode("utf-8", "replace").strip().splitlines()
             raise ModuleError(
                 f"{self.binary} terminó con código {proc.returncode}"

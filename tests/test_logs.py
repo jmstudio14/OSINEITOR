@@ -149,3 +149,29 @@ def test_cli_rejects_an_unwritable_log_path(tmp_path):
     )
     assert result.exit_code == 2
     assert "fichero de registro" in result.output
+
+
+async def test_unexpected_module_errors_are_stored_without_keys(ctx, monkeypatch):
+    """El texto de una excepción cualquiera llega a la BD y a la GUI: sin consultas ni keys."""
+    from osineitor.engine import Engine
+    from osineitor.models import Entity
+    from osineitor.modules.base import Module
+
+    monkeypatch.setenv("OSINEITOR_SHODAN_KEY", "CLAVE-SECRETA-123")
+
+    class Broken(Module):
+        name = "broken"
+        description = "test"
+        consumes = frozenset({EntityType.DOMAIN})
+
+        async def run(self, entity):
+            raise RuntimeError(
+                "fallo en https://api.test/x?key=QUERYSECRETA y CLAVE-SECRETA-123 en el texto"
+            )
+
+    result = await Engine(ctx, [Broken]).run(Entity(type=EntityType.DOMAIN, value="example.com"))
+    [run] = result.runs
+    assert run.status == "error" and "RuntimeError" in run.message
+    stored = json.dumps([run.message] + [e.message for e in result.events])
+    assert "QUERYSECRETA" not in stored and "CLAVE-SECRETA-123" not in stored
+    assert "https://api.test/x" in run.message

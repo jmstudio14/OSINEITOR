@@ -47,6 +47,29 @@ def test_markdown_escapes_pipes():
     assert "SPF" not in md  # vacíos omitidos
 
 
+def test_markdown_does_not_pass_html_links_or_new_lines_through():
+    """Un visor con HTML (MkDocs, Obsidian…) ejecutaría `onerror` o seguiría `javascript:`."""
+    hostile = ScanResult(
+        target=Entity(type=EntityType.DOMAIN, value="example.com"),
+        depth=1,
+        entities=[
+            Entity(
+                type=EntityType.RECORD,
+                value="<img src=x onerror=alert(1)>",
+                source="m",
+                data={"t": "[pulsa](javascript:alert(1))", "c": "`fuera` del\r# código"},
+            )
+        ],
+        events=[ScanEvent(kind="error", module="m", message="<b>x</b>\n# título", entity="a")],
+    )
+    for fmt in ("md", "attack-surface", "executive"):
+        text = report.render(hostile, fmt)
+        unescaped = re.findall(r"(?<!\\)(?:<img|<b>|\]\(javascript:)", text)
+        assert unescaped == [] and "\n# título" not in text and "\r" not in text
+    md = report.render(hostile, "md")
+    assert "\\<img src=x onerror=alert(1)\\>" in md and "\\[pulsa\\](javascript:alert(1))" in md
+
+
 SEEN_BY_TWO = ScanResult(
     target=SEED,
     depth=1,

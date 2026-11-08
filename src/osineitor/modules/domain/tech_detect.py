@@ -20,9 +20,11 @@ WP_ASSET = re.compile(
     r"""/wp-content/(plugins|themes)/([a-z0-9_-]+)/(?:[^"'\s<>]*?\?ver=([0-9][\w.-]*))?""",
     re.IGNORECASE,
 )
-META = re.compile(r"<meta\b[^>]*>", re.IGNORECASE)
-ATTR = re.compile(r"""([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
-SCRIPT_SRC = re.compile(r"""<script\b[^>]*\bsrc\s*=\s*["']([^"']+)""", re.IGNORECASE)
+# El HTML es del objetivo: ningún patrón debe recorrer el resto del documento en cada intento
+# (`[^<>]` acaba en la etiqueta siguiente y la lookbehind no empieza a mitad de palabra).
+META = re.compile(r"<meta\b[^<>]*+>", re.IGNORECASE)
+ATTR = re.compile(r"""(?<![\w:-])([\w:-]++)\s*+=\s*+(?:"([^"]*+)"|'([^']*+)')""")
+SCRIPT_SRC = re.compile(r"""<script\b[^<>]*\bsrc\s*+=\s*+["']([^"']+)""", re.IGNORECASE)
 
 
 @cache
