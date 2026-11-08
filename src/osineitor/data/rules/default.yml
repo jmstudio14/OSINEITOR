@@ -1,0 +1,170 @@
+# Reglas de hallazgos incluidas. Formato y campos: src/osineitor/findings.py.
+rules:
+  - id: dmarc-missing
+    title: El dominio no publica DMARC
+    severity: medium
+    type: record
+    value_prefix: "dns:"
+    when:
+      - {field: DMARC, op: missing}
+      - {field: subject, op: root_domain}
+    recommendation: >
+      Publica un registro TXT en _dmarc.<dominio> con v=DMARC1 y una política p=quarantine o
+      p=reject, y una dirección rua para recibir informes.
+
+  - id: dmarc-monitor-only
+    title: DMARC en modo solo supervisión (p=none)
+    severity: low
+    type: record
+    value_prefix: "dns:"
+    when:
+      - {field: DMARC, op: regex, value: '(?i)\bp=none\b'}
+    evidence: [DMARC]
+    recommendation: >
+      Con p=none no se bloquea ni se aísla el correo suplantado. Revisa los informes y sube la
+      política a quarantine y después a reject.
+
+  - id: spf-permissive
+    title: SPF permisivo (+all o ?all)
+    severity: high
+    type: record
+    value_prefix: "dns:"
+    when:
+      - {field: SPF, op: regex, value: '(?i)(^|\s)[+?]all(\s|$)'}
+    evidence: [SPF]
+    recommendation: >
+      Cualquier servidor puede enviar correo en nombre del dominio. Cierra el registro con ~all
+      o, mejor, -all, y lista solo los remitentes legítimos.
+
+  - id: mta-sts-missing
+    title: El dominio no publica MTA-STS
+    severity: low
+    type: record
+    value_prefix: "mail_security:"
+    when:
+      - {field: MTA_STS, op: missing}
+    recommendation: >
+      Publica una política MTA-STS (registro TXT _mta-sts y fichero en mta-sts.<dominio>) para
+      exigir TLS en el correo entrante.
+
+  - id: cert-expired
+    title: Certificado caducado
+    severity: low
+    type: certificate
+    when:
+      - {field: status, op: eq, value: caducado}
+    evidence: [common_name, issuer, not_after, expires_in_days]
+    recommendation: >
+      Comprueba que hay un certificado vigente para ese nombre: crt.sh también lista certificados
+      antiguos ya sustituidos, así que esto puede ser solo histórico.
+
+  - id: cert-expiring
+    title: Certificado a punto de caducar (30 días o menos)
+    severity: medium
+    type: certificate
+    when:
+      - {field: status, op: eq, value: caduca_pronto}
+    evidence: [common_name, issuer, not_after, expires_in_days]
+    recommendation: >
+      Renueva el certificado antes de la fecha de caducidad y automatiza la renovación.
+      Si ya se renovó, este es el certificado anterior.
+
+  - id: domain-expiring
+    title: El dominio expira en 60 días o menos
+    severity: medium
+    type: record
+    value_prefix: ["rdap:", "whois:"]
+    when:
+      - {field: expires, op: days_lte, value: 60}
+    evidence: [expires, registrar]
+    recommendation: >
+      Renueva el dominio y activa la renovación automática; un dominio caducado puede ser
+      registrado por un tercero.
+
+  - id: cve-in-kev
+    title: Vulnerabilidad explotada activamente (catálogo KEV de CISA)
+    severity: critical
+    type: vulnerability
+    when:
+      - {field: kev, op: eq, value: true}
+    evidence: [cvss, epss, kev_due_date, kev_ransomware]
+    recommendation: >
+      Aplica el parche o la mitigación del proveedor con prioridad: CISA la lista como
+      explotada en ataques reales.
+
+  - id: cve-epss-high
+    title: Vulnerabilidad con alta probabilidad de explotación (EPSS 0,5 o más)
+    severity: high
+    type: vulnerability
+    when:
+      - {field: epss, op: gte, value: 0.5}
+    evidence: [cvss, epss, epss_percentile]
+    recommendation: >
+      Prioriza el parcheo: según EPSS hay al menos un 50 % de probabilidad de explotación en
+      los próximos 30 días.
+
+  - id: dangling-cname
+    title: CNAME colgante (posible toma de subdominio)
+    severity: high
+    type: record
+    value_prefix: "takeover:"
+    evidence: [service, cname, evidence]
+    recommendation: >
+      Elimina el registro CNAME o reclama el recurso en el servicio de destino antes de que
+      lo haga un tercero.
+
+  - id: sensitive-archived-url
+    title: URL sensible archivada (copia de seguridad, configuración o base de datos)
+    severity: medium
+    type: url
+    when:
+      - {field: archived, op: eq, value: true}
+      - {field: value, op: regex, value: '(?i)\.(env|sql|bak|old|zip|tar|gz|log|conf|config|ini|db|swp|git)(\?|$)'}
+    recommendation: >
+      Comprueba si el fichero sigue accesible; si contenía credenciales, rótalas. Pide su
+      retirada del archivo si es necesario.
+
+  - id: ip-blacklisted
+    title: IP en una lista negra DNS
+    severity: medium
+    type: record
+    value_prefix: "dnsbl:"
+    when:
+      - {field: listed_on, op: exists}
+    evidence: [listed_on]
+    recommendation: >
+      Averigua por qué está listada (equipo comprometido o reputación del rango) y solicita la
+      retirada en cada lista una vez resuelto.
+
+  - id: missing-security-headers
+    title: Cabeceras de seguridad HTTP ausentes
+    severity: low
+    type: record
+    value_prefix: "http:"
+    when:
+      - {field: missing_security_headers, op: exists}
+    evidence: [missing_security_headers, server]
+    recommendation: >
+      Configura Strict-Transport-Security, Content-Security-Policy, X-Content-Type-Options y
+      las demás cabeceras que falten en el servidor web.
+
+  - id: exposed-admin-service
+    title: Servicio de administración o base de datos expuesto a Internet
+    severity: high
+    type: service
+    when:
+      - {field: port, op: in, value: [23, 445, 1433, 2375, 3306, 3389, 5432, 5900, 6379, 9200, 11211, 27017]}
+    evidence: [port]
+    recommendation: >
+      Cierra el puerto en el cortafuegos o restringe el acceso por IP o VPN. Telnet, SMB, RDP,
+      VNC, Docker y las bases de datos no deben ser accesibles desde Internet.
+
+  - id: security-txt-expired
+    title: security.txt caducado
+    severity: info
+    type: record
+    value_prefix: "web_meta:"
+    when:
+      - {field: security_expired, op: eq, value: true}
+    evidence: [security_txt, security_expires]
+    recommendation: Actualiza el campo Expires de security.txt (RFC 9116).

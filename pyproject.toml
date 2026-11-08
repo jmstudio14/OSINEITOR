@@ -1,13 +1,26 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "osineitor"
-version = "0.4.0"
+version = "0.5.0"
 description = "Herramienta OSINT modular: dominios, IPs, emails y usernames con pivoteo entre entidades"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["osint", "reconnaissance", "security", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+]
 requires-python = ">=3.11"
 dependencies = [
     "typer>=0.12",
@@ -18,7 +31,15 @@ dependencies = [
     "platformdirs>=4",
     "idna>=3",
     "pyyaml>=6",
+    "phonenumbers>=8.13",
+    "maxminddb>=3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/jmstudio14/OSINEITOR"
+Documentation = "https://github.com/jmstudio14/OSINEITOR/blob/main/docs/USO.md"
+Changelog = "https://github.com/jmstudio14/OSINEITOR/blob/main/CHANGELOG.md"
+Issues = "https://github.com/jmstudio14/OSINEITOR/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -28,12 +49,31 @@ dev = [
     "pytest-cov>=5",
     "respx>=0.21",
     "ruff>=0.5",
+    "pymisp>=2.5",
+    "stix2>=3",
 ]
 
-gui = ["PySide6-Essentials>=6.7"]
+# Exportación STIX 2.1 (`export -f stix`) y a MISP (`export -f misp`).
+stix = ["stix2>=3"]
+misp = ["pymisp>=2.5"]
+
+gui = ["PySide6-Essentials>=6.8"]
+# Tests de las vistas. Fuera de `dev`: sin PySide6, pytest-qt aborta toda la ejecución de pytest.
+gui-test = ["PySide6-Essentials>=6.8", "pytest-qt>=4"]
+
+# Pantallazo del módulo `capture`; además hace falta `playwright install chromium`.
+capture = ["playwright>=1.40"]
+
+# Construcción del paquete de Windows (packaging/windows/); no es una dependencia de ejecución.
+build = ["pyinstaller>=6"]
+
+docs = ["mkdocs>=1.6"]
 
 [project.scripts]
 osineitor = "osineitor.cli:app"
+
+[project.gui-scripts]
+osineitor-gui = "osineitor_gui.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -43,6 +83,13 @@ osineitor = [
     "modules/domain/data/*.json",
     "modules/username/data/*.json",
     "data/presets/*.yml",
+    "data/rules/*.yml",
+]
+osineitor_gui = [
+    "ui/assets/*.qss",
+    "ui/assets/fonts/*",
+    "ui/assets/icons/*",
+    "ui/assets/qss/*",
 ]
 
 [tool.pytest.ini_options]

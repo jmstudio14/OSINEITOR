@@ -42,10 +42,30 @@ Fuera de la UE aplica la legislación local (p. ej. la Ley 25.326 en Argentina).
   la huella: conserva la respuesta original de cada fuente y permite comprobar que no se ha tocado
   (ver [EVIDENCIA.md](EVIDENCIA.md)).
 - Guarda los resultados cifrados o en un equipo controlado; la base de datos y los informes se
-  guardan sin cifrar (ver [SECURITY.md](../SECURITY.md)).
-- Borra los scans cuando termine la investigación.
+  guardan sin cifrar (ver [SECURITY.md](https://github.com/jmstudio14/OSINEITOR/blob/main/SECURITY.md)).
+- Borra los scans cuando termine la investigación; `osineitor purge --older-than 90d` aplica una
+  retención.
+- Vigila solo activos propios o con autorización expresa ([VIGILANCIA.md](VIGILANCIA.md)).
+- Los resúmenes con IA están desactivados por defecto. Un proveedor remoto recibe los hechos del
+  scan, que pueden ser datos personales: usa un modelo local (Ollama) para investigar personas y
+  lee [IA.md](IA.md) antes de activar uno remoto.
 - Verifica los hallazgos antes de actuar sobre ellos: las fuentes se equivocan y la búsqueda de
   usernames produce falsos positivos.
+
+## Si encuentras un secreto
+
+`github_code` puede señalar lo que parece una credencial en código público. Su valor no se guarda y el
+módulo no comprueba si funciona.
+
+1. **No lo uses ni lo pruebes.** Ni para confirmar que es real: acceder con una credencial ajena puede ser
+   delito aunque esté publicada.
+2. **No la copies ni la publiques** en informes, tiques o chats. Basta con el repositorio, la ruta y el
+   tipo de regla; la huella permite referirse a ella sin escribirla.
+3. **Avisa a quien pueda retirarla:** a la organización dueña del dominio, por su `security.txt` o su
+   canal de seguridad, y al dueño del repositorio, de forma privada si tiene *security advisories*.
+4. **Da tiempo antes de hablar en público**, y déjale decidir la solución: hay que revocar la credencial,
+   porque borrarla del repositorio no basta (sigue en el historial).
+5. **Si es tuya,** revócala primero y limpia el historial después.
 
 ## Si eres el objetivo
 

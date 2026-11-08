@@ -86,6 +86,14 @@ async def test_private_ip_literals_stay_blocked_with_a_proxy():
             await http.get("http://169.254.169.254/latest/meta-data")
 
 
+async def test_proxy_variables_from_the_environment_are_ignored(monkeypatch):
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+        monkeypatch.setenv(name, "http://proxy.test:3128")
+    async with HttpClient(Config(keys={})) as http:
+        # httpx monta un transporte por esquema cuando toma el proxy del entorno.
+        assert http._client._mounts == {}
+
+
 async def test_without_a_proxy_names_are_still_resolved_by_the_guard(monkeypatch):
     seen: list[str] = []
 

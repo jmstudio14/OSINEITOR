@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: test (${{ matrix.os }}, ${{ matrix.python-version }})
@@ -20,8 +23,8 @@ jobs:
           - { os: ubuntu-latest, python-version: "3.11" }
           - { os: macos-latest, python-version: "3.13" }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e '.[dev]'
@@ -29,17 +32,71 @@ jobs:
       - run: ruff format --check .
       - run: python -m pytest -q
 
+  # Las vistas de Qt: sin el extra `gui`, sus tests se omiten en el resto de trabajos.
+  gui:
+    name: gui (windows-latest, 3.13)
+    runs-on: windows-latest
+    timeout-minutes: 20 # un diálogo modal sin responder colgaría el trabajo
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - run: pip install -e '.[dev,gui-test]'
+      - run: python -m pytest tests/gui -q
+
   # Informativo: no bloquea la fusión aunque falle. Dice si el proyecto funciona en Python 3.14.
   test-py314:
     name: test (windows-latest, 3.14, informativo)
     runs-on: windows-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.14"
       - run: pip install -e '.[dev]'
       - run: ruff check .
       - run: ruff format --check .
       - run: python -m pytest -q
+
+  # Lo que se publicaría: construye el wheel, lo instala en un entorno limpio y lo ejecuta.
+  package:
+    name: paquete
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - run: |
+          python -m venv /tmp/limpio
+          /tmp/limpio/bin/pip install dist/*.whl
+          /tmp/limpio/bin/osineitor version
+          /tmp/limpio/bin/osineitor modules --json > /dev/null
+          /tmp/limpio/bin/osineitor presets --json > /dev/null
+
+  docs:
+    name: sitio de documentación
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - run: pip install -e '.[docs]'
+      - run: mkdocs build --strict
+
+  docker:
+    name: imagen Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - run: docker build -t osineitor:ci .
+      - run: docker run --rm osineitor:ci version
+      - run: docker run --rm osineitor:ci modules --json > /dev/null
+      - name: La imagen no corre como root
+        run: test "$(docker run --rm --entrypoint id osineitor:ci -u)" != 0

@@ -10,14 +10,14 @@ CLI (cli.py) ──► Engine (engine.py) ──► Módulos (modules/**)
      │                 ▼
      │           ScanResult (models.py)
      ▼
-Storage (storage.py, SQLite) ──► Informes (report/: JSON, Markdown, HTML)
+Storage (storage.py, SQLite) ──► Informes (report/: JSON, Markdown, HTML, CSV, grafo, STIX, MISP)
 ```
 
 | Fichero | Responsabilidad |
 |---|---|
 | `models.py` | `EntityType`, `Entity`, `ScanEvent`, `ModuleRun`, `ScanResult` y `detect_type()` |
 | `config.py` | API keys y ajustes desde TOML o variables de entorno; rutas por sistema (`platformdirs`) |
-| `errors.py` | Excepciones: `ModuleError`, `ModuleSkipped`, `ModuleQuota`, `NetworkGuardError`, `BudgetExceeded`, `InvalidEntityValue` |
+| `errors.py` | Excepciones: `ModuleError`, `ModuleSkipped`, `ModuleQuota`, `NetworkGuardError`, `BudgetExceeded`, `InvalidEntityValue`, `ExportUnavailable` |
 | `sanitize.py` | Saneado de usernames y codificación de valores que viajan a URLs |
 | `normalize.py` | Forma canónica de cada tipo de entidad: dominios (IDNA), IPs, emails, URLs, ASN, redes CIDR, huellas de certificado, teléfonos (E.164) y textos |
 | `presets.py` | Presets de escaneo (`--preset`): YAML incluidos en `data/presets/` y los del usuario |
@@ -32,14 +32,29 @@ Storage (storage.py, SQLite) ──► Informes (report/: JSON, Markdown, HTML)
 | `modules/base.py` | Contrato `Module` (`emit` y `try_emit`) y `Context` |
 | `modules/_external.py` | `ExternalToolModule`: base para adaptadores de herramientas externas |
 | `modules/_manifest.py` | Lista explícita de ficheros de módulos (un test la contrasta con el descubrimiento) |
-| `registry.py` | Descubre las subclases de `Module` en `osineitor.modules` |
+| `registry.py` | Descubre las subclases de `Module` en `osineitor.modules` y las de los plugins del grupo de *entry points* `osineitor.modules` |
 | `engine.py` | Ejecuta los módulos, pivota por niveles, deduplica y registra incidencias |
 | `events.py` | Eventos del contrato CLI y `NdjsonSink` (salida NDJSON) |
 | `control.py` | Lectura de órdenes por stdin (`--control-stdin`) para cancelar un scan |
 | `cache.py` | Caché HTTP en SQLite (`cache.db`) |
 | `doctor.py` | Comprobaciones de `osineitor doctor` sobre cada módulo |
+| `scanner.py` | `Scanner`: API de librería (`scan`, `ascan`, `cancel`); la vigilancia la reutiliza |
+| `findings.py` | Motor de hallazgos: reglas YAML de `data/rules/` evaluadas sobre las entidades (las usa el analizador `findings` y las alertas de `watch`) |
+| `diff.py` | `osineitor diff`: entidades y hallazgos nuevos, desaparecidos y modificados entre dos scans |
+| `risk.py` | `osineitor risk`: puntuación orientativa de 0 a 100 por dominio o IP |
+| `resolve.py` | `osineitor resolve`: hipótesis de cuentas que podrían ser de la misma persona |
+| `timeline.py` | `osineitor timeline`: fechas de los datos de un scan en orden cronológico |
+| `tool_import.py` | `osineitor import subfinder` y `import maigret`: leen la salida JSON de esas herramientas y la convierten en un `ScanResult` (sin red, sin pivoteo) |
+| `mcp_server.py` | `osineitor mcp`: servidor MCP por stdio (consulta y scans pasivos; sin módulos activos) |
+| `pivots.py` | `osineitor suggest`: propone qué investigar a continuación sin ejecutarlo |
+| `targets.py` | Lee la lista de `scan --targets-file` |
+| `nmap_import.py` | `osineitor import nmap`: lee un XML de Nmap y lo convierte en un `ScanResult` (sin red, sin pivoteo) |
+| `crypto_address.py` | Reconoce y valida direcciones de criptomonedas |
+| `watch.py` | Vigilancia continua (`osineitor watch`): qué es nuevo y qué avisar ([VIGILANCIA.md](VIGILANCIA.md)) |
+| `notify.py` | Notificadores de la vigilancia: webhook, correo SMTP y fichero NDJSON |
+| `ai.py` | Resumen con IA (`osineitor summarize`): consentimiento, hechos numerados y validación de citas ([IA.md](IA.md)) |
 | `storage.py` | Guarda y recupera scans en SQLite |
-| `report/` | Exportadores a JSON, Markdown y HTML |
+| `report/` | Exportadores a JSON, Markdown, HTML (con grafo interactivo), CSV, grafos (GraphML, GEXF, Cypher), STIX 2.1, MISP, superficie de ataque y resumen ejecutivo |
 | `cli.py` | Comandos de Typer y salida con Rich |
 | `__main__.py` | Permite ejecutar la CLI con `python -m osineitor` |
 
@@ -52,7 +67,7 @@ Todo lo que se descubre es una `Entity`:
 
 | Campo | Descripción |
 |---|---|
-| `type` | `domain`, `ip`, `email`, `username`, `url`, `profile`, `service`, `vulnerability`, `breach`, `record`, `asn`, `netblock`, `certificate`, `technology`, `organization`, `person`, `phone`, `crypto_address`, `file`, `location` o `finding` (reservado a F7.8) |
+| `type` | `domain`, `ip`, `email`, `username`, `url`, `profile`, `service`, `vulnerability`, `breach`, `record`, `asn`, `netblock`, `certificate`, `technology`, `organization`, `person`, `phone`, `crypto_address`, `file`, `location` o `finding` |
 | `value` | Valor identificador (`example.com`, `1.1.1.1:443`, `CVE-2024-0001`…) |
 | `data` | Diccionario libre con los detalles que aporta la fuente |
 | `source` | Nombre del primer módulo que la vio |
@@ -75,7 +90,8 @@ existir las observaciones cae en `source`. `source` se mantiene (contrato aditiv
 
 **Confianza.** `Engine.run` asigna a cada entidad un nivel con `confidence.assess` al terminar:
 puntos = fuentes distintas + 1 si alguna es autoritativa (`Module.authority`: `dns`, `rdap`,
-`http_fingerprint` y `email_validate`; el resto `aggregated`); 3 o más es `alto`, 2 `medio`, 0 o 1
+`whois`, `mail_security`, `http_fingerprint`, `email_validate`, `ptr`, `web_meta`,
+`analytics_ids`, `takeover` y `tech_detect`; el resto `aggregated`); 3 o más es `alto`, 2 `medio`, 0 o 1
 `bajo`. Si el dato es de hace más de 90 días baja un nivel: la fecha es la que aporta el tercero
 (`last_update`, `last_seen`, `last_reported`, `seen`) o, si no la hay, `last_seen`. Un módulo nuevo
 que lea de quien administra el dato debe declarar `authority = "authoritative"`. Es una heurística
@@ -216,11 +232,17 @@ SQLite en `osineitor.db` dentro del directorio de datos (`%LOCALAPPDATA%\osineit
 - `module_runs`: el `ModuleRun` de cada ejecución (estado, entidades, peticiones, caché, ms).
 - `evidence`: respuesta original de cada fuente con su SHA-256 y el cuerpo (BLOB), desde la
   versión 4. Solo se rellena con `--evidence`.
+- `watch_targets` y `watch_seen`, desde la versión 8: por objetivo vigilado, la última ejecución y
+  las claves de entidad que la vigilancia ya conoce. `osineitor purge` no las toca.
+- `watch_pending`, desde la versión 9: entidades nuevas que esperan una segunda ejecución
+  (`confirm`).
+- `cases`, `case_scans` y `case_notes`, desde la versión 10: los casos, los scans que agrupan y sus
+  notas; la versión 10 añade también el índice `idx_entities_value` para `osineitor search`.
 
 **Migraciones.** El esquema se versiona con `PRAGMA user_version`: `storage.MIGRATIONS` es una
 lista donde la posición es la versión y cada migración se aplica en una transacción. Una base de
 la v0.1.0 (versión 0) se actualiza sola sin perder datos; una de una versión más nueva se rechaza.
-Nunca se edita una migración ya publicada: los cambios van al final de la lista. Un tipo de
+El esquema está hoy en la versión 10. Nunca se edita una migración ya publicada: los cambios van al final de la lista. Un tipo de
 entidad nuevo no necesita migración: `entities.type` es texto sin restricción y el valor se
 normaliza al cargarlo. Una base con tipos nuevos no la lee un OSINEITOR anterior.
 
@@ -232,7 +254,7 @@ viajara en la consulta no queda en disco.
 
 Orden de prioridad para cada key: variable `OSINEITOR_<NOMBRE>_KEY` → sección `[keys]` de
 `config.toml` del directorio de configuración (`%APPDATA%\osineitor` en Windows). La sección
-`[settings]` admite `timeout` (segundos) y `user_agent`.
+`[settings]` admite `timeout` (segundos), `user_agent` y `require_purpose`.
 
 **Presets.** `--preset NOMBRE` aplica un perfil (módulos, profundidad, presupuesto y si admite
 módulos activos). Los incluidos están en `src/osineitor/data/presets/`; los tuyos van en
@@ -242,8 +264,16 @@ Lo que indiques en la línea de órdenes manda sobre el preset, y `allow_active:
 
 **Datasets.** `osineitor update-data` descarga los datasets de terceros a `datasets/` del
 directorio de datos y anota en `manifest.json` su versión, SHA-256, licencia y URL. Solo instala
-los de licencia compatible con MIT (los demás se rechazan sin descargar); quien los lee usa
-`datasets.installed_path`, que ignora un fichero cuyo hash no coincide con el registrado.
+los de licencia compatible con MIT, más los feeds públicos de rangos de IP (licencia `public-feed`,
+sin hash fijo porque cambian a diario); los demás se rechazan sin descargar. Quien los lee usa
+`datasets.installed_path`, que ignora un fichero cuyo hash no coincide con el registrado. Un
+dataset con `discover` averigua su URL en cada comprobación (Azure, desde la página de descarga) y
+no descarga si coincide con la del manifiesto. El callback de la CLI llama a
+`datasets.auto_update` al arrancar cada orden: comprueba `AUTO_UPDATE` como mucho una vez al día
+(sello `datasets/auto-update.json`), salvo con `--proxy`, en `mcp`, en `update-data` o con
+`OSINEITOR_NO_AUTO_UPDATE`. Si la página no trae el enlace, `_azure_guess` prueba con HEAD la ruta
+conocida para los últimos 14 días. Los fallos y los rangos con más de 14 días
+(`datasets.azure_published`) se avisan por stderr.
 
 Las variables `OSINEITOR_CONFIG_DIR` y `OSINEITOR_DATA_DIR` sustituyen los directorios de
 configuración y de datos (base de datos y caché) por la ruta indicada.

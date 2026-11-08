@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 from datetime import UTC, datetime
 from typing import Any
@@ -44,12 +45,17 @@ def _url_password(url: str) -> set[str]:
         return set()
 
 
+def mask_secret(value: str) -> None:
+    """Enmascara `value` en el registro activo (p. ej. la URL de un webhook)."""
+    if len(value) >= MIN_SECRET_LENGTH and value not in _secrets:
+        _secrets.append(value)
+        _secrets.sort(key=lambda v: (-len(v), v))
+
+
 def mask_credentials(url: str) -> None:
     """Enmascara en el registro la contraseña de una URL (p. ej. la de `--proxy`)."""
     for password in _url_password(url):
-        if len(password) >= MIN_SECRET_LENGTH and password not in _secrets:
-            _secrets.append(password)
-            _secrets.sort(key=lambda v: (-len(v), v))
+        mask_secret(password)
 
 
 def known_secrets() -> list[str]:
@@ -58,6 +64,17 @@ def known_secrets() -> list[str]:
     values |= {v for k, v in os.environ.items() if k.startswith(ENV_PREFIX) and k.endswith("_KEY")}
     values |= _url_password(os.environ.get(f"{ENV_PREFIX}PROXY", ""))
     return sorted((v for v in values if len(v) >= MIN_SECRET_LENGTH), key=lambda v: (-len(v), v))
+
+
+URL_IN_TEXT = re.compile(r"[a-z][a-z0-9+.-]*://\S+", re.IGNORECASE)
+
+
+def scrub(text: str) -> str:
+    """`text` para guardar: las URLs con `redact_url` y las keys conocidas por `***`."""
+    text = URL_IN_TEXT.sub(lambda m: redact_url(m[0]), text)
+    for secret in known_secrets() + _secrets:
+        text = text.replace(secret, MASK)
+    return text
 
 
 class JsonFormatter(logging.Formatter):

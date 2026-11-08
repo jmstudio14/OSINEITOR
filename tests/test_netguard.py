@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import gzip
+
 import httpx
 import pytest
 import respx
 
+from osineitor import http as http_module
 from osineitor import netguard
 from osineitor.budget import Budget
 from osineitor.config import Config
 from osineitor.errors import BudgetExceeded, NetworkGuardError
-from osineitor.http import MAX_REDIRECTS, HttpClient
+from osineitor.http import MAX_REDIRECTS, HttpClient, ResponseTooLarge
 from osineitor.netguard import resolve_host as real_resolve_host
 
 
@@ -31,6 +34,12 @@ from osineitor.netguard import resolve_host as real_resolve_host
         ("::ffff:127.0.0.1", False),
         ("::ffff:10.0.0.1", False),
         ("fe80::1%eth0", False),
+        ("::127.0.0.1", False),  # IPv4-compatible
+        ("::ffff:0:7f00:1", False),  # SIIT
+        ("64:ff9b::a9fe:a9fe", False),  # NAT64 hacia 169.254.169.254
+        ("64:ff9b::7f00:1", False),
+        ("64:ff9b::808:808", True),  # NAT64 hacia 8.8.8.8
+        ("fec0::1", False),  # site-local
         ("no-es-una-ip", False),
     ],
 )
@@ -59,13 +68,29 @@ async def test_ensure_public_checks_literals_and_names(monkeypatch):
     )
     await netguard.ensure_public("https://8.8.8.8/x")
     await netguard.ensure_public("https://ok.test/x")
-    await netguard.ensure_public("https://sin-resolver.test/x")  # no resuelve: falla httpx luego
+    await netguard.ensure_public("https://sin-resolver.test/x", resolve=False)  # con proxy
     for url in ("http://127.0.0.1/", "http://[::1]/", "http://169.254.169.254/latest/meta-data"):
         with pytest.raises(NetworkGuardError):
             await netguard.ensure_public(url)
     for url in ("https://internal.test/", "https://mixed.test/"):
         with pytest.raises(NetworkGuardError, match="--allow-private"):
             await netguard.ensure_public(url)
+
+
+@respx.mock
+async def test_unresolvable_host_is_blocked_and_not_remembered(monkeypatch):
+    """Fail-closed: si la guardia no ve IP, httpx no debe resolver por su cuenta y conectar."""
+    mapping: dict[str, list[str]] = {}
+    monkeypatch.setattr(netguard, "resolve_host", resolver(mapping))
+    route = respx.get("https://rebind.test/").mock(return_value=httpx.Response(200))
+    async with client() as http:
+        with pytest.raises(httpx.ConnectError, match="no resuelve"):
+            await http.get("https://rebind.test/")
+        assert not route.called
+        mapping["rebind.test"] = ["10.0.0.7"]  # luego resuelve a la red interna
+        with pytest.raises(NetworkGuardError):
+            await http.get("https://rebind.test/")
+    assert not route.called
 
 
 async def test_guard_message_does_not_leak_the_query(monkeypatch):
@@ -198,6 +223,45 @@ async def test_each_host_is_resolved_once_within_the_ttl(monkeypatch):
         await http.get("https://a.test/x")
         await http.get("https://a.test/x")
     assert calls == ["a.test"]
+
+
+@respx.mock
+async def test_body_over_the_limit_is_cut_without_retries(monkeypatch):
+    monkeypatch.setattr(http_module, "MAX_RESPONSE", 100)
+    route = respx.get("https://a.test/big").mock(
+        return_value=httpx.Response(200, content=b"x" * 1000)
+    )
+    async with client() as http:
+        with pytest.raises(ResponseTooLarge, match="supera"):
+            await http.get("https://a.test/big")
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_limit_counts_decompressed_bytes(monkeypatch):
+    """Una bomba gzip: pocos bytes en la red que se expanden al descomprimir."""
+    monkeypatch.setattr(http_module, "MAX_RESPONSE", 1000)
+    bomb = gzip.compress(b"\0" * 100_000)
+    assert len(bomb) < 1000
+    respx.get("https://a.test/bomb").mock(
+        return_value=httpx.Response(200, content=bomb, headers={"content-encoding": "gzip"})
+    )
+    async with client() as http:
+        with pytest.raises(ResponseTooLarge):
+            await http.get("https://a.test/bomb")
+
+
+@respx.mock
+async def test_body_under_the_limit_is_decoded(monkeypatch):
+    monkeypatch.setattr(http_module, "MAX_RESPONSE", 1000)
+    respx.get("https://a.test/ok").mock(
+        return_value=httpx.Response(
+            200, content=gzip.compress(b"hola"), headers={"content-encoding": "gzip"}
+        )
+    )
+    async with client() as http:
+        response = await http.get("https://a.test/ok")
+    assert response.text == "hola"
 
 
 @respx.mock

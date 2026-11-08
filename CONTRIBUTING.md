@@ -24,14 +24,19 @@ pip install -e '.[dev]'
 
 ## Comprobaciones obligatorias
 
-Lo mismo que ejecuta la CI, en Windows y Linux con Python 3.11 y 3.13 (Windows es la plataforma
-principal):
+Lo mismo que ejecuta la CI, en Windows y Linux con Python 3.11 y 3.13 y en macOS con 3.13 (Windows
+es la plataforma principal):
 
 ```bash
 ruff check .
 ruff format --check .
 python -m pytest -q
 ```
+
+La CI construye además el paquete, la imagen Docker y la documentación. Si cambias `docs/` o
+`mkdocs.yml`, comprueba el sitio con `pip install -e '.[docs]'` y `mkdocs build --strict`: un
+enlace a un fichero fuera de `docs/` debe ser una URL de GitHub. Si tocas el resumen con IA,
+`python scripts/eval_ai.py` recalcula los números de [docs/IA.md](docs/IA.md).
 
 ## Reglas para los cambios
 
@@ -54,6 +59,11 @@ python -m pytest -q
   `ctx.http`, llama a `self.record_evidence(...)` para que `--evidence` la guarde.
 - **Analizadores.** Un módulo que solo lee entidades ya recogidas (sin red) marca
   `analyzer = True`: corre en un pase final con un contexto sin red y lo que emite no se pivota.
+- **Hallazgos y alertas.** Un hallazgo nuevo no necesita código: es una regla YAML en
+  `src/osineitor/data/rules/` (formato en `findings.py`) con su test en `tests/test_findings.py`.
+- **Plugins.** Un módulo de un paquete aparte se registra con el grupo de *entry points*
+  `osineitor.modules`; el contrato está en [docs/API.md](docs/API.md#plugins) y es parte de la
+  [estabilidad](docs/ESTABILIDAD.md).
 - **Herramientas externas.** Hereda de `ExternalToolModule` (`modules/_external.py`): declara
   `binary` y, si hace falta, `min_version`, y pasa el objetivo como valor de una opción o tras `--`.
   No se empaquetan binarios y su tráfico no pasa por `ctx.http`.

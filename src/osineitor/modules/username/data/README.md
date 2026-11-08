@@ -31,3 +31,16 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+# wmn.json
+
+Firmas de detección de perfiles tomadas del proyecto
+[WhatsMyName](https://github.com/WebBreacher/WhatsMyName) (`wmn-data.json`), © 2015-2026 Micah
+Hoffman, distribuidas bajo la licencia
+[Creative Commons Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/).
+El fichero se incluye **sin modificar** y separado del código (MIT) del proyecto; el código de
+`wmn.py` solo lo lee. Si lo redistribuyes o lo modificas, la licencia CC BY-SA 4.0 sigue aplicándose
+a ese fichero.
+
+Para actualizarlo, descarga de nuevo `wmn-data.json` y sustituye el fichero. No entra en
+`osineitor update-data`, que solo admite licencias compatibles con el proyecto.

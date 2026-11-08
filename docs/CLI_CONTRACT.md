@@ -1,7 +1,7 @@
 # Contrato CLI ↔ otros programas (versión 1)
 
 Esta es la interfaz estable que usa la aplicación de escritorio (Hito G del
-[roadmap](../ROADMAP.md)) para controlar la CLI, y que sirve a cualquier otro programa. El esquema
+[roadmap](https://github.com/jmstudio14/OSINEITOR/blob/main/ROADMAP.md)) para controlar la CLI, y que sirve a cualquier otro programa. El esquema
 formal está en [`cli-contract.schema.json`](cli-contract.schema.json) y los tests validan contra él
 la salida real de la CLI.
 
@@ -17,11 +17,13 @@ la salida real de la CLI.
   no depende de la codificación de la tubería. `--json` sale en UTF-8 sin escapar, por eso hay que
   fijar `PYTHONUTF8` y `PYTHONIOENCODING`. Las líneas pueden acabar en `\n` o `\r\n`; usa
   `splitlines()`.
-- stdout es solo para datos. Los errores y diagnósticos humanos van a stderr.
+- stdout es solo para datos. Los errores y diagnósticos humanos van a stderr. Entre ellos, el aviso
+  de la comprobación diaria de datasets al arrancar (rangos de Azure), que nunca cambia stdout ni el
+  código de salida.
 
 ## Scans en streaming: `--ndjson`
 
-Válido en `scan`, `domain`, `ip`, `email` y `username`. Excluyente con `--json`. Una línea JSON
+Válido en `scan`, `domain`, `ip`, `email`, `username` y `person`. Excluyente con `--json`. Una línea JSON
 por evento, con `flush` inmediato. Todos llevan `v` (1), `ts` (ISO 8601 UTC) y `type`.
 
 | `type` | Cuándo | Campos |
@@ -55,9 +57,10 @@ por evento, con `flush` inmediato. Todos llevan `v` (1), `ts` (ISO 8601 UTC) y `
   `scan.start` y en `scan_result`. Lo que cae fuera del alcance no genera evento `entity`: consta
   como `events[]` con `kind: "skipped"`, `module: "engine"` y `message: "fuera de alcance: <clave>"`.
 - `purpose` (texto, o ausente/`null` sin `--purpose`) va en `scan.start` y en `scan_result`. Con
-  `require_purpose` activo, un scan de email o username sin `--purpose` termina con código 2 antes de
+  `require_purpose` activo, un scan de email, username, persona o teléfono sin `--purpose` termina con código 2 antes de
   empezar (no emite `scan.start`).
-- `--quiet` suprime la salida legible (no afecta a `--ndjson` ni a `--json`).
+- `--quiet` suprime la salida legible (no afecta a `--ndjson` ni a `--json`). La opción global
+  `--no-color` desactiva el color de la salida legible.
 
 ## Cancelar: `--control-stdin`
 
@@ -88,9 +91,12 @@ integrarse usa `--ndjson` y `--json`. `--verbose` escribe en `stderr`, así que 
 | `0` | Terminó sin incidencias |
 | `1` | Error interno (excepción no prevista) |
 | `2` | Uso incorrecto o entrada inválida (convención de `click`) |
-| `3` | Terminó, pero algún módulo falló (también `doctor` si alguna fuente falla) |
+| `3` | Terminó, pero algún módulo falló (también `doctor` si alguna fuente falla, `update-data` si algún dataset falla o se rechaza y `watch run` si un objetivo da error o queda truncado o cancelado) |
 | `4` | Terminó **incompleto** por agotar el presupuesto (`--max-entities/--max-requests/--max-time`) |
-| `5` | Solo `verify`: alguna evidencia no coincide con su huella (o con `--digest`) |
+| `5` | Solo `verify`: alguna evidencia o fichero de `capture` no coincide con su huella (o con `--digest`) |
+| `10` | Solo `watch run`: hay alertas nuevas |
+| `11` | Solo `watch run`: alguna alerta no llegó a ningún notificador |
+| `12` | Solo `summarize`: el modelo falló o no produjo ninguna frase con cita válida |
 | `130` | Cancelado |
 
 Si coinciden varios motivos gana el más grave: `130` > `4` > `3`. Un módulo `skipped` no cuenta
@@ -102,17 +108,30 @@ Un único documento JSON por stdout.
 
 | Orden | Esquema (`$defs`) | Contenido |
 |---|---|---|
-| `scan`, `domain`, `ip`, `email`, `username`, `show` | `scan_result` | Resultado completo: `target`, `entities`, `events`, `runs` (estado por módulo), `evidence` (metadatos y SHA-256 de cada respuesta guardada con `--evidence`, sin el cuerpo), `evidence_digest` (huella del conjunto o `null`), `truncated`, `status` |
-| `modules` | `modules_output` | Módulos: `name`, `description`, `consumes`, `produces`, `passive`, `analyzer`, `requires_key`, `key_configured`, `timeout` |
+| `scan`, `domain`, `ip`, `email`, `username`, `person`, `show`, `import nmap`, `import subfinder`, `import maigret` | `scan_result` | Resultado completo: `target`, `entities`, `events`, `runs` (estado por módulo), `evidence` (metadatos y SHA-256 de cada respuesta guardada con `--evidence`, sin el cuerpo), `evidence_digest` (huella del conjunto o `null`), `truncated`, `status` |
+| `modules` | `modules_output` | Módulos: `name`, `description`, `consumes`, `produces`, `passive`, `analyzer`, `plugin`, `requires_key`, `key_configured`, `timeout` |
 | `presets` | `presets_output` | `presets[]` (`name`, `source`, `description`, `depth`, `modules`, `allow_active`, `max_*`) y `errors[]` (ficheros de preset no válidos; con alguno, código 2) |
 | `update-data` | `update_data_output` | Por dataset: `name`, `status` (`actualizado`, `sin cambios`, `rechazado`, `error`), `detail`, `license`, `version`, `sha256`. Código 3 si alguno falla o se rechaza |
 | `history` | `history_output` | Scans guardados |
+| `diff` | `diff_output` | `from` y `to` (`scan_id`, `target`, `started_at`), `same_target`, `added`, `removed` y `changed` (cada elemento: `key`, `type`, `value`; los modificados añaden `changes[]` con `field`, `before` y `after`), `findings` (las mismas tres listas, solo de hallazgos) y `unchanged` |
 | `doctor` | `doctor_output` | `module`, `verdict` (`ok`, `empty`, `fail`, `skipped`, `unchecked`), `detail`, `duration_ms`, `requests` |
 | `config show` | `config_show_output` | Ruta y **nombres** de las keys configuradas (nunca valores, ni enmascarados) |
 | `config set`, `config unset` | `config_key_output` | `name` y `configured`. `config set NOMBRE --stdin` lee el valor de stdin (así la key no aparece en la línea de comandos); también acepta el valor como argumento |
-| `version` | `version_output` | `{"version": "0.2.0"}` |
+| `version` | `version_output` | `{"version": "0.5.0"}` |
 | `export` | `export_output` | `scan_id`, `format`, `path` del informe generado |
-| `verify` | `verify_output` | `scan_id`, `checked`, `ok`, `mismatches` (evidencias alteradas), `evidence_digest` recalculada, `digest_match` (`null` si no se pasó `--digest`). Sale con `5` si algo no coincide |
+| `summarize` | `summary_output` | `scan_id`, `target`, `provider`, `model`, `remote`, `summary` (solo frases válidas), `sentences[]` (`text`, `citations`), `rejected[]` (`text`, `reason`), `citations` (identificador → clave de entidad, solo los citados), `facts`, `omitted`. Ver [IA.md](IA.md) |
+| `watch run` | `watch_output` | `checked_at`, `alerts` (total), `exit_code` y `targets[]` (`target`, `due`, `ran`, `scan_id`, `status`, `baseline`, `pending`, `held`, `alerts[]` con `rule`, `title`, `severity`, `entity`, `value`, `recommendation`, `evidence`; `deliveries[]` con `notifier`, `ok`, `sent`, `error`; `error`). Ver [VIGILANCIA.md](VIGILANCIA.md) |
+| `watch check` | — | `{"targets": n, "notifiers": [...]}`: objetivos válidos y nombres de los notificadores. Aún no tiene definición en el esquema |
+| `watch list` | `watch_list_output` | Por objetivo: `target`, `type`, `every` (segundos), `last_run`, `last_status`, `due`, `notify` |
+| `case show` | `case_show_output` | `id`, `name`, `description`, `tags`, `created_at`, `scans[]` (`id`, `target_type`, `target`, `started_at`, `entities`), `notes[]` (`at`, `text`) y `correlations[]` (`type`, `value`, `cases`, `scans`: datos del caso que figuran también en otros casos) |
+| `case list` | `case_list_output` | Por caso: `name`, `description`, `tags`, `created_at`, `scans` (cuántos) |
+| `timeline` | `timeline_output` | `scan_id`, `target` y `events[]` en orden cronológico: `at` (UTC), `event`, `field`, `entity`, `type`, `value`, `source` (`null` si es la semilla), `future` (posterior al inicio del scan) |
+| `risk` | `risk_output` | `scan_id`, `target` y `assets[]` de mayor a menor riesgo: `asset`, `type`, `value`, `score` (0–100), `level` (`info`…`critical`), `findings` (por severidad), `exposure` (`services`, `vulnerabilities`) y `reasons` |
+| `suggest` | `suggest_output` | `scan_id`, `target` y `suggestions[]`: `entity`, `type`, `value`, `modules` (pasivos), `active_modules` (solo informativo), `sensitive` y `command` (el comando que lo investigaría; nunca se ejecuta; si no hay forma segura de citarlo en Windows, la sugerencia se omite) |
+| `resolve` | `resolve_output` | `scan_id`, `target` y `hypotheses[]` de mayor a menor puntuación: `label` (siempre `hipótesis`), `score` (0–0,95), `accounts` (claves de `profile`) y `signals[]` (`kind`, `value`, `weight`) |
+| `search` | `search_output` | Por coincidencia: `scan_id`, `type`, `value`, `source` (`null` si es la semilla), `confidence`, `target`, `started_at`, `cases` |
+| `purge` | `purge_output` | `before` (fecha de corte), `deleted`, `dry_run` |
+| `verify` | `verify_output` | `scan_id`, `checked`, `ok`, `mismatches` (evidencias y ficheros de `capture` alterados; en estos, `url` es la ruta y `actual` puede ser `ausente`), `evidence_digest` recalculada, `digest_match` (`null` si no se pasó `--digest`). Sale con `5` si algo no coincide |
 
 ## Ejemplo
 

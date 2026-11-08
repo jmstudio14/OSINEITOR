@@ -20,6 +20,9 @@ EXIT_USAGE = 2  # entrada inválida (el que usa click)
 EXIT_MODULE_ERRORS = 3  # terminó, pero algún módulo falló
 EXIT_TRUNCATED = 4  # se agotó el presupuesto: el resultado es incompleto
 EXIT_TAMPERED = 5  # `verify`: alguna evidencia no coincide con su huella
+EXIT_ALERTS = 10  # solo `watch run`: hay alertas nuevas
+EXIT_NOTIFY_FAILED = 11  # solo `watch run`: una alerta no llegó a ningún notificador
+EXIT_AI_FAILED = 12  # solo `summarize`: el modelo falló o no dio ninguna frase válida
 EXIT_CANCELLED = 130  # cancelado por el usuario (convención de Ctrl+C)
 
 

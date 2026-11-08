@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+from pathlib import Path
 
 import pytest
 from rich.console import Console
@@ -272,6 +273,23 @@ def test_export_default_path(modules, db, tmp_path, monkeypatch):
     result = runner.invoke(app, ["export", "1", "--db", db])
     assert result.exit_code == 0
     assert (tmp_path / "reports" / "osineitor-1-example.com.html").exists()
+
+
+def test_export_default_path_stays_in_reports(tmp_path, monkeypatch):
+    """Una semilla URL con `..` no puede escribir fuera de `reports/`."""
+    from osineitor.models import Entity, EntityType, ScanResult
+    from osineitor.storage import Storage
+
+    monkeypatch.chdir(tmp_path)
+    db = tmp_path / "s.db"
+    target = Entity(type=EntityType.URL, value="https://example.com/../../../../fuera")
+    with Storage(db) as storage:
+        scan_id = storage.save(ScanResult(target=target, depth=1))
+    result = runner.invoke(app, ["export", str(scan_id), "-f", "json", "--db", str(db), "--json"])
+    assert result.exit_code == 0, result.output
+    written = Path(json.loads(result.stdout)["path"]).resolve()
+    assert written.parent == (tmp_path / "reports").resolve()
+    assert not (tmp_path.parent / "fuera.json").exists()
 
 
 def test_export_rejects_unknown_format(modules, db):
@@ -583,3 +601,27 @@ def test_scan_draws_no_bar_in_machine_or_quiet_modes(modules, monkeypatch, flag)
     out, err = _terminals(monkeypatch)
     runner.invoke(app, ["domain", "example.com", "--no-save", flag])
     assert err.getvalue() == ""
+
+
+def test_render_neutralises_markup_and_terminal_escapes(monkeypatch):
+    """Los valores son de terceros: ni `[link=…]` oculto, ni `[/]` que rompa, ni ESC/OSC."""
+    from osineitor.models import Entity, ScanEvent, ScanResult
+
+    out = io.StringIO()
+    monkeypatch.setattr(cli, "console", Console(file=out, width=300, force_terminal=False))
+    hostile = Entity(
+        type=EntityType.RECORD,
+        value="[link=https://evil.test]inofensivo[/link] [/]",
+        source="m",
+        data={"title": "\x1b]0;titulo-falso\x07\x1b[2Jborrado"},
+    )
+    result = ScanResult(
+        target=Entity(type=EntityType.DOMAIN, value="example.com"),
+        depth=1,
+        entities=[hostile],
+        events=[ScanEvent(kind="error", module="m", message="x", entity="record:[/]")],
+    )
+    cli.render(result)
+    text = out.getvalue()
+    assert "[link=https://evil.test]" in text and "\x1b" not in text and "\x07" not in text
+    assert "borrado" in text

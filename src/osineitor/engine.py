@@ -353,7 +353,8 @@ class Engine:
                 self._record(result, module, entity, stats, started, "skipped", "cancelado")
                 raise
             except Exception as exc:  # un módulo roto no debe tumbar el scan
-                status, message = "error", f"{type(exc).__name__}: {exc}"
+                # El texto puede traer una URL con su key: se guarda en la BD y lo ve la GUI.
+                status, message = "error", logs.scrub(f"{type(exc).__name__}: {exc}")
                 event_kind = "error"
         self._record(result, module, entity, stats, started, status, message, len(found))
         if event_kind:

@@ -57,8 +57,17 @@ importa únicamente `detect_type` y `__version__`); Qt solo en `osineitor_gui/ui
 reglas de seguridad (confirmar `--active`) viven en `ScanRequest`, no en las vistas; las API keys
 viajan por stdin; textos en español con `tr()` en `ui/` (la capa sin Qt pasa textos ya hechos).
 
-Estado: la capa sin Qt (PR-E1) está hecha; `ui/` y `app.py` (PR-E2) están pendientes y no existen
-aún. Instala PySide6 con `pip install -e '.[gui]'` (no viene en `.[dev]`).
+Estado: la capa sin Qt (PR-E1) está hecha y PR-E2 está en curso: `app.py` y `ui/` ya tienen la
+ventana principal (G2), el scan en vivo (G3), el historial con detalle y exportación (G4) y el
+panel de salud (G5), los ajustes con API keys (G6) y el aviso legal con las confirmaciones de
+`--active` (G7). El instalador (G8, `packaging/windows/`) está escrito; falta ejecutarlo en la CI y
+las pruebas manuales en Windows (G9). Siguen pendientes la instancia única y exponer `--scope` y
+`--evidence`. Instala PySide6 con `pip install -e '.[gui]'` y, para los tests de Qt, `'.[dev,gui-test]'`.
+
+Aspecto: colores y tipografía viven en `ui/theme.py` y `ui/assets/theme.qss`. Nada de
+`setStyleSheet` en los widgets ni colores sueltos: propiedades `role`/`kind`/`tone`
+(`widgets.set_style`). Un `QLabel` o tooltip con datos de terceros o stderr va siempre en texto
+plano (`widgets.label`, `widgets.safe_tooltip`). Con proxy, usa `tables.source_row`.
 
 ## Límites
 
@@ -66,3 +75,9 @@ aún. Instala PySide6 con `pip install -e '.[gui]'` (no viene en `.[dev]`).
   autenticación, ni técnicas ofensivas. Ver [docs/USO_RESPONSABLE.md](docs/USO_RESPONSABLE.md).
 - `src/osineitor/modules/username/data/sites.json` es un fichero de terceros (Sherlock, MIT): no
   editarlo a mano; se actualiza descargándolo de nuevo.
+- `src/osineitor/modules/username/data/wmn.json` es de terceros (WhatsMyName, CC BY-SA 4.0): se
+  conserva sin modificar.
+
+# graphify
+- **graphify** (`.claude/skills/graphify/SKILL.md`) - any input to knowledge graph. Trigger: `/graphify`
+When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.

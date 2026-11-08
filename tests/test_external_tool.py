@@ -18,7 +18,7 @@ from osineitor.doctor import run_doctor
 from osineitor.engine import Engine
 from osineitor.http import HttpClient
 from osineitor.models import Entity, EntityType
-from osineitor.modules._external import ExternalToolModule, json_documents
+from osineitor.modules._external import ExternalToolModule, find_executable, json_documents
 from osineitor.modules.base import Context
 
 SEED = Entity(type=EntityType.DOMAIN, value="example.com")
@@ -55,6 +55,21 @@ def adapter(script: str = NDJSON, **attrs) -> type[ExternalToolModule]:
 
 async def scan(ctx, cls, seed=SEED):
     return await Engine(ctx, [cls]).run(seed)
+
+
+async def test_an_exit_code_declared_as_valid_is_not_a_failure(ctx):
+    script = "import json, sys\nprint(json.dumps({'host': 'a.' + sys.argv[1]}))\nsys.exit(1)\n"
+    tolerant = await scan(ctx, adapter(script, ok_exit_codes=(0, 1)))
+    assert [e.value for e in tolerant.entities] == ["a.example.com"]
+    strict = await scan(ctx, adapter(script))
+    assert strict.entities == []
+    assert strict.runs[-1].status == "error"
+
+
+async def test_it_can_pass_input_through_stdin(ctx):
+    module = adapter()(ctx)
+    script = "import sys; print(sys.stdin.read().upper())"
+    assert (await module._exec([sys.executable, "-c", script], stdin=b"hola")).strip() == "HOLA"
 
 
 async def test_it_runs_the_tool_and_parses_its_json_lines(ctx):
@@ -204,3 +219,22 @@ def test_the_discovery_does_not_pick_up_the_base_class():
 
     assert "ExternalToolModule" not in {m.__name__ for m in registry.discover()}
     assert json.dumps(sorted(m.name for m in registry.discover()))  # y no falla al importarlo
+
+
+def test_executable_in_the_current_directory_is_not_used(tmp_path, monkeypatch):
+    """En Windows `shutil.which` mira antes la carpeta actual: un binario plantado no cuenta."""
+    import os
+
+    planted, installed = tmp_path / "descargas", tmp_path / "bin"
+    planted.mkdir()
+    installed.mkdir()
+    name = "subfinder.exe" if os.name == "nt" else "subfinder"
+    for folder in (planted, installed):
+        (folder / name).write_text("x")
+        (folder / name).chmod(0o755)
+    monkeypatch.chdir(planted)
+    monkeypatch.setenv("PATH", os.pathsep.join(["", ".", str(installed)]))
+    assert find_executable(name) == str(installed / name)
+    monkeypatch.setenv("PATH", os.pathsep.join(["", "."]))
+    assert find_executable(name) is None
+    assert find_executable(sys.executable) == sys.executable  # una ruta exacta sigue valiendo

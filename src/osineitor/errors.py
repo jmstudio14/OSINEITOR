@@ -29,3 +29,7 @@ class BudgetExceeded(Exception):
 
 class InvalidEntityValue(ValueError):
     """El valor no es válido para el tipo de entidad indicado."""
+
+
+class ExportUnavailable(RuntimeError):
+    """El formato de exportación necesita una dependencia opcional que no está instalada."""

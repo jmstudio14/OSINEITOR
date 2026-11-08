@@ -1,0 +1,43 @@
+site_name: OSINEITOR
+site_description: CLI OSINT modular para dominios, IPs, emails y usernames
+repo_url: https://github.com/jmstudio14/OSINEITOR
+edit_uri: edit/main/docs/
+docs_dir: docs
+theme:
+  name: readthedocs
+  language: es
+hooks:
+  - scripts/mkdocs_hooks.py
+# Los planes de cada fase son notas de desarrollo y enlazan a ficheros fuera del sitio.
+exclude_docs: |
+  plans/
+nav:
+  - Inicio: index.md
+  - Guía de usuario:
+      - Uso: USO.md
+      - Tutorial: TUTORIAL.md
+      - Vigilancia continua: VIGILANCIA.md
+      - Asistencia con IA: IA.md
+      - Servidor MCP: MCP.md
+      - Uso responsable: USO_RESPONSABLE.md
+  - Referencia:
+      - Módulos: MODULES.md
+      - Módulos (generada): referencia-modulos.md
+      - Contrato de la CLI: CLI_CONTRACT.md
+      - Librería y plugins: API.md
+      - Evidencias: EVIDENCIA.md
+      - Cobertura RDAP: RDAP_COBERTURA.md
+      - Falsos positivos de usernames: FALSOS_POSITIVOS.md
+      - Falsos positivos de usernames: FALSOS_POSITIVOS.md
+  - Proyecto:
+      - Arquitectura: ARCHITECTURE.md
+      - Estabilidad: ESTABILIDAD.md
+      - Migración desde 0.x: MIGRACION.md
+      - Publicación: PUBLICACION.md
+      - Aplicación de escritorio: GUI.md
+      - Pruebas en Windows: PRUEBAS_WINDOWS.md
+markdown_extensions:
+  - tables
+  - toc:
+      # Los enlaces internos usan las anclas de GitHub, que conservan los acentos.
+      slugify: !!python/name:markdown.extensions.toc.slugify_unicode

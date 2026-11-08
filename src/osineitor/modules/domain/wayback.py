@@ -26,6 +26,7 @@ class Wayback(Module):
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.RECORD, EntityType.URL})
     canary = "example.com"
+    min_interval = 1.0  # límite duro del CDX de archive.org: 60/min
     timeout = 240.0  # su consulta admite 60 s × 3 intentos
 
     def accepts(self, entity: Entity) -> bool:

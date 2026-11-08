@@ -1,0 +1,29 @@
+{
+  "module": "http_fingerprint",
+  "target": "example.org",
+  "recorded": "2026-11-05",
+  "entities": 1,
+  "sites": null,
+  "http": [
+    {
+      "method": "GET",
+      "url": "https://example.org",
+      "status": 200,
+      "headers": {
+        "date": "Thu, 05 Nov 2026 17:14:38 GMT",
+        "content-type": "text/html; charset=utf-8",
+        "connection": "keep-alive",
+        "server": "cloudflare",
+        "last-modified": "Wed, 04 Nov 2026 22:19:53 GMT",
+        "allow": "GET, HEAD",
+        "age": "11187",
+        "cache-control": "max-age=14400",
+        "cf-cache-status": "HIT",
+        "cf-ray": "a55d7ef598097954-MAD",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+    }
+  ],
+  "dns": []
+}

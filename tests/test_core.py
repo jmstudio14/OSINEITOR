@@ -157,3 +157,17 @@ def test_detect_type():
     assert detect_type("john_doe") == EntityType.USERNAME
     # Ambiguo por diseño: parece un dominio. Para forzarlo, `osineitor username john.doe`.
     assert detect_type("john.doe") == EntityType.DOMAIN
+
+
+def test_detect_type_never_touches_unc_paths(monkeypatch):
+    """Comprobar si `\\\\host\\share` existe abriría SMB hacia ese host (fuga del hash NTLM)."""
+    import os
+
+    from osineitor.models import detect_type
+
+    touched: list[str] = []
+    monkeypatch.setattr(os.path, "isfile", lambda path: touched.append(path) or True)
+    for value in (r"\\atacante.test\s\x", "//atacante.test/s/x", r"\/atacante.test\s"):
+        assert detect_type(value) != EntityType.FILE
+    assert touched == []
+    assert detect_type("./informe.pdf") == EntityType.FILE  # las rutas normales siguen valiendo

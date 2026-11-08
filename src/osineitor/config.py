@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import getpass
 import os
+import re
 import subprocess
 import tomllib
 import warnings
@@ -77,7 +78,7 @@ class Config:
         path.parent.mkdir(parents=True, exist_ok=True)
         lines = ["[settings]", f"timeout = {self.timeout}", f"user_agent = {_q(self.user_agent)}"]
         lines.append(f"require_purpose = {str(self.require_purpose).lower()}")
-        lines += ["", "[keys]"] + [f"{k} = {_q(v)}" for k, v in sorted(self.keys.items())]
+        lines += ["", "[keys]"] + [f"{_q(k)} = {_q(v)}" for k, v in sorted(self.keys.items())]
         path.touch(mode=0o600, exist_ok=True)  # en POSIX nace privado, sin ventana con la umask
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         try:
@@ -87,13 +88,30 @@ class Config:
         return path
 
 
+def private_file(path: Path) -> None:
+    """En POSIX, deja `path` (creándolo si no existe) legible solo por el usuario: 0600.
+
+    Para las bases de datos de scans y caché. En Windows no hace falta: viven en `%LOCALAPPDATA%`,
+    cuya ACL ya es solo del usuario.
+    """
+    if os.name == "nt":
+        return
+    try:
+        path.touch(mode=0o600, exist_ok=True)  # nace privado, sin ventana con la umask
+        path.chmod(0o600)
+    except OSError as exc:
+        warnings.warn(f"No se pudieron restringir los permisos de {path}: {exc}", stacklevel=2)
+
+
 def _restrict(path: Path) -> None:
     """Deja el fichero legible solo por el usuario actual (ACL en Windows, 0600 en el resto)."""
     if os.name == "nt":
         # `chmod` no sirve en Windows: solo cambia el atributo de solo lectura.
         user = f"{getpass.getuser()}:(R,W)"
+        # Ruta absoluta: por nombre, Windows lo buscaría antes en la carpeta actual.
+        icacls = os.environ.get("SYSTEMROOT", "C:\\Windows") + "\\System32\\icacls.exe"
         subprocess.run(
-            ["icacls", str(path), "/inheritance:r", "/grant:r", user],
+            [icacls, str(path), "/inheritance:r", "/grant:r", user],
             check=True,
             capture_output=True,
         )
@@ -102,4 +120,6 @@ def _restrict(path: Path) -> None:
 
 
 def _q(value: str) -> str:
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    """Cadena básica de TOML. Los caracteres de control dejarían el fichero ilegible."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return '"' + re.sub(r"[\x00-\x1f\x7f]", lambda m: f"\\u{ord(m[0]):04x}", escaped) + '"'

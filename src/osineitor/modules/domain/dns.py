@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import secrets
+
 import dns.exception
 import dns.resolver
 
 from osineitor.models import Entity, EntityType
-from osineitor.modules.base import Module, ModuleError
+from osineitor.modules.base import Context, Module, ModuleError
 
 RECORD_TYPES = ("A", "AAAA", "CNAME", "MX", "NS", "TXT", "CAA")
 
@@ -16,9 +18,13 @@ class Dns(Module):
     authority = "authoritative"
     description = "Registros A/AAAA/CNAME/MX/NS/TXT/CAA, SPF y DMARC"
     consumes = frozenset({EntityType.DOMAIN})
-    produces = frozenset({EntityType.IP, EntityType.RECORD})
+    produces = frozenset({EntityType.IP, EntityType.RECORD, EntityType.DOMAIN})
     canary = "example.com"
     direct_dns = True
+
+    def __init__(self, ctx: Context) -> None:
+        super().__init__(ctx)
+        self._wildcards: dict[str, frozenset[str]] = {}  # zona → IPs de una etiqueta aleatoria
 
     async def _query(
         self, name: str, rtype: str, refused: set[str] | None = None
@@ -50,6 +56,20 @@ class Dns(Module):
         self.record_evidence(f"dns://{name}/{rtype}", "\n".join(values))
         return values
 
+    async def _wildcard_addresses(self, zone: str) -> frozenset[str]:
+        """IPs a las que resuelve una etiqueta aleatoria de `zone`: vacío si no hay wildcard.
+
+        Se sondea una vez por zona y escaneo: un subdominio que resuelve solo a esas IPs no
+        demuestra que exista.
+        """
+        if zone not in self._wildcards:
+            probe = f"osineitor-{secrets.token_hex(8)}.{zone}"
+            found: set[str] = set()
+            for rtype in ("A", "AAAA"):
+                found.update(await self._query(probe, rtype) or [])
+            self._wildcards[zone] = frozenset(found)
+        return self._wildcards[zone]
+
     async def run(self, entity: Entity) -> list[Entity]:
         refused: set[str] = set()
         answers = {rtype: await self._query(entity.value, rtype, refused) for rtype in RECORD_TYPES}
@@ -71,6 +91,13 @@ class Dns(Module):
         if not records and not dmarc:
             return []
 
+        addresses = records.get("A", []) + records.get("AAAA", [])
+        wildcard = False
+        if entity.data.get("subdomain") and addresses:
+            zone = entity.value.split(".", 1)[1]
+            wild = await self._wildcard_addresses(zone)
+            wildcard = bool(wild) and set(addresses) <= wild
+
         out = [
             self.emit(
                 entity,
@@ -79,8 +106,14 @@ class Dns(Module):
                 **records,
                 SPF=spf[0] if spf else None,
                 DMARC=dmarc[0] if dmarc else None,
+                wildcard=True if wildcard else None,
             )
         ]
-        for ip in records.get("A", []) + records.get("AAAA", []):
+        if wildcard:
+            # Se marca el propio subdominio (el motor funde los datos) y no se pivota a las IPs
+            # del wildcard: no dicen nada del objetivo y cada una costaría consultas a terceros.
+            out.append(self.emit(entity, EntityType.DOMAIN, entity.value, wildcard=True))
+            return out
+        for ip in addresses:
             out.append(self.emit(entity, EntityType.IP, ip, resolved_from=entity.value))
         return out

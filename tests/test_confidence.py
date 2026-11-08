@@ -85,6 +85,12 @@ def test_every_module_declares_a_valid_authority():
         "email_validate",
         "mail_security",
         "whois",
+        "web_meta",
+        "takeover",
+        "tech_detect",
+        "analytics_ids",
+        "ptr",
+        "capture",
     }
 
 

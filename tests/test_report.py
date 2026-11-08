@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 
 import pytest
 from typer.testing import CliRunner
@@ -44,6 +45,29 @@ def test_markdown_escapes_pipes():
     assert "a\\|b" in md
     assert "**A**: 1.2.3.4" in md
     assert "SPF" not in md  # vacíos omitidos
+
+
+def test_markdown_does_not_pass_html_links_or_new_lines_through():
+    """Un visor con HTML (MkDocs, Obsidian…) ejecutaría `onerror` o seguiría `javascript:`."""
+    hostile = ScanResult(
+        target=Entity(type=EntityType.DOMAIN, value="example.com"),
+        depth=1,
+        entities=[
+            Entity(
+                type=EntityType.RECORD,
+                value="<img src=x onerror=alert(1)>",
+                source="m",
+                data={"t": "[pulsa](javascript:alert(1))", "c": "`fuera` del\r# código"},
+            )
+        ],
+        events=[ScanEvent(kind="error", module="m", message="<b>x</b>\n# título", entity="a")],
+    )
+    for fmt in ("md", "attack-surface", "executive"):
+        text = report.render(hostile, fmt)
+        unescaped = re.findall(r"(?<!\\)(?:<img|<b>|\]\(javascript:)", text)
+        assert unescaped == [] and "\n# título" not in text and "\r" not in text
+    md = report.render(hostile, "md")
+    assert "\\<img src=x onerror=alert(1)\\>" in md and "\\[pulsa\\](javascript:alert(1))" in md
 
 
 SEEN_BY_TWO = ScanResult(
@@ -96,7 +120,9 @@ def test_show_lists_every_source_in_the_table(tmp_path):
 
 def test_html_escapes_content():
     html = report.render(RESULT, "html")
-    assert "<script>" not in html.split("</style>", 1)[1]
+    # Salvo los <script> propios del grafo, el contenido de terceros no puede traer etiquetas.
+    page = re.sub(r"<script.*?</script>", "", html.split("</style>", 1)[1], flags=re.S)
+    assert "<script>" not in page
     assert "&lt;script&gt;" in html
     assert "timeout &lt;x&gt;" in html
 

@@ -71,6 +71,10 @@ class CliApi:
     def show(self, scan_id: int) -> dict[str, Any]:
         return self.run(["show", str(scan_id), "--json"])
 
+    def search(self, value: str) -> list[dict[str, Any]]:
+        """Busca como subcadena en los scans guardados. Tras `--`: un dato nunca es una opción."""
+        return self.run(["search", "--contains", "--json", "--", value])
+
     def doctor(
         self, modules: Sequence[str] = (), *, active: bool = False, timeout: float = 300.0
     ) -> list[dict[str, Any]]:

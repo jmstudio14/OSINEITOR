@@ -671,6 +671,9 @@
           },
           "analyzer": {
             "type": "boolean"
+          },
+          "plugin": {
+            "type": "boolean"
           }
         },
         "additionalProperties": true
@@ -1065,6 +1068,971 @@
             "boolean",
             "null"
           ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "diff_item": {
+      "type": "object",
+      "required": [
+        "key",
+        "type",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "field"
+            ],
+            "properties": {
+              "field": {
+                "type": "string"
+              },
+              "before": {},
+              "after": {}
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "diff_output": {
+      "type": "object",
+      "required": [
+        "from",
+        "to",
+        "same_target",
+        "added",
+        "removed",
+        "changed",
+        "findings",
+        "unchanged"
+      ],
+      "properties": {
+        "from": {
+          "type": "object",
+          "required": [
+            "scan_id",
+            "target",
+            "started_at"
+          ],
+          "properties": {
+            "scan_id": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "target": {
+              "type": "string"
+            },
+            "started_at": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        },
+        "to": {
+          "type": "object",
+          "required": [
+            "scan_id",
+            "target",
+            "started_at"
+          ],
+          "properties": {
+            "scan_id": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "target": {
+              "type": "string"
+            },
+            "started_at": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        },
+        "same_target": {
+          "type": "boolean"
+        },
+        "added": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diff_item"
+          }
+        },
+        "removed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diff_item"
+          }
+        },
+        "changed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diff_item"
+          }
+        },
+        "findings": {
+          "type": "object",
+          "required": [
+            "added",
+            "removed",
+            "changed"
+          ],
+          "properties": {
+            "added": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/diff_item"
+              }
+            },
+            "removed": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/diff_item"
+              }
+            },
+            "changed": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/diff_item"
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        "unchanged": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": true
+    },
+    "watch_alert": {
+      "type": "object",
+      "required": [
+        "rule",
+        "title",
+        "severity",
+        "entity",
+        "value",
+        "recommendation",
+        "evidence"
+      ],
+      "properties": {
+        "rule": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "entity": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "recommendation": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "watch_target": {
+      "type": "object",
+      "required": [
+        "target",
+        "due",
+        "ran",
+        "scan_id",
+        "status",
+        "baseline",
+        "alerts",
+        "deliveries",
+        "error"
+      ],
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "due": {
+          "type": "boolean"
+        },
+        "ran": {
+          "type": "boolean"
+        },
+        "scan_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "baseline": {
+          "type": "boolean"
+        },
+        "alerts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/watch_alert"
+          }
+        },
+        "deliveries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "notifier",
+              "ok",
+              "sent",
+              "error"
+            ],
+            "properties": {
+              "notifier": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "sent": {
+                "type": "integer"
+              },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "pending": {
+          "type": "integer",
+          "description": "Entidades nuevas que esperan una segunda ejecución (`confirm`)."
+        },
+        "held": {
+          "type": "integer",
+          "description": "Alertas retenidas porque todos sus notificadores estaban en ventana de silencio."
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "watch_output": {
+      "type": "object",
+      "required": [
+        "checked_at",
+        "alerts",
+        "exit_code",
+        "targets"
+      ],
+      "properties": {
+        "checked_at": {
+          "type": "string"
+        },
+        "alerts": {
+          "type": "integer"
+        },
+        "exit_code": {
+          "type": "integer"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/watch_target"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "watch_list_output": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "target",
+          "type",
+          "every",
+          "last_run",
+          "last_status",
+          "due",
+          "notify"
+        ],
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "every": {
+            "type": "number"
+          },
+          "last_run": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due": {
+            "type": "boolean"
+          },
+          "notify": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "purge_output": {
+      "type": "object",
+      "required": [
+        "before",
+        "deleted",
+        "dry_run"
+      ],
+      "properties": {
+        "before": {
+          "type": "string"
+        },
+        "deleted": {
+          "type": "integer"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "summary_output": {
+      "type": "object",
+      "required": [
+        "scan_id",
+        "target",
+        "provider",
+        "model",
+        "remote",
+        "summary",
+        "sentences",
+        "rejected",
+        "citations",
+        "facts",
+        "omitted"
+      ],
+      "properties": {
+        "scan_id": {
+          "type": "integer"
+        },
+        "target": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "boolean"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "sentences": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "text",
+              "citations"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "citations": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "pattern": "^E[0-9]+$"
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "rejected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "text",
+              "reason"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "citations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "facts": {
+          "type": "integer"
+        },
+        "omitted": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": true
+    },
+    "case_show_output": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "description",
+        "tags",
+        "created_at",
+        "scans",
+        "notes",
+        "correlations"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "scans": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "target_type",
+              "target",
+              "started_at",
+              "entities"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "target_type": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string"
+              },
+              "started_at": {
+                "type": "string"
+              },
+              "entities": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "text"
+            ],
+            "properties": {
+              "at": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "correlations": {
+          "description": "Datos identificadores del caso que también figuran en scans de otros casos.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "type",
+              "value",
+              "cases",
+              "scans"
+            ],
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "cases": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "scans": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "case_list_output": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "tags",
+          "created_at",
+          "scans"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "scans": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "search_output": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "scan_id",
+          "type",
+          "value",
+          "source",
+          "confidence",
+          "target",
+          "started_at",
+          "cases"
+        ],
+        "properties": {
+          "scan_id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "null si es la semilla del scan."
+          },
+          "confidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "timeline_output": {
+      "type": "object",
+      "required": [
+        "scan_id",
+        "target",
+        "events"
+      ],
+      "properties": {
+        "scan_id": {
+          "type": "integer"
+        },
+        "target": {
+          "type": "string"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "event",
+              "field",
+              "entity",
+              "type",
+              "value",
+              "source",
+              "future"
+            ],
+            "properties": {
+              "at": {
+                "type": "string",
+                "description": "Fecha ISO 8601 en UTC."
+              },
+              "event": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string"
+              },
+              "entity": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "source": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "future": {
+                "type": "boolean",
+                "description": "Posterior al inicio del scan."
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "risk_output": {
+      "type": "object",
+      "required": [
+        "scan_id",
+        "target",
+        "assets"
+      ],
+      "properties": {
+        "scan_id": {
+          "type": "integer"
+        },
+        "target": {
+          "type": "string"
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "asset",
+              "type",
+              "value",
+              "score",
+              "level",
+              "findings",
+              "exposure",
+              "reasons"
+            ],
+            "properties": {
+              "asset": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "score": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "level": {
+                "enum": [
+                  "info",
+                  "low",
+                  "medium",
+                  "high",
+                  "critical"
+                ]
+              },
+              "findings": {
+                "description": "Hallazgos por severidad.",
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "exposure": {
+                "type": "object",
+                "required": [
+                  "services",
+                  "vulnerabilities"
+                ],
+                "properties": {
+                  "services": {
+                    "type": "integer"
+                  },
+                  "vulnerabilities": {
+                    "type": "integer"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "resolve_output": {
+      "type": "object",
+      "required": [
+        "scan_id",
+        "target",
+        "hypotheses"
+      ],
+      "properties": {
+        "scan_id": {
+          "type": "integer"
+        },
+        "target": {
+          "type": "string"
+        },
+        "hypotheses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "label",
+              "score",
+              "accounts",
+              "signals"
+            ],
+            "properties": {
+              "label": {
+                "const": "hipótesis"
+              },
+              "score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "accounts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "signals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "kind",
+                    "value",
+                    "weight"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "email",
+                        "username",
+                        "display_name"
+                      ]
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "weight": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "suggest_output": {
+      "type": "object",
+      "required": [
+        "scan_id",
+        "target",
+        "suggestions"
+      ],
+      "properties": {
+        "scan_id": {
+          "type": "integer"
+        },
+        "target": {
+          "type": "string"
+        },
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "entity",
+              "type",
+              "value",
+              "modules",
+              "active_modules",
+              "sensitive",
+              "command"
+            ],
+            "properties": {
+              "entity": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "modules": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "active_modules": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "sensitive": {
+                "type": "boolean"
+              },
+              "command": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
         }
       },
       "additionalProperties": true

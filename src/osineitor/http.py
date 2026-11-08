@@ -23,6 +23,13 @@ log = logs.get("http")
 RETRY_STATUS = {429, 500, 502, 503, 504}
 MAX_REDIRECTS = 10
 GUARD_TTL = 60.0  # segundos que se recuerda que un host ya se comprobó
+MAX_RESPONSE = 64 * 1024 * 1024  # bytes ya descomprimidos: una bomba gzip no agota la memoria
+# Sustituye al cuerpo en la evidencia de una respuesta que no se debe guardar.
+OMITTED_BODY = b"(cuerpo omitido: puede contener secretos de terceros)"
+
+
+class ResponseTooLarge(httpx.RequestError):
+    """La respuesta supera `MAX_RESPONSE`. No es un fallo de transporte: no se reintenta."""
 
 
 def validate_proxy(value: str) -> str:
@@ -62,6 +69,10 @@ class SourceHttp:
     def proxy(self) -> str | None:
         return self._client.proxy
 
+    @property
+    def guarded(self) -> bool:
+        return self._client.guarded
+
     async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         return await self._client.request(
             method,
@@ -96,12 +107,15 @@ class HttpClient:
     ) -> None:
         self.proxy = proxy
         # Las redirecciones las sigue `request()` para poder comprobar cada salto.
+        # `trust_env=False`: un `HTTPS_PROXY` del entorno desviaría el tráfico sin que la guardia
+        # lo sepa (resolvería nombres que el proxy no resuelve). Solo cuenta `--proxy`.
         self._client = httpx.AsyncClient(
             timeout=config.timeout,
             headers={"User-Agent": config.user_agent},
             follow_redirects=False,
             transport=transport,
             proxy=proxy,
+            trust_env=False,
         )
         self._host_limits: dict[str, asyncio.Semaphore] = defaultdict(
             lambda: asyncio.Semaphore(per_host)
@@ -116,6 +130,11 @@ class HttpClient:
         self._last_call: dict[str, float] = {}
         self._source_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._secrets: list[str] | None = None  # se leen la primera vez que hacen falta
+
+    @property
+    def guarded(self) -> bool:
+        """`False` con `--allow-private`: lo que salga fuera de este cliente lo debe respetar."""
+        return self._guard
 
     def bind(self, source: str, *, cache_ttl: int = 0, min_interval: float = 0.0) -> SourceHttp:
         return SourceHttp(self, source, cache_ttl=cache_ttl, min_interval=min_interval)
@@ -138,7 +157,7 @@ class HttpClient:
         await netguard.ensure_public(url, resolve=not self.proxy)
         self._safe_hosts[host] = now + GUARD_TTL
 
-    def _capture(self, method: str, response: httpx.Response) -> None:
+    def _capture(self, method: str, response: httpx.Response, *, keep_body: bool = True) -> None:
         """Guarda la respuesta definitiva de un salto cuando el scan pide evidencias."""
         stats = current_stats.get()
         if stats is None or stats.evidence is None:
@@ -149,17 +168,35 @@ class HttpClient:
             capture(
                 "http",
                 str(response.url),
-                response.content,
+                response.content if keep_body else OMITTED_BODY,
                 method=method.upper(),
                 status=response.status_code,
                 secrets=self._secrets,
             )
         )
 
+    async def _fetch(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        """Petición con el cuerpo leído por partes y cortado al pasar de `MAX_RESPONSE`."""
+        request = self._client.build_request(method, url, **kwargs)
+        response = await self._client.send(request, stream=True)
+        body = bytearray()
+        try:
+            async for chunk in response.aiter_bytes():
+                body += chunk
+                if len(body) > MAX_RESPONSE:
+                    raise ResponseTooLarge(
+                        f"la respuesta supera {MAX_RESPONSE // 2**20} MiB", request=request
+                    )
+        finally:
+            await response.aclose()
+        response._content = bytes(body)  # lo mismo que hace `aread()` al leerlo entero
+        return response
+
     async def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         host = httpx.URL(url).host
         source = kwargs.pop("source", None)
         interval = kwargs.pop("min_interval", 0.0)
+        keep_body = kwargs.pop("evidence_body", True)
         attempt = 0
         while True:
             if self.budget:
@@ -172,12 +209,12 @@ class HttpClient:
             fields = {"method": method, "url": logs.redact_url(url), "source": source}
             try:
                 async with self._host_limits[host]:
-                    response = await self._client.request(method, url, **kwargs)
+                    response = await self._fetch(method, url, **kwargs)
                 fields |= {"status": response.status_code, "attempt": attempt}
                 fields["ms"] = round((time.monotonic() - started) * 1000)
                 log.debug("http", extra={"fields": fields})
                 if response.status_code not in RETRY_STATUS or attempt >= self._retries:
-                    self._capture(method, response)
+                    self._capture(method, response, keep_body=keep_body)
                     return response
             except httpx.TransportError as exc:
                 fields |= {"error": type(exc).__name__, "attempt": attempt}

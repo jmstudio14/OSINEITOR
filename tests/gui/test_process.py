@@ -182,7 +182,7 @@ def test_locator_prefers_packaged_exe_then_module_then_path(tmp_path):
     if os.name != "nt":
         sibling.rename(tmp_path / "osineitor")
     assert locate_cli(frozen=True, executable=str(exe))[0].startswith(str(tmp_path))
-    assert locate_cli(frozen=False, executable="/py")[:2] == ["/py", "-m"]
+    assert locate_cli(frozen=False, executable="/py")[:3] == ["/py", "-P", "-m"]
     # Empaquetado pero sin el ejecutable de la CLI junto al de la aplicación: cae al PATH.
     assert locate_cli(
         frozen=True,
@@ -193,7 +193,60 @@ def test_locator_prefers_packaged_exe_then_module_then_path(tmp_path):
         locate_cli(frozen=True, executable=str(tmp_path / "otra" / "x.exe"), which=lambda n: None)
 
 
+def test_path_lookup_ignores_the_current_directory(tmp_path, monkeypatch):
+    """En Windows `shutil.which` mira antes la carpeta actual; aquí solo cuenta el PATH."""
+    import os
+
+    from osineitor_gui.cli_locator import which_on_path
+
+    planted, installed = tmp_path / "trampa", tmp_path / "bin"
+    planted.mkdir()
+    installed.mkdir()
+    name = "herramienta.exe" if os.name == "nt" else "herramienta"
+    for folder in (planted, installed):
+        (folder / name).write_text("x")
+        (folder / name).chmod(0o755)
+    monkeypatch.chdir(planted)
+    monkeypatch.setenv("PATH", os.pathsep.join(["", ".", str(installed)]))
+    assert which_on_path(name) == str(installed / name)
+    monkeypatch.setenv("PATH", os.pathsep.join(["", "."]))
+    assert which_on_path(name) is None
+
+
 def test_missing_cli_command_fails_loudly():
     proc = CliProcess([], cli=["/no/existe/osineitor"])
     with pytest.raises(OSError):
         proc.start()
+
+
+# --- propósito del scan con `require_purpose` activo (G7) -------------------------------------
+
+
+def email_scan(purpose, monkeypatch):
+    monkeypatch.setenv("OSINEITOR_REQUIRE_PURPOSE", "1")
+    args = ScanRequest("a@example.com", kind="email", no_save=True, purpose=purpose).to_args()
+    return launch(args)
+
+
+def test_email_scan_without_purpose_fails_with_the_cli_message(monkeypatch):
+    proc, rec = email_scan(None, monkeypatch)
+    assert proc.wait(30) == 2
+    session = ScanSession()
+    session.begin()
+    session.process_exited(2, proc.stderr_tail)
+    assert session.state == "failed" and "--purpose" in session.message
+
+
+def test_email_scan_with_purpose_succeeds(monkeypatch):
+    proc, rec = email_scan("auditoría autorizada", monkeypatch)
+    assert proc.wait(30) == EXIT_OK
+    kinds = [type(e).__name__ for e in rec.events]
+    assert "ScanStart" in kinds and kinds[-1] == "ScanEnd"
+
+
+def test_the_child_cannot_be_forced_to_write_ansi_styles(monkeypatch):
+    for name in ("FORCE_COLOR", "PY_COLORS", "GITHUB_ACTIONS"):
+        monkeypatch.setenv(name, "1")
+    env = child_env()
+    assert not {"FORCE_COLOR", "PY_COLORS", "GITHUB_ACTIONS"} & set(env)
+    assert env["NO_COLOR"] == "1"

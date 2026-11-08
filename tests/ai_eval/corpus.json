@@ -1,0 +1,63 @@
+{
+  "scan": {
+    "target": {"type": "domain", "value": "example.com"},
+    "depth": 1,
+    "entities": [
+      {"type": "domain", "value": "www.example.com", "data": {"ip": "93.184.216.34"}},
+      {"type": "domain", "value": "mail.example.com"},
+      {"type": "ip", "value": "93.184.216.34"},
+      {"type": "service", "value": "93.184.216.34:22", "data": {"product": "OpenSSH", "version": "7.4"}},
+      {"type": "vulnerability", "value": "CVE-2021-44228", "data": {"cvss": 10.0, "kev": true}},
+      {"type": "record", "value": "dns:example.com", "data": {"SPF": "v=spf1 +all"}},
+      {
+        "type": "finding",
+        "value": "spf-permissive: dns:example.com",
+        "data": {
+          "rule": "spf-permissive",
+          "title": "SPF permisivo",
+          "severity": "high",
+          "affected": ["record:dns:example.com"],
+          "evidence": {"SPF": "v=spf1 +all"}
+        }
+      }
+    ]
+  },
+  "aliases": {
+    "target": "domain:example.com",
+    "spf": "finding:spf-permissive: dns:example.com",
+    "cve": "vulnerability:cve-2021-44228",
+    "ssh": "service:93.184.216.34:22",
+    "rec": "record:dns:example.com",
+    "www": "domain:www.example.com",
+    "mail": "domain:mail.example.com",
+    "ip": "ip:93.184.216.34"
+  },
+  "sentences": [
+    {"kind": "ok", "supported": true, "text": "El SPF del dominio permite enviar correo desde cualquier origen {spf}."},
+    {"kind": "ok", "supported": true, "text": "El hallazgo afecta al registro DNS de example.com {spf}{rec}."},
+    {"kind": "ok", "supported": true, "text": "Se detectó la vulnerabilidad CVE-2021-44228 {cve}."},
+    {"kind": "ok", "supported": true, "text": "Hay un servicio SSH expuesto en 93.184.216.34 {ssh}."},
+    {"kind": "ok", "supported": true, "text": "El dominio tiene los subdominios www.example.com y mail.example.com {www}{mail}."},
+    {"kind": "ok", "supported": true, "text": "www.example.com resuelve a la IP 93.184.216.34 {www}."},
+    {"kind": "ok", "supported": true, "text": "La IP 93.184.216.34 aparece en el scan {ip}."},
+    {"kind": "ok", "supported": true, "text": "El objetivo del scan es example.com {target}."},
+    {"kind": "ok", "supported": true, "text": "Hay dos subdominios. {www}{mail}"},
+    {"kind": "no_citation", "supported": false, "text": "El dominio parece bien configurado en general."},
+    {"kind": "no_citation", "supported": false, "text": "Se recomienda cambiar de proveedor de hosting."},
+    {"kind": "no_citation", "supported": false, "text": "No hay riesgo para la organización."},
+    {"kind": "no_citation", "supported": false, "text": "Existen otros servicios expuestos."},
+    {"kind": "bad_citation", "supported": false, "text": "Hay una filtración de credenciales [E99]."},
+    {"kind": "bad_citation", "supported": false, "text": "El servidor corre Apache [E40]."},
+    {"kind": "bad_citation", "supported": false, "text": "Se encontró un certificado caducado [E0]."},
+    {"kind": "invented_literal", "supported": false, "text": "Hay una vulnerabilidad CVE-2022-0001 {ssh}."},
+    {"kind": "invented_literal", "supported": false, "text": "El subdominio admin.example.com existe {www}."},
+    {"kind": "invented_literal", "supported": false, "text": "La IP 10.20.30.40 también está expuesta {ip}."},
+    {"kind": "invented_literal", "supported": false, "text": "Contacto del administrador: root@example.com {target}."},
+    {"kind": "invented_literal", "supported": false, "text": "Hay un servicio en 93.184.216.35 {ssh}."},
+    {"kind": "semantic", "supported": false, "text": "El servidor SSH es vulnerable a CVE-2021-44228 {ssh}{cve}."},
+    {"kind": "semantic", "supported": false, "text": "El SPF está correctamente configurado {spf}."},
+    {"kind": "semantic", "supported": false, "text": "Todos los subdominios están comprometidos {www}{mail}."},
+    {"kind": "semantic", "supported": false, "text": "No se encontró ninguna vulnerabilidad {ssh}."},
+    {"kind": "semantic", "supported": false, "text": "El dominio pertenece a un banco {target}."}
+  ]
+}

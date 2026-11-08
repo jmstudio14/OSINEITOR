@@ -6,6 +6,7 @@ import importlib.util
 import re
 from pathlib import Path
 
+import httpx
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
@@ -21,6 +22,7 @@ def load_script(name: str):
 rdap = load_script("rdap_coverage")
 baseline = load_script("fp_baseline")
 doctor_issue = load_script("doctor_issue")
+recorder = load_script("record_fixtures")
 
 BOOTSTRAP = {
     "publication": "2026-10-28T22:00:04Z",
@@ -108,6 +110,12 @@ def test_doctor_issue_lists_only_failures_and_escapes_pipes():
         assert f"`{module}`" not in text
 
 
+def test_doctor_issue_does_not_mention_people_named_in_remote_text():
+    checks = [{"module": "x", "verdict": "fail", "detail": "contacta con @octocat"}]
+    text = doctor_issue.render(checks)
+    assert "@octocat" not in text and "@​octocat" in text
+
+
 def test_doctor_issue_is_empty_when_nothing_fails():
     assert doctor_issue.render([{"module": "dns", "verdict": "ok", "detail": ""}]) == ""
 
@@ -118,3 +126,51 @@ def test_doctor_issue_main_reads_file_and_validates_usage(tmp_path, capsys):
     assert doctor_issue.main([str(source)]) == 0
     assert "| `crtsh` | x |" in capsys.readouterr().out
     assert doctor_issue.main([]) == 2
+
+
+# --- record_fixtures (F0.2) ------------------------------------------------------------------
+
+
+def record_through(handler):
+    transport = recorder.RecordingTransport(httpx.MockTransport(handler))
+    return transport, httpx.AsyncClient(transport=transport)
+
+
+async def test_recorder_keeps_the_body_and_drops_cookies_and_encoding():
+    def handler(request):
+        return httpx.Response(
+            200,
+            headers={
+                "Set-Cookie": "sid=secreto",
+                "Content-Type": "application/json",
+                "Server": "nginx",
+                "Content-Encoding": "identity",
+            },
+            content=b'{"ok": true}',
+        )
+
+    transport, client = record_through(handler)
+    async with client:
+        response = await client.get("https://example.org/x?a=1", headers={"Authorization": "k"})
+    assert response.json() == {"ok": True}
+    (call,) = transport.calls
+    assert call["url"] == "https://example.org/x?a=1" and call["status"] == 200
+    assert call["headers"] == {"content-type": "application/json", "server": "nginx"}
+    assert call["body"] == '{"ok": true}'
+    assert "Authorization" not in str(call) and "secreto" not in str(call)
+
+
+async def test_recorder_refuses_what_it_cannot_store_faithfully():
+    big = recorder.MAX_BODY + 1
+    for content, reason in ((b"x" * big, "objetivo menor"), (bytes([0xFF, 0xFE]), "no es UTF-8")):
+        _, client = record_through(lambda request, c=content: httpx.Response(200, content=c))
+        async with client:
+            with pytest.raises(ValueError, match=reason):
+                await client.get("https://example.org/")
+
+
+def test_recorder_refuses_modules_that_need_a_key():
+    with pytest.raises(SystemExit, match="API key"):
+        recorder.pick_module("shodan", None)
+    with pytest.raises(SystemExit, match="desconocido"):
+        recorder.pick_module("no_existe", None)

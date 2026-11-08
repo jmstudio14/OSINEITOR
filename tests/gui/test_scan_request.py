@@ -109,3 +109,40 @@ def test_detect_kind_matches_the_cli():
     assert detect_kind("1.1.1.1") == "ip"
     assert detect_kind("alguien@example.com") == "email"
     assert detect_kind("johndoe") == "username"
+
+
+# --- propósito (`--purpose`) -----------------------------------------------------------------
+
+
+def test_purpose_goes_before_the_separator_as_one_argument():
+    args = ScanRequest("a@example.com", kind="email", purpose="auditoría interna").to_args()
+    assert args[-4:] == ["--purpose", "auditoría interna", "--", "a@example.com"]
+
+
+def test_purpose_is_stripped():
+    args = ScanRequest("example.com", purpose="  revisión  ").to_args()
+    assert args[args.index("--purpose") + 1] == "revisión"
+
+
+@pytest.mark.parametrize("blank", [None, "", "   "])
+def test_blank_purpose_is_omitted_and_not_an_error(blank):
+    assert "--purpose" not in ScanRequest("example.com", purpose=blank).to_args()
+
+
+def test_purpose_of_500_chars_is_valid_and_501_is_not():
+    ScanRequest("example.com", purpose="x" * 500).validate()
+    with pytest.raises(InvalidRequest, match="500"):
+        ScanRequest("example.com", purpose="x" * 501).validate()
+
+
+@pytest.mark.parametrize("bad", ["a\nb", "a\rb", "a\x00b"])
+def test_purpose_with_line_break_or_nul_is_invalid(bad):
+    with pytest.raises(InvalidRequest):
+        ScanRequest("example.com", purpose=bad).validate()
+
+
+def test_purpose_that_looks_like_options_stays_one_argument():
+    args = ScanRequest("example.com", purpose="-x --active").to_args()
+    assert args[args.index("--purpose") + 1] == "-x --active"
+    assert "--active" not in args  # el valor es un único elemento, nunca la opción
+    assert args.index("--purpose") < args.index("--")

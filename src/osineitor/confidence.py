@@ -43,8 +43,8 @@ def assess(entity: Entity, authoritative: set[str], reference: datetime) -> str 
     más de `MAX_AGE` (respecto a `reference`, normalmente el fin del scan) baja un nivel.
     """
     sources = set(entity.sources)
-    if not entity.observations or not sources:
-        return None
+    if not entity.observations or not sources or entity.type == "finding":
+        return None  # un hallazgo lo deduce el analizador: su respaldo es el de lo que señala
     points = len(sources) + bool(sources & authoritative)
     level = 2 if points >= 3 else 1 if points == 2 else 0
     date = data_date(entity)

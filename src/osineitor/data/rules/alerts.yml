@@ -1,0 +1,70 @@
+# Reglas de alerta de `osineitor watch`: se evalúan solo sobre entidades NUEVAS desde la última
+# ejecución. Mismo formato que default.yml (ver src/osineitor/findings.py). Un hallazgo nuevo
+# (finding) alerta por sí solo con su propia severidad, sin regla aquí.
+rules:
+  - id: new-subdomain
+    title: Subdominio nuevo
+    severity: low
+    type: domain
+    when:
+      - {field: subdomain, op: eq, value: true}
+    recommendation: >
+      Comprueba que el subdominio es tuyo y está inventariado; un subdominio inesperado puede ser
+      un activo olvidado o una toma de subdominio.
+
+  - id: new-ip
+    title: IP nueva asociada al objetivo
+    severity: low
+    type: ip
+    recommendation: >
+      Comprueba que la dirección pertenece a tu infraestructura y que debe estar expuesta.
+
+  - id: new-exposed-service
+    title: Servicio nuevo expuesto
+    severity: medium
+    type: service
+    evidence: [port, product, version]
+    recommendation: >
+      Confirma que el puerto debe estar abierto a Internet; si no, ciérralo o restringe el acceso.
+
+  - id: new-vulnerability
+    title: Vulnerabilidad nueva (CVE)
+    severity: medium
+    type: vulnerability
+    evidence: [cvss, epss, kev]
+    recommendation: >
+      Evalúa si el servicio afectado está realmente expuesto y aplica el parche del proveedor.
+
+  - id: new-breach
+    title: Aparición en una filtración nueva
+    severity: high
+    type: breach
+    recommendation: >
+      Revisa qué cuentas están afectadas, fuerza el cambio de contraseña y activa la
+      autenticación en dos pasos.
+
+  - id: new-lookalike-domain
+    title: Dominio parecido al tuyo, recién registrado
+    severity: medium
+    type: record
+    value_prefix: "lookalike:"
+    when:
+      - {field: technique, op: exists}
+      - {field: mx, op: missing}
+    evidence: [technique, ns, a]
+    recommendation: >
+      Revisa a quién pertenece y qué sirve; si imita tu marca, valora una denuncia por abuso al
+      registrador o una disputa UDRP, y bloquéalo en tus filtros.
+
+  - id: new-lookalike-domain-with-mail
+    title: Dominio parecido al tuyo, recién registrado y con correo
+    severity: high
+    type: record
+    value_prefix: "lookalike:"
+    when:
+      - {field: technique, op: exists}
+      - {field: mx, op: exists}
+    evidence: [technique, ns, a, mx]
+    recommendation: >
+      Puede servir para suplantar tu correo (phishing, fraude del CEO): avisa a tus equipos,
+      bloquéalo en el filtro de correo y refuerza SPF, DKIM y DMARC con `p=reject`.

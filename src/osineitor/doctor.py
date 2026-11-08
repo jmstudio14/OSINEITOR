@@ -9,7 +9,7 @@ import httpx
 from osineitor.config import Config
 from osineitor.engine import Engine
 from osineitor.http import HttpClient
-from osineitor.models import Entity, detect_type
+from osineitor.models import Entity, EntityType, detect_type
 from osineitor.modules.base import Context, Module
 
 # ok: respondió con datos · empty: respondió sin datos · fail: error o cuota
@@ -37,6 +37,16 @@ async def _probe(http: HttpClient, cls: type[Module]) -> Check:
     return Check(cls.name, "ok", f"alcanzable ({response.status_code}); sin prueba de datos")
 
 
+def seed_entity(cls: type[Module]) -> Entity:
+    """Entidad de prueba con el canary del módulo."""
+    # Un nombre de persona o de empresa se detectaría como username: se siembra con el tipo que
+    # consume el módulo.
+    free_text = {EntityType.PERSON, EntityType.ORGANIZATION}
+    if cls.consumes <= free_text:
+        return Entity(type=min(cls.consumes), value=cls.canary)
+    return Entity(type=detect_type(cls.canary), value=cls.canary)
+
+
 async def check_module(
     cls: type[Module], config: Config, http: HttpClient, *, active: bool
 ) -> Check:
@@ -50,10 +60,9 @@ async def check_module(
         if cls.probe_url:
             return await _probe(http, cls)
         return Check(cls.name, "unchecked", "sin valor de prueba")
-    seed = Entity(type=detect_type(cls.canary), value=cls.canary)
     # Sin presupuesto ni caché: la prueba debe tocar la fuente real.
     engine = Engine(Context(config=config, http=http), [cls], active=active)
-    result = await engine.run(seed)
+    result = await engine.run(seed_entity(cls))
     run = next((r for r in result.runs if r.entity), None)
     if run is None:
         return Check(cls.name, "skipped", result.runs[0].message if result.runs else "")

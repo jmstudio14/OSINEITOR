@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from osineitor.config import data_dir
+from osineitor.config import data_dir, private_file
 
 MAX_BODY = 2_000_000  # no se cachean respuestas mayores (bytes)
 
@@ -40,6 +40,7 @@ class ResponseCache:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or default_cache_path()
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        private_file(self.path)
         self._conn = sqlite3.connect(self.path)
         self._conn.executescript(SCHEMA)
 

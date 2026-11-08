@@ -19,6 +19,7 @@ class CrtSh(Module):
     consumes = frozenset({EntityType.DOMAIN})
     produces = frozenset({EntityType.DOMAIN})
     canary = "example.com"
+    min_interval = 1.0  # crt.sh es un servicio voluntario y se satura con facilidad
     timeout = 240.0  # su consulta admite 60 s × 3 intentos
 
     def accepts(self, entity: Entity) -> bool:

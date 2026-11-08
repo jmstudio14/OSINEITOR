@@ -1,6 +1,6 @@
 # Roadmap de OSINEITOR
 
-> **Estado:** vigente · **Versión actual:** 0.4.0 · **Última revisión:** 31 de octubre de 2026
+> **Estado:** vigente · **Versión actual:** 0.5.0 · **Última revisión:** 7 de noviembre de 2026
 >
 > Este documento define la dirección del proyecto después del MVP: qué se construirá, en qué
 > orden, por qué y cómo se sabrá que cada fase está terminada. No compromete fechas: el orden,
@@ -138,7 +138,8 @@ navegable y exportable.
   "dominio no registrado" (F1.18).
 - **Licencias de datos.** `enthec/webappanalyzer`, sucesor de Wappalyzer, es **GPL-3.0** [R20]:
   no puede empaquetarse en un proyecto MIT. WhatsMyName es CC BY-SA 4.0 [R7] y Sherlock MIT
-  (fichero separado y con atribución, ya cumplido). Los términos de GeoLite2, NVD y Hudson Rock
+  (fichero separado y con atribución, ya cumplido). GeoLite2 (EULA de MaxMind y CC BY-SA 4.0) no se
+  incluye: la base la coloca el usuario (F4.23). Los términos de NVD y Hudson Rock
   están por verificar en sus *spikes*.
 - **APIs de búsqueda.** Bing está retirada [R19]; la API JSON de Google Custom Search solo
   admite clientes existentes y se discontinúa el 1-1-2027 (cita de segunda mano, confirmar en
@@ -197,7 +198,7 @@ El detalle está en el [progreso por fase](#progreso-de-implementación).
 | Núcleo | Sin módulos de análisis offline sobre datos ya recogidos | F3.3 |
 | Núcleo | Sin adaptadores para herramientas externas (Subfinder, Amass pasivo, Maigret, ExifTool) | F3.4 |
 | Núcleo | Datasets de terceros sin mecanismo de actualización ni registro de licencia | F3.5 |
-| Núcleo | Sin barra de progreso, `--quiet`, exit codes ni salida CSV | F1.17, F7.11 |
+| Núcleo | Sin barra de progreso, exit codes ni salida CSV | F1.17 |
 | Dominio | Sin WHOIS de respaldo | F4.11 |
 | Dominio | Certificados reducidos a nombres: sin emisor, validez, SAN ni huella | F4.12 |
 | Dominio | Sin inferencia de SaaS desde MX/NS/SPF/TXT | F4.13 |
@@ -213,7 +214,6 @@ El detalle está en el [progreso por fase](#progreso-de-implementación).
 | Teléfono, cripto, ficheros | Sin soporte | F6.5 a F6.11 |
 | Evidencia | Sin captura de páginas (HTML, WARC, pantallazo) | F6.12 |
 | Fugas | Sin búsqueda de menciones del dominio en código público | F6.15 |
-| Análisis | Sin capa de hallazgos con severidad y recomendación | F7.8 |
 | Análisis | Sin resolución de entidades entre cuentas | F7.10 |
 
 ---
@@ -271,26 +271,26 @@ entre sí y pueden reordenarse.
 
 ### Progreso de implementación
 
-Estado a 31-10-2026 (v0.4.0 publicada; las fases 2 y 3 están hechas y publicadas), contrastado con el código. Leyenda: **✅ Hecho** · **🟡 Parcial** (falta parte del entregable o de su criterio de aceptación) · **⬜ Pendiente** · **➖ Obsoleto**. La columna *Estado* de cada tabla de la sección 6 es la fuente.
+Estado a 08-11-2026 (v0.5.0 publicada; las fases 4 a 11 están implementadas en el repositorio y sin publicar, salvo lo que cada fase marca como pendiente o bloqueado), contrastado con el código. Leyenda: **✅ Hecho** · **🟡 Parcial** (falta parte del entregable o de su criterio de aceptación) · **⬜ Pendiente** · **➖ Obsoleto**. La columna *Estado* de cada tabla de la sección 6 es la fuente.
 
 | Fase | Versión | Hechos | Parciales | Pendientes | *M* hechos |
 |---|---|---|---|---|---|
-| 0 | 0.1.1 | 2 | 1 | 3 | 2 / 6 |
-| 1 | 0.2.0 | 16 | 1 | 1 | 11 / 12 |
+| 0 | 0.1.1 | 3 | 3 | 0 | 3 / 6 |
+| 1 | 0.2.0 | 18 | 0 | 0 | 12 / 12 |
 | 2 | 0.3.0 | 7 | 0 | 0 | 4 / 4 |
 | 3 | 0.4.0 | 7 | 0 | 0 | 3 / 3 |
-| 4 | 0.5.0–0.5.1 | 5 | 0 | 19 | 5 / 5 |
-| 5 | 0.6.0 | 0 | 0 | 15 | 0 / 1 |
-| 6 | 0.7.0 | 0 | 0 | 18 | 0 / 3 |
-| 7 | 0.8.0 | 0 | 0 | 12 | 0 / 4 |
-| 8 | 0.9.0 | 1 | 0 | 6 | 1 / 3 |
-| 9 | 0.10.0 | 0 | 0 | 7 | 0 / 3 |
-| 10 | 0.11.0 | 0 | 0 | 7 | 0 / 3 |
-| 11 | 1.0.0 | 0 | 0 | 5 | 0 / 3 |
-| G | 0.2.0–0.2.2 | 1 | 6 | 2 | 1 / 8 |
-| **Total (fases 0–11)** | | **38** | **2** | **93** | **26 / 50** |
+| 4 | 0.5.0–0.5.1 | 23 | 1 | 0 | 5 / 5 |
+| 5 | 0.6.0 | 13 | 0 | 2 | 1 / 1 |
+| 6 | 0.7.0 | 15 | 1 | 2 | 3 / 3 |
+| 7 | 0.8.0 | 12 | 0 | 0 | 4 / 4 |
+| 8 | 0.9.0 | 6 | 1 | 0 | 3 / 3 |
+| 9 | 0.10.0 | 7 | 0 | 0 | 3 / 3 |
+| 10 | 0.11.0 | 7 | 0 | 0 | 3 / 3 |
+| 11 | 1.0.0 | 3 | 1 | 1 | 2 / 3 |
+| G | 0.2.0–0.2.2 | 8 | 0 | 1 | 7 / 8 |
+| **Total (fases 0–11)** | | **121** | **7** | **5** | **46 / 50** |
 
-Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **25 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
+Corte recomendado (v0.5.0, *M* de las fases 0 a 4): **27 de 30** entregables hechos. F11.1 consta como obsoleto y no cuenta en los totales; el Hito G se cuenta aparte.
 
 ### Corte recomendado
 
@@ -321,20 +321,27 @@ punto de partida con el que se comparará la fase 1.
 
 | ID | P | Estado | Entregable | Detalle |
 |---|---|---|---|---|
-| F0.1 | M | ⬜ Pendiente | Prueba real de cada módulo | Ejecutar cada módulo contra objetivos propios o públicos de prueba (p. ej. `example.com`, `8.8.8.8`) y documentar el resultado |
-| F0.2 | M | ⬜ Pendiente | Fixtures grabadas | Guardar respuestas reales anonimizadas en `tests/fixtures/` y usarlas en los tests en lugar de respuestas inventadas |
-| F0.3 | M | ⬜ Pendiente | Corrección de discrepancias | Ajustar el parseo donde el formato real difiera del documentado |
+| F0.1 | M | 🟡 Parcial | Prueba real de cada módulo | Ejecutar cada módulo contra objetivos propios o públicos de prueba (p. ej. `example.com`, `8.8.8.8`) y documentar el resultado. **Hecho el 05-11-2026 para los 10 módulos sin API key**; los 6 con key quedan bloqueados |
+| F0.2 | M | 🟡 Parcial | Fixtures grabadas | Guardar respuestas reales anonimizadas en `tests/fixtures/` y usarlas en los tests en lugar de respuestas inventadas. **Hecho para los 10 módulos sin key** (`scripts/record_fixtures.py`, `tests/modules/test_recorded.py`); los tests simulados de los demás se mantienen |
+| F0.3 | M | 🟡 Parcial | Corrección de discrepancias | Ajustar el parseo donde el formato real difiera del documentado. **Sin discrepancias en los 10 módulos grabados**; sin comprobar en los 6 con key ni en las fuentes de las fases 4 a 11 |
 | F0.4 | M | ✅ Hecho | Tests de la CLI | Cubrir todos los comandos con `typer.testing.CliRunner` |
-| F0.5 | M | 🟡 Parcial | Línea base de falsos positivos de usernames | Script reproducible que ejecuta `username_sites` con usernames aleatorios inexistentes y publica la tasa en `docs/`; es la referencia del criterio de la fase 1 |
+| F0.5 | M | ✅ Hecho | Línea base de falsos positivos de usernames | Script reproducible que ejecuta `username_sites` con usernames aleatorios inexistentes y publica la tasa en `docs/`; es la referencia del criterio de la fase 1. Medida: 0,26 % ([`docs/FALSOS_POSITIVOS.md`](docs/FALSOS_POSITIVOS.md)), con la verificación ya activa |
 | F0.6 | M | ✅ Hecho | Cobertura RDAP por TLD | Documentar qué TLD tienen RDAP según el bootstrap de IANA [R15] y cuáles quedan ciegos; alimenta F1.18 y F4.11 |
 
-**Estado (29-10-2026):** F0.4 (cobertura de `cli.py` medida: 99 %) y F0.6
-([`docs/RDAP_COBERTURA.md`](docs/RDAP_COBERTURA.md)) están hechos. F0.5 tiene el script listo
-(`scripts/fp_baseline.py`), pero falta la medición desde una red con acceso a los sitios y publicar
-la tasa en `docs/`. F0.1, F0.2 y F0.3 siguen **pendientes**: `tests/fixtures/` no existe y solo `dns`
-y `crtsh` se han ejecutado en vivo desde Windows (ambos con fallos aún sin diagnosticar). La fase 1
-se entregó sin cerrarlos, así que dos criterios de la fase 1 (falsos positivos −50 %, `doctor` en
-menos de 2 minutos) no son comprobables todavía. Estado de cada módulo y pasos en
+**Estado (05-11-2026):** F0.4 (cobertura de `cli.py` medida: 99 %), F0.5
+([`docs/FALSOS_POSITIVOS.md`](docs/FALSOS_POSITIVOS.md): 0,26 % con 5 usernames) y F0.6
+([`docs/RDAP_COBERTURA.md`](docs/RDAP_COBERTURA.md)) están hechos. F0.1, F0.2 y F0.3 son
+**parciales**: los 10 módulos de los 16 originales que no necesitan API key (`dns`, `rdap`,
+`crtsh`, `wayback`, `ipinfo`, `internetdb`, `gravatar`, `email_validate`, `http_fingerprint` y
+`username_sites`) se ejecutaron en vivo desde Windows, sus respuestas están en `tests/fixtures/`
+y se parsean sin discrepancias. Los 6 con key (`shodan`, `abuseipdb`, `greynoise`, `hibp`,
+`hunter_verify`, `hunter_domain`) siguen **bloqueados** por falta de cuentas, así que el criterio
+«los 16 módulos» no se cumple. F0.5 mide el módulo con su verificación por username de control,
+no la tasa anterior a ella: el criterio de la fase 1 «falsos positivos −50 %» sigue sin ser
+comprobable. El de `doctor` en menos de 2 minutos sí se cumple: tarda 41 s con todos los módulos
+pasivos y sin key (antes se caía por el `canary` de `gleif`, ya corregido), aunque esa ejecución
+falla en `crtsh`, `cert_details`, `dns` y `mail_security` por causas de la red. Estado de cada módulo
+y pasos en
 [`docs/PRUEBAS_WINDOWS.md`](docs/PRUEBAS_WINDOWS.md).
 
 **Criterios de aceptación**
@@ -357,7 +364,7 @@ está vacío, y que la herramienta no pueda dañar al propio analista ni explota
 | F1.3 | S | ✅ Hecho | Health check programado en CI | Workflow semanal (no bloqueante) que ejecuta `doctor` y abre un issue si una fuente falla |
 | F1.4 | M | ✅ Hecho | Migraciones de esquema | Versionado con `PRAGMA user_version` y migraciones incrementales con tests; requisito previo para la fase 2 |
 | F1.5 | M | ✅ Hecho | Caché HTTP | Caché en disco con TTL por fuente (`--no-cache`, `--refresh`) para no repetir consultas ni gastar cuota |
-| F1.6 | M | 🟡 Parcial | Límites declarativos por fuente | Cada módulo declara su límite (p. ej. Shodan 1 petición/s) y el cliente HTTP lo respeta |
+| F1.6 | M | ✅ Hecho | Límites declarativos por fuente | Cada módulo declara su límite (p. ej. Shodan 1 petición/s) y el cliente HTTP lo respeta **Hecho**: `shodan`, `hibp`, `hibp_pastes`, `hunter_*`, `wayback` y `crtsh` declaran su `min_interval`. |
 | F1.7 | M | ✅ Hecho | Timeout por módulo y cancelación | Ningún módulo puede bloquear el scan más de su tiempo máximo |
 | F1.8 | S | ✅ Hecho | Proxy y Tor | `--proxy socks5://…` aplicado a todas las peticiones salientes |
 | F1.9 | S | ✅ Hecho | Registro estructurado | `--verbose` y `--log-file` en JSON, sin incluir nunca API keys |
@@ -366,26 +373,28 @@ está vacío, y que la herramienta no pueda dañar al propio analista ni explota
 | F1.12 | M | ✅ Hecho | Normalización canónica de entidades | Dominios en minúsculas, punycode (IDNA) y sin punto final; IPv6 comprimida; URLs normalizadas; la clave de identidad usa la forma canónica; migración de los datos existentes. Resuelve D10 |
 | F1.13 | M | ✅ Hecho | Guardia de red | Los módulos activos y las redirecciones rechazan loopback, redes privadas, *link-local* y metadatos cloud (`169.254.169.254`) salvo `--allow-private`; los hostnames devueltos por fuentes externas se validan antes de emitirse. Resuelve D9 |
 | F1.14 | M | ✅ Hecho | Presupuestos de escaneo | `--max-entities`, `--max-requests`, `--max-time` y límite por módulo; al agotarse, el scan termina de forma ordenada e informa de lo omitido. Resuelve D11 |
-| F1.15 | S | ⬜ Pendiente | Detección de DNS wildcard | Sondeo con etiquetas aleatorias; los subdominios que solo resuelven por wildcard se marcan y no se pivotan |
+| F1.15 | S | ✅ Hecho | Detección de DNS wildcard | Sondeo con etiquetas aleatorias; los subdominios que solo resuelven por wildcard se marcan y no se pivotan **Hecho**: `dns` sondea una etiqueta aleatoria por zona y marca `wildcard` sin pivotar a sus IP. |
 | F1.16 | S | ✅ Hecho | Multiplataforma | Rutas con `platformdirs`, permisos equivalentes en Windows y CI en Linux, macOS y Windows. Resuelve D12. ⚠️ **No probado en macOS** |
 | F1.17 | S | ✅ Hecho | Experiencia de uso | Barra de progreso en `stderr`, `--quiet`, `stdout` limpio con `--json`, y *exit codes* documentados (éxito, error de uso, fuentes con errores, sin resultados). La GUI usa los eventos `progress` del contrato; los códigos están en [`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md). ⚠️ **Barra sin comprobar a ojo en una terminal real** |
 | F1.18 | M | ✅ Hecho | `rdap` distingue "TLD sin RDAP" de "no registrado" | Consulta el bootstrap de IANA [R15]; para un TLD sin servidor emite `omitido: TLD sin RDAP` en lugar de un resultado vacío. Resuelve D14 junto con F4.11 |
 
-**Estado (29-10-2026):** 16 de 18 hechos, 1 parcial y 1 pendiente (F1.15, *S*): los 12 *M* están
-hechos salvo F1.6.
+**Estado (07-11-2026):** 18 de 18 hechos (F1.6 y F1.15 se cerraron en el cierre del roadmap):
+los 12 *M* están hechos.
 
 - **F1.2** usa valores de prueba fijos (`example.com`, `1.1.1.1`) y no `username_claimed` de Sherlock,
   que haría ~460 peticiones.
 - **F1.3** (`.github/workflows/doctor.yml`) corre en un runner de GitHub: solo prueba módulos
   pasivos y sin API key, y una fuente que bloquee IP de centros de datos aparecería como fallo.
   Aún no se ha ejecutado en GitHub (hacerlo con *Run workflow*).
-- **F1.6** (parcial): el mecanismo funciona, pero ningún módulo declara aún un `min_interval`
-  porque no se han verificado los límites reales de sus fuentes.
+- **F1.6**: el mecanismo funciona y 24 módulos declaran un `min_interval` (p. ej. `shodan` 1 s,
+  `hibp` 12 s, `virustotal` 15 s). Los límites son los publicados por cada fuente; no se han
+  medido en vivo.
 - **F1.12**: las filas guardadas antiguas se canonicalizan al cargarlas, sin migración de esquema.
 - **F1.16** se centra en Windows, la plataforma soportada: usa `platformdirs`; `config.toml` se
   protege con una ACL (`icacls`, verificado en Windows) y `0600` desde la creación en POSIX. La CI
   incluye ya macOS (3.13), **pero aún no se ha ejecutado en GitHub**: el test del modo `0600`
-  tampoco se ha corrido fuera de Windows. Los ficheros `.db` no se restringen (no guardan keys).
+  tampoco se ha corrido fuera de Windows. Los ficheros `osineitor.db` y `cache.db` también quedan en
+  `0600` en POSIX (`config.private_file`).
 - **F1.8**: `--proxy` aplica a todo el HTTP y evita dos fugas de DNS: la guardia de red no resuelve
   hostnames en local con proxy, y `dns`/`email_validate` (DNS por UDP, que SOCKS no enruta) se
   omiten. Probado con un servidor SOCKS5 de prueba y la CLI real; **no con Tor real**. No está en
@@ -437,21 +446,25 @@ en modo carpeta e Inno Setup.
 | ID | P | Estado | Entregable | Versión | Detalle |
 |---|---|---|---|---|---|
 | G1 | M | ✅ Hecho | Contrato CLI↔GUI | 0.2.0 | `--ndjson`, `--json`, `--quiet`, `--control-stdin`, códigos de salida y cancelación ordenada, con esquema JSON y tests. **Hecho** ([`docs/CLI_CONTRACT.md`](docs/CLI_CONTRACT.md)) |
-| G2 | M | 🟡 Parcial | Esqueleto de la aplicación | 0.2.1 | Ventana, menús, barra de herramientas, localizador de la CLI y tema claro/oscuro. **Localizador y preferencias hechos** (sin Qt); falta la ventana |
-| G3 | M | 🟡 Parcial | Scan en vivo | 0.2.1 | Lanza la CLI con `--ndjson`, muestra entidades y progreso y cancela por stdin. **Lanzador, cancelación y estado del scan hechos** (sin Qt); falta pintarlo |
-| G4 | M | 🟡 Parcial | Historial, detalle y exportación | 0.2.1 | Lista de scans, panel de detalle de cada entidad y exportación a JSON/Markdown/HTML. **API hecha**; faltan las vistas |
-| G5 | S | 🟡 Parcial | Panel de salud | 0.2.1 | Estado de cada módulo desde `doctor --json`. **API hecha**; falta la vista |
-| G6 | M | 🟡 Parcial | Ajustes y API keys | 0.2.1 | Gestión de keys vía `osineitor config`; opción de almacenarlas en el Administrador de credenciales. **`config set --stdin` / `unset` y API hechos**; falta la vista y queda pendiente lo del Administrador de credenciales |
-| G7 | M | 🟡 Parcial | Avisos legales y `--active` | 0.2.1 | Aviso en el primer arranque y confirmación explícita antes de módulos activos. **Textos y reglas de confirmación hechos** (`ScanRequest`); faltan los diálogos |
-| G8 | M | ⬜ Pendiente | Instalador de Windows | 0.2.2 | PyInstaller + Inno Setup, ZIP portable y SHA-256, construidos en CI |
+| G2 | M | ✅ Hecho | Esqueleto de la aplicación | 0.2.1 | Ventana, menús, barra de herramientas, localizador de la CLI y tema claro/oscuro. **Hecho**: `osineitor-gui` abre la ventana principal (`app.py`, `ui/`) con los menús Archivo, Ver ▸ Tema y Ayuda, la barra de herramientas, la CLI localizada en la barra de estado y la geometría recordada. Solo tiene acciones que ya funcionan: las de scan, historial, salud y ajustes llegan con G3–G7 |
+| G3 | M | ✅ Hecho | Scan en vivo | 0.2.1 | Lanza la CLI con `--ndjson`, muestra entidades y progreso y cancela por stdin. **Hecho**: «Nuevo scan» (`Ctrl+N`, solo módulos pasivos) abre una pestaña por scan con la tabla de entidades (filtro por tipo con recuentos y búsqueda), la actividad por módulo en vivo, el progreso en la barra de estado y Cancelar (guarda lo obtenido y marca la pestaña); cerrar la pestaña o la ventana con un scan en marcha pide confirmación y no deja la CLI huérfana. Sin selector de módulos ni `--active` / `--allow-private` (G7), ni detalle de entidad (G4) |
+| G4 | M | ✅ Hecho | Historial, detalle y exportación | 0.2.1 | Lista de scans, panel de detalle de cada entidad y exportación a JSON/Markdown/HTML. **Hecho**: el panel lateral Historial (se carga al abrir y tras cada scan guardado; Archivo ▸ Abrir scan guardado… lo muestra y recarga) abre un scan con doble clic en una pestaña idéntica a la de uno en vivo, sin duplicarla; el panel de detalle muestra fuente, origen y campos de `data` de la entidad seleccionada; Archivo ▸ Exportar scan… escribe JSON, Markdown o HTML con `osineitor export`. Las llamadas a la CLI van en un hilo de trabajo. Sin confianza ni observaciones en el detalle |
+| G5 | S | ✅ Hecho | Panel de salud | 0.2.1 | Estado de cada módulo desde `doctor --json`. **Hecho**: Herramientas ▸ Salud de los módulos… abre un diálogo que lanza `doctor` bajo demanda en un hilo de trabajo y muestra veredicto, detalle, tiempo y peticiones por módulo. Solo pasivo (`--active` llega con G7); un `doctor` en curso no se puede cancelar |
+| G6 | M | ✅ Hecho | Ajustes y API keys | 0.2.1 | Gestión de keys vía `osineitor config`. **Hecho**: Herramientas ▸ Ajustes… (`Ctrl+,`) abre un diálogo con la pestaña «API keys» (una fila por key, porque varios módulos comparten la misma; guardar con `config set --stdin` y borrar con `config unset`, en un hilo de trabajo; la key nunca se muestra y el estado «configurada» sale de la CLI) y la pestaña «General» (tema). Fuera de alcance: guardarlas en el Administrador de credenciales de Windows (exigiría soporte de `keyring` en la propia CLI y cambiar el contrato) |
+| G7 | M | ✅ Hecho | Avisos legales y `--active` | 0.2.1 | Aviso en el primer arranque y confirmación explícita antes de módulos activos. **Hecho**: el primer arranque muestra el aviso legal con «Acepto» / «Salir» (Salir, Esc o cerrar la ventana cierran la aplicación sin abrirla; se vuelve a pedir si sube `LEGAL_VERSION`). «Nuevo scan» tiene selector de módulos (los que necesitan una key que falta se ven deshabilitados con el motivo), las casillas «módulos activos» y «redes privadas» (cada una pide una confirmación cuyo botón por defecto es Cancelar y, si se rechaza, se desmarca) y el cuadro «Propósito» (`--purpose`). El panel de salud también confirma antes de `doctor --active` |
+| G8 | M | ✅ Hecho | Instalador de Windows | 0.2.2 | PyInstaller + Inno Setup, ZIP portable y SHA-256, construidos en CI. **Hecho**: `packaging/windows/` (`osineitor.spec`, `build.ps1`, `smoke.py`, `osineitor.iss`, `checksums.py`) y el job `windows` de `release.yml`. Dos ejecutables en una carpeta (`osineitor-gui.exe` sin consola y `osineitor.exe` con ella), instalador por usuario sin UAC con la CLI en el PATH como opción, ZIP portable y `SHA256SUMS.txt`, que el job sube a una Release de GitHub al empujar la etiqueta. Construido y probado en local con PyInstaller; el `.iss`, el instalador y la Release no se han ejecutado (los hace la CI) |
 | G9 | M | ⬜ Pendiente | Pruebas manuales en Windows | 0.2.2 | Lista de comprobación (instalar, escanear, cancelar, exportar, modo oscuro, desinstalar); las ejecuta el autor, la CI no puede |
 
-**Estado (29-10-2026):** el contrato G1 está hecho. De G2 a G7 existe la **capa sin Qt**
-(`src/osineitor_gui/`: localizador de la CLI, preferencias, lanzador con cancelación, estado del scan,
-`CliApi`, textos legales y reglas de confirmación de `ScanRequest`, con tests y una regla que impide
-importar el motor o Qt fuera de `ui/`). Faltan la ventana y todas las vistas (PR-E2), el instalador
-(G8, PR-F) y las pruebas manuales (G9). `PySide6` es solo un extra opcional. Diseño y traspaso en
-[`docs/GUI.md`](docs/GUI.md).
+**Estado (05-11-2026):** el contrato G1, el esqueleto G2, el scan en vivo G3, el historial, el
+detalle y la exportación G4 y el panel de salud G5, los ajustes con API keys G6 y los avisos legales con la confirmación de
+`--active` G7 están hechos: la ventana principal (`app.py`, `ui/`) abre con menús,
+barra de herramientas, tema claro/oscuro/sistema y geometría recordada, lanza scans (los activos solo
+tras confirmarlos) que se ven y se cancelan en vivo, abre scans guardados y los exporta, comprobado con tests sin pantalla
+(G3 a G7 aún sin ver en Windows). Debajo hay una **capa sin Qt** (`src/osineitor_gui/`: lanzador
+con cancelación, estado del scan, `CliApi`, textos legales y reglas de confirmación de
+`ScanRequest`, con tests y una regla que impide importar el motor o Qt fuera de `ui/`). El
+instalador (G8, PR-F) está escrito y el paquete se construye y pasa la prueba de humo en local;
+falta ejecutarlo en la CI y las pruebas manuales en Windows (G9). `PySide6` es solo un extra opcional. Diseño y traspaso en [`docs/GUI.md`](docs/GUI.md).
 
 **Fuera de este hito:** grafo, hallazgos, procedencia en la interfaz, internacionalización y
 actualizaciones automáticas. El instalador sin firmar mostrará el aviso de SmartScreen; la firma
@@ -495,15 +508,16 @@ preservación del Protocolo de Berkeley.
   a hosts ajenos (eso sigue siendo la guardia de red). La GUI aún no expone la opción.
 - F2.6: `--purpose` (máx. 500 caracteres) se guarda con el scan (BD versión 7) y sale en `show`, los
   informes y `scan.start`. `require_purpose` (`config.toml` u `OSINEITOR_REQUIRE_PURPOSE`) lo exige en
-  scans de email y username (código 2 si falta). Riesgo conocido: la GUI aún no pasa `--purpose`, así
-  que con `require_purpose` activo sus scans de email y username fallan.
+  scans de email y username (código 2 si falta). La GUI lo pasa desde «Nuevo scan» (G7); es opcional
+  en la vista porque no conoce `require_purpose`, así que sin él esos scans fallan con el mensaje de
+  la CLI.
 - F2.7: los informes HTML y Markdown acaban con la sección «Evidencias» (módulo, consulta, URL,
   fecha, estado, bytes, SHA-256 completo y huella del conjunto); el hash del informe coincide con el
   de `osineitor verify`. Los cuerpos no van en el informe.
 - Criterios de aceptación: rastreo entidad → consulta (observaciones + evidencias unidas por módulo y
   entidad), `verify` detecta manipulación (código 5) y un scan con alcance no produce entidades
   fuera de él (test con dominios trampa, `tests/test_scope.py`). Pendiente fuera de esta fase: la
-  GUI no expone `--evidence`, `--scope` ni `--purpose`.
+  GUI no expone `--evidence` ni `--scope`.
 
 **Criterios de aceptación**
 - Cualquier entidad de un informe se puede rastrear hasta la consulta exacta que la produjo.
@@ -520,10 +534,10 @@ externas.
 
 | ID | P | Estado | Entregable | Detalle |
 |---|---|---|---|---|
-| F3.1 | M | ✅ Hecho | Nuevos tipos de entidad | `asn`, `netblock`, `certificate`, `technology`, `organization`, `person`, `phone`, `crypto_address`, `file`, `location` y `finding` (este último reservado a F7.8), con su normalización (F1.12) y migración (F1.4). Resuelve D13 |
+| F3.1 | M | ✅ Hecho | Nuevos tipos de entidad | `asn`, `netblock`, `certificate`, `technology`, `organization`, `person`, `phone`, `crypto_address`, `file`, `location` y `finding` (generado por el analizador `findings`, F7.8), con su normalización (F1.12) y migración (F1.4). Resuelve D13 |
 | F3.2 | M | ✅ Hecho | Presets de escaneo | `--preset` y `osineitor presets`. Definidos en YAML y editables en el directorio de configuración: fijan módulos, profundidad, presupuesto y si admiten módulos activos. Incluidos: `passive`, `quick`, `domain-recon`, `attack-surface`, `person`, `email-audit` y `full` [R2] |
 | F3.3 | M | ✅ Hecho | Analizadores offline | Módulos de tipo *analyzer* que consumen entidades ya recogidas (p. ej. el `record` de DNS) sin hacer peticiones; se ejecutan en un pase final y no consumen presupuesto de red |
-| F3.4 | S | ✅ Hecho | Adaptadores de herramientas externas | Clase base `ExternalToolModule`: detección con `shutil.which`, ejecución **sin shell**, timeout, versión mínima y parseo de JSON. No se empaquetan binarios; `doctor` informa de cuáles están instalados |
+| F3.4 | S | ✅ Hecho | Adaptadores de herramientas externas | Clase base `ExternalToolModule`: detección con `find_executable` (solo carpetas absolutas del `PATH`), ejecución **sin shell**, timeout, versión mínima y parseo de JSON. No se empaquetan binarios; `doctor` informa de cuáles están instalados |
 | F3.5 | S | ✅ Hecho | `osineitor update-data` | Descarga y actualiza los datasets de terceros en el directorio de datos del usuario, registrando versión, hash y licencia; los de licencia incompatible con MIT nunca entran en el paquete |
 | F3.6 | S | ✅ Hecho | Semillas ampliadas | `scan` reconoce URL (la descompone en dominio y URL), CIDR y ASN (`AS13335`). Teléfono, cripto y ficheros se añaden en la fase 6 junto a sus módulos |
 | F3.7 | C | ✅ Hecho | Filtros de salida | `--only-types` y `--exclude` para recortar resultados e informes |
@@ -542,11 +556,11 @@ externas.
   preset que no los admite, `--active` es un error de uso. El preset usado no se guarda con el scan.
 - F3.3: `Module.analyzer = True`. Pase final tras los niveles, sobre la semilla y lo recogido, con un
   contexto `Offline` (usar `http` o `resolver` es un `ModuleError`) y sin gastar presupuesto de
-  peticiones; lo que emiten no se pivota. El primer analizador concreto es `saas_footprint` (F4.13); F4.14 acabó siendo un módulo normal y F4.17 sigue pendiente.
-- F3.4: `ExternalToolModule` (`modules/_external.py`): `shutil.which`, ejecución sin shell, versión
+  peticiones; lo que emiten no se pivota. El primer analizador concreto es `saas_footprint` (F4.13); F4.14 acabó siendo un módulo normal y `cloud_attribution` (F4.17) es el segundo analizador.
+- F3.4: `ExternalToolModule` (`modules/_external.py`): `find_executable` (no busca en la carpeta actual), ejecución sin shell, versión
   mínima, timeout con muerte del proceso, JSON o NDJSON y sin las variables `OSINEITOR_*` en el
   entorno. Sin el binario el módulo queda `omitido`. Su tráfico no pasa por `ctx.http`: con
-  `--proxy` se omite y no deja evidencia. Aún no hay adaptadores concretos (F4.24).
+  `--proxy` se omite y no deja evidencia. El primer adaptador concreto es `ext_subfinder` (F4.24).
 - F3.5: `osineitor update-data` descarga el catálogo (hoy solo `sherlock-sites`, MIT) a
   `<datos>/datasets/` y anota versión (`Last-Modified`, `ETag` o la fecha), SHA-256, licencia y URL
   en `manifest.json`. Una licencia fuera de la lista de compatibles se rechaza sin descargar;
@@ -583,12 +597,12 @@ priorizando fuentes gratuitas con API oficial. **v0.5.0** entrega los *M*; **v0.
 | F4.4 | M | ✅ Hecho | `mail_security` | MTA-STS, TLS-RPT, BIMI y selectores DKIM comunes | No | Pasivo (DNS) |
 | F4.11 | M | ✅ Hecho | `whois` | WHOIS por puerto 43 para los TLD sin RDAP (`.es`, `.io`, `.de`, `.mx`, `.it`, `.co`, `.me`… [R15]); parseo por TLD, límite de consultas y respeto de la privacidad de los datos | No | Pasivo |
 | F4.13 | M | ✅ Hecho | `saas_footprint` | Analizador que deduce proveedores de correo, DNS, identidad y colaboración desde MX, NS, `include:` de SPF y TXT de verificación; tabla de firmas versionada | No | Pasivo (offline) |
-| F4.1 | S | ⬜ Pendiente | `urlscan` | urlscan.io: escaneos históricos, tecnologías, IPs | Opcional | Pasivo |
-| F4.2 | S | ⬜ Pendiente | `otx` | AlienVault OTX: pulses, DNS pasivo, malware asociado | Sí (gratis) | Pasivo |
-| F4.3 | S | ⬜ Pendiente | `virustotal` | VirusTotal: reputación, subdominios, resoluciones | Sí (gratis, cuota baja) | Pasivo |
-| F4.5 | S | ⬜ Pendiente | `web_meta` | `robots.txt`, `sitemap.xml`, `security.txt` | No | **Activo** |
-| F4.6 | S | ⬜ Pendiente | `takeover` | Detección de subdominios con CNAME a servicios no reclamados | No | **Activo** |
-| F4.18 | S | ⬜ Pendiente | `tech_detect` | Detección de tecnologías con un dataset descargable (F3.5). **El de `webappanalyzer` es GPL-3.0 [R20] y no se incluye en el paquete**; alternativa: firmas propias. Sustituye las 17 firmas de `http_fingerprint` | No | **Activo** |
+| F4.1 | S | ✅ Hecho | `urlscan` | urlscan.io: escaneos históricos, tecnologías, IPs | Opcional | Pasivo |
+| F4.2 | S | ✅ Hecho | `otx` | AlienVault OTX: pulses, DNS pasivo, malware asociado | Sí (gratis) | Pasivo |
+| F4.3 | S | ✅ Hecho | `virustotal` | VirusTotal: reputación, subdominios, resoluciones | Sí (gratis, cuota baja) | Pasivo |
+| F4.5 | S | ✅ Hecho | `web_meta` | `robots.txt`, `sitemap.xml`, `security.txt` | No | **Activo** |
+| F4.6 | S | ✅ Hecho | `takeover` | Detección de subdominios con CNAME a servicios no reclamados | No | **Activo** |
+| F4.18 | S | ✅ Hecho | `tech_detect` | Detección de tecnologías con un dataset descargable (F3.5). **El de `webappanalyzer` es GPL-3.0 [R20] y no se incluye en el paquete**; alternativa: firmas propias. Sustituye las 17 firmas de `http_fingerprint` | No | **Activo** |
 
 **Certificados y vulnerabilidades**
 
@@ -596,32 +610,50 @@ priorizando fuentes gratuitas con API oficial. **v0.5.0** entrega los *M*; **v0.
 |---|---|---|---|---|---|---|
 | F4.12 | M | ✅ Hecho | `cert_details` | crt.sh (y Censys si hay key): emisor, validez, SAN y huella SHA-256 como entidad `certificate`; pivote por SAN y huella a otros dominios; aviso de caducidad | No | Pasivo |
 | F4.14 | M | ✅ Hecho | `cve_enrich` | Analizador sobre entidades `vulnerability`: CVSS (NVD), probabilidad EPSS y marca KEV [R17]. Límites de NVD *(spike)* | Opcional (NVD) | Pasivo |
-| F4.15 | S | ⬜ Pendiente | `censys` | Censys Platform: hosts y certificados; segunda base de escaneo que complementa a Shodan [R1] | Sí (gratis con créditos) | Pasivo |
+| F4.15 | S | ✅ Hecho | `censys` | Censys Platform: hosts y certificados; segunda base de escaneo que complementa a Shodan [R1] | Sí (gratis con créditos) | Pasivo |
 
 **IP y red**
 
 | ID | P | Estado | Módulo | Fuente o función | Key | Tipo |
 |---|---|---|---|---|---|---|
-| F4.7 | S | ⬜ Pendiente | `ptr` | DNS inverso | No | Pasivo |
-| F4.8 | S | ⬜ Pendiente | `ripestat` | RIPEstat: ASN, prefijo, país de registro, historial de enrutamiento | No | Pasivo |
-| F4.9 | S | ⬜ Pendiente | `dnsbl` | Listas negras DNS (Spamhaus ZEN y otras de uso gratuito) | No | Pasivo |
-| F4.16 | S | ⬜ Pendiente | `asn_netblock` | De IP a ASN y a los prefijos del AS (con tope); entidades `asn` y `netblock` | No | Pasivo |
-| F4.17 | S | ⬜ Pendiente | `cloud_attribution` | Analizador que etiqueta IPs como AWS, GCP, Azure, Cloudflare… con los rangos que publican esos proveedores (dataset de F3.5; feeds *(spike)*) y detecta CDN por CNAME y cabeceras | No | Pasivo (offline) |
-| F4.10 | C | ⬜ Pendiente | `abusech` | ThreatFox y URLhaus: IOCs asociados [R8] | Sí (gratis) | Pasivo |
-| F4.22 | C | ⬜ Pendiente | `reverse_ip` | Hostnames alojados en la misma IP según fuentes pasivas *(spike)* | Según fuente | Pasivo |
-| F4.23 | C | ⬜ Pendiente | `geoip_offline` | GeoIP con GeoLite2 en local para no enviar IPs a terceros; la licencia exige que cada usuario descargue la base *(spike)* | Cuenta gratuita | Pasivo (offline) |
+| F4.7 | S | ✅ Hecho | `ptr` | DNS inverso | No | Pasivo |
+| F4.8 | S | ✅ Hecho | `ripestat` | RIPEstat: ASN, prefijo, país de registro, historial de enrutamiento | No | Pasivo |
+| F4.9 | S | ✅ Hecho | `dnsbl` | Listas negras DNS (Spamhaus ZEN y otras de uso gratuito) | No | Pasivo |
+| F4.16 | S | ✅ Hecho | `asn_netblock` | De IP a ASN y a los prefijos del AS (con tope); entidades `asn` y `netblock` | No | Pasivo |
+| F4.17 | S | ✅ Hecho | `cloud_attribution` | Analizador que etiqueta IPs como AWS, GCP, Azure, Cloudflare… con los rangos que publican esos proveedores (dataset de F3.5; feeds *(spike)*) y detecta CDN por CNAME y cabeceras **Estado**: Rangos de AWS, GCP, Azure y Cloudflare vía `update-data` (licencia `public-feed`, sin hash fijo porque cambian a diario). La URL de Azure cambia cada semana: la CLI la lee de la página de Microsoft al arrancar, como mucho una vez al día, y solo descarga si ha cambiado; ver [Datasets](docs/USO.md#datasets). | No | Pasivo (offline) |
+| F4.10 | C | ✅ Hecho | `abusech` | ThreatFox y URLhaus: IOCs asociados [R8] | Sí (gratis) | Pasivo |
+| F4.22 | C | ✅ Hecho | `reverse_ip` | Hostnames alojados en la misma IP según fuentes pasivas *(spike)* **Hecho**: `reverse_ip` con la API gratuita de HackerTarget; si la IP aloja más de 50 hostnames deja un resumen en vez de dominios que pivotar. | Según fuente | Pasivo |
+| F4.23 | C | ✅ Hecho | `geoip_offline` | GeoIP con GeoLite2 en local para no enviar IPs a terceros *(spike)* **Hecho**: analizador que lee `GeoLite2-City.mmdb` del directorio de datos; OSINEITOR no incluye ni descarga la base. Probado en vivo con la base real. | No | Pasivo (offline) |
 
 **Pivotes de infraestructura y defensa**
 
 | ID | P | Estado | Módulo | Fuente o función | Key | Tipo |
 |---|---|---|---|---|---|---|
-| F4.19 | S | ⬜ Pendiente | `favicon_pivot` | Hash MurmurHash3 del favicon y búsqueda de otros hosts con el mismo icono en Shodan (`http.favicon.hash`) o Censys [R16] | Sí (Shodan o Censys) | **Activo** (descarga el favicon del objetivo) |
-| F4.20 | S | ⬜ Pendiente | `lookalike_domains` | Permutaciones y homógrafos del dominio **propio** y comprobación DNS (A, MX, NS) de los registrados; se evalúa dnstwist como dependencia opcional [R21] *(spike: licencia y mantenimiento)* | No | Pasivo (DNS) |
-| F4.21 | C | ⬜ Pendiente | `analytics_ids` | IDs de Google Analytics, GTM y AdSense de la página y dominios relacionados donde una fuente lo permita *(spike)* | Según fuente | **Activo** |
-| F4.24 | C | ⬜ Pendiente | `ext_subfinder`, `ext_amass` | Adaptadores (F3.4) de Subfinder y de Amass **solo en modo pasivo**; el binario lo instala el usuario | No | Pasivo |
+| F4.19 | S | ✅ Hecho | `favicon_pivot` | Hash MurmurHash3 del favicon y búsqueda de otros hosts con el mismo icono en Shodan (`http.favicon.hash`) o Censys [R16] | Sí (Shodan o Censys) | **Activo** (descarga el favicon del objetivo) |
+| F4.20 | S | ✅ Hecho | `lookalike_domains` | Permutaciones y homógrafos del dominio **propio** y comprobación DNS (A, MX, NS) de los registrados; se evalúa dnstwist como dependencia opcional [R21] *(spike: licencia y mantenimiento)* | No | Pasivo (DNS) |
+| F4.21 | C | ✅ Hecho | `analytics_ids` | IDs de Google Analytics, GTM y AdSense de la página y dominios relacionados donde una fuente lo permita *(spike)* **Hecho**: `analytics_ids` (activo) extrae los IDs de la portada; no busca otros dominios con el mismo ID porque no hay una fuente gratuita verificada. | Según fuente | **Activo** |
+| F4.24 | C | 🟡 Parcial | `ext_subfinder`, `ext_amass` | Adaptadores (F3.4) de Subfinder y de Amass **solo en modo pasivo**; el binario lo instala el usuario **Estado**: `ext_subfinder` hecho; `ext_amass` no, porque no hay un formato de salida estable verificado; ver [fuentes evaluadas](docs/MODULES.md#fuentes-evaluadas-y-no-incluidas). | No | Pasivo |
 
-**Estado (31-10-2026):** 5 de 24 hechos, todos los *M* de la v0.5.0 (F4.4, F4.11, F4.12, F4.13 y
-F4.14); los 19 *S* y *C* de la v0.5.1 siguen pendientes.
+**Estado (08-11-2026):** 23 de 24 hechos y 1 parcial (F4.24). Los 5 *M* (F4.4, F4.11, F4.12, F4.13 y
+F4.14) están publicados en la 0.5.0; 18 de los *S* y *C* están hechos en la rama `feat/roadmap-f4-s`
+(sin publicar). Plan y decisiones en [`docs/plans/fase-04.md`](docs/plans/fase-04.md).
+- **v0.5.1, hecho y sin verificar en vivo (D1):** F4.1 a F4.3, F4.5 a F4.10, F4.15, F4.16, F4.18 a
+  F4.20 y `ext_subfinder` (F4.24). Los tests simulan las respuestas; el parseo de `censys` sale de la documentación y
+  ninguna de las fuentes nuevas se ha ejecutado contra el servicio real.
+- **F4.17:** `cloud_attribution` etiqueta por CNAME y huella HTTP, y las IP con los rangos de AWS,
+  GCP, Azure y Cloudflare que instala `update-data` (licencia `public-feed`, sin hash fijo).
+  `ServiceTags_Public_<fecha>.json` de Azure cambia de URL cada semana: la CLI la lee de la página
+  de descarga de Microsoft al arrancar, como mucho una vez al día, y solo descarga si ha cambiado.
+  Solo etiqueta proveedor y categoría, no servicio ni región.
+- **Cierre del roadmap (07-11-2026):** F4.21 (`analytics_ids`) y F4.22 (`reverse_ip`) hechos; F4.23
+  evaluado y aplazado; `ext_amass` (F4.24) sin formato verificado.
+- **F4.18:** firmas propias (no `webappanalyzer`, GPL-3.0); `http_fingerprint` conserva sus 17.
+- **F4.20:** sin dnstwist; un único `record`, sin entidades `domain` (no se pivota a un dominio
+  potencialmente hostil).
+- **F4.24:** solo `ext_subfinder`; `ext_amass` aplazado (formato de salida inestable entre v4 y v5).
+- **F4.23 (08-11-2026):** `geoip_offline` es un analizador que lee una base que coloca el usuario, sin
+  descarga automática: `update-data` rechaza CC BY-SA. `maxminddb` es dependencia normal para que el
+  módulo funcione en el instalador. Los tests usan la base de prueba de MaxMind. Solo la edición City.
 - F4.4: `mail_security` consulta por DNS `_mta-sts`, `_smtp._tls`, `default._bimi` y 15 selectores
   DKIM comunes, y deja un `record`. No descarga la política MTA-STS por HTTPS: sería activo.
 - F4.11: `whois` usa un socket al puerto 43 (`direct_dns`: con `--proxy` se omite; la evidencia
@@ -672,26 +704,26 @@ línea, sin recurrir a scraping de redes sociales.
 
 | ID | P | Estado | Módulo | Fuente o función | Key | Tipo |
 |---|---|---|---|---|---|---|
-| F5.2 | S | ⬜ Pendiente | `github_email` | Búsqueda de commits públicos por email en la API de GitHub | Opcional | Pasivo |
-| F5.8 | S | ⬜ Pendiente | `hudsonrock` | Exposición del email, username o dominio por infostealers [R18]. **Solo metadatos** (existencia, fecha, equipo comprometido sí o no); nunca credenciales. Términos de uso *(spike)* | Sí (gratis) | Pasivo |
-| F5.1 | C | ⬜ Pendiente | `leakcheck` | LeakCheck API pública: nombres de filtraciones *(spike)* | No | Pasivo |
-| F5.12 | C | ⬜ Pendiente | `pgp_keyserver` | Clave pública asociada al email en keys.openpgp.org (solo identidades verificadas) *(spike)* | No | Pasivo |
-| F5.13 | C | ⬜ Pendiente | `hibp_pastes` | Apariciones del email en *pastes* (mismo endpoint de HIBP y misma key) | Sí (HIBP) | Pasivo |
+| F5.2 | S | ✅ Hecho | `github_email` | Búsqueda de commits públicos por email en la API de GitHub | Opcional | Pasivo |
+| F5.8 | S | ⬜ Pendiente | `hudsonrock` | Exposición del email, username o dominio por infostealers [R18]. **Solo metadatos** (existencia, fecha, equipo comprometido sí o no); nunca credenciales. Términos de uso *(spike)* **Estado**: Evaluada y no incluida: la clave gratuita se pide con un correo corporativo y no se han podido verificar los términos ni la respuesta; ver [fuentes evaluadas](docs/MODULES.md#fuentes-evaluadas-y-no-incluidas). | Sí (gratis) | Pasivo |
+| F5.1 | C | ✅ Hecho | `leakcheck` | LeakCheck API pública: nombres de filtraciones *(spike)* **Hecho**: `leakcheck` con la API pública, que solo devuelve nombres de fuentes y fechas. | No | Pasivo |
+| F5.12 | C | ✅ Hecho | `pgp_keyserver` | Clave pública asociada al email en keys.openpgp.org (solo identidades verificadas) *(spike)* **Hecho**: `pgp_keyserver` con `keys.openpgp.org` (índice legible por máquina, solo identidades verificadas). | No | Pasivo |
+| F5.13 | C | ✅ Hecho | `hibp_pastes` | Apariciones del email en *pastes* (mismo endpoint de HIBP y misma key) | Sí (HIBP) | Pasivo |
 
 **Usernames y personas**
 
 | ID | P | Estado | Entregable | Detalle |
 |---|---|---|---|---|
-| F5.9 | M | ⬜ Pendiente | Generadores | `username_variants` (permutaciones a partir de nombre o alias) y `email_candidates` (patrones como `{first}.{last}` sobre un dominio). **Solo generan candidatos: nunca se verifican por SMTP.** Introducen la entidad `person` |
-| F5.3 | S | ⬜ Pendiente | Segunda fuente de firmas | Integrar WhatsMyName (CC BY-SA 4.0, fichero de datos separado con atribución [R7]) y marcar como "confirmado" lo que detecten ambas fuentes |
-| F5.4 | S | ⬜ Pendiente | Extracción de perfil | Para los sitios principales, extraer nombre visible, biografía, enlaces y otros usernames de la página pública |
-| F5.5 | S | ⬜ Pendiente | Pivote recursivo de identificadores | Los usernames y enlaces extraídos en F5.4 alimentan el siguiente nivel de pivoteo |
-| F5.7 | S | ⬜ Pendiente | `github_user` | Perfil público de GitHub: nombre, empresa, blog, organizaciones, emails de commits públicos |
-| F5.10 | S | ⬜ Pendiente | `fediverse` | Mastodon `GET /api/v1/accounts/lookup` [R22] y WebFinger en las instancias derivadas de `usuario@instancia`; perfil público de Bluesky *(spike)* |
-| F5.11 | S | ⬜ Pendiente | `dev_registries` | Perfiles y mantenedores en npm, PyPI, crates.io, Docker Hub y Stack Exchange, y metadatos públicos de los paquetes publicados |
-| F5.6 | C | ⬜ Pendiente | Filtros por categoría | `--tags dev,social,gaming` y `--top N` por popularidad |
-| F5.14 | C | ⬜ Pendiente | `discord_snowflake` | Fecha de creación de una cuenta a partir de su ID, en local |
-| F5.15 | C | ⬜ Pendiente | `ext_maigret` | Adaptador (F3.4) de Maigret para extracción de perfil recursiva; el binario lo instala el usuario |
+| F5.9 | M | ✅ Hecho | Generadores | `username_variants` (permutaciones a partir de nombre o alias) y `email_candidates` (patrones como `{first}.{last}` sobre un dominio). **Solo generan candidatos: nunca se verifican por SMTP.** Introducen la entidad `person` |
+| F5.3 | S | ✅ Hecho | Segunda fuente de firmas | Integrar WhatsMyName (CC BY-SA 4.0, fichero de datos separado con atribución [R7]) y marcar como "confirmado" lo que detecten ambas fuentes |
+| F5.4 | S | ✅ Hecho | Extracción de perfil | Para los sitios principales, extraer nombre visible, biografía, enlaces y otros usernames de la página pública **Hecho**: `profile_extract` lee las APIs oficiales de DEV Community y Codeberg (nombre, bio, web, usernames declarados); no extrae nada de páginas HTML. |
+| F5.5 | S | ✅ Hecho | Pivote recursivo de identificadores | Los usernames y enlaces extraídos en F5.4 alimentan el siguiente nivel de pivoteo **Hecho**: los usernames que declara `profile_extract` se emiten como entidades y el motor los pivota hasta la profundidad del scan. |
+| F5.7 | S | ✅ Hecho | `github_user` | Perfil público de GitHub: nombre, empresa, blog, organizaciones, emails de commits públicos |
+| F5.10 | S | ✅ Hecho | `fediverse` | Mastodon `GET /api/v1/accounts/lookup` [R22] y WebFinger en las instancias derivadas de `usuario@instancia`; perfil público de Bluesky *(spike)* **Hecho**: `bluesky` (API pública, handle `usuario.bsky.social` o con dominio propio) junto a `fediverse`. |
+| F5.11 | S | ✅ Hecho | `dev_registries` | Perfiles y mantenedores en npm, PyPI, crates.io, Docker Hub y Stack Exchange, y metadatos públicos de los paquetes publicados **Hecho**: `dev_registries` añade PyPI (página pública de perfil) y Stack Overflow (solo nombres visibles idénticos, sin `verified`). |
+| F5.6 | C | ⬜ Pendiente | Filtros por categoría | `--tags dev,social,gaming` y `--top N` por popularidad **Estado**: Evaluada y no incluida: Sherlock no tiene categorías ni popularidad y solo WhatsMyName tiene categorías; un filtro que afecte a una de las dos fuentes engañaría; ver [fuentes evaluadas](docs/MODULES.md#fuentes-evaluadas-y-no-incluidas). |
+| F5.14 | C | ✅ Hecho | `discord_snowflake` | Fecha de creación de una cuenta a partir de su ID, en local |
+| F5.15 | C | ✅ Hecho | `ext_maigret` | Adaptador (F3.4) de Maigret para extracción de perfil recursiva; el binario lo instala el usuario **Hecho**: `ext_maigret` lee el informe `--json simple` que Maigret escribe en una carpeta temporal. |
 
 **Criterios de aceptación**
 - Los generadores no hacen ninguna petición de red ni de SMTP (test).
@@ -699,6 +731,18 @@ línea, sin recurrir a scraping de redes sociales.
   contiene).
 - Los resultados de WhatsMyName y Sherlock coincidentes se marcan como confirmados.
 - Cada módulo cumple los criterios de la fase 4 sobre salud, procedencia y términos de uso.
+
+**Estado (07-11-2026):** 13 de 15 hechos y 0 parciales, en la rama `feat/roadmap-f4-s` (sin
+publicar); quedan F5.6 y F5.8, evaluadas y no incluidas. Plan y decisiones en [`docs/plans/fase-05.md`](docs/plans/fase-05.md).
+- **Hechos, sin verificar en vivo (D1):** F5.2, F5.3, F5.7, F5.9, F5.13 y F5.14. Los tests simulan
+  las respuestas.
+- **F5.3:** «confirmado» = las dos fuentes dan la misma URL de perfil, el motor las fusiona y la
+  confianza sube a `medio`. Si las URLs difieren, no se detecta la coincidencia.
+- **F5.10:** `fediverse` es activo (contacta con el host del email); `bluesky` usa la API pública.
+- **F5.11:** npm, crates.io, Docker Hub, PyPI y Stack Overflow; Stack Overflow solo por nombre visible.
+- **Cierre del roadmap (07-11-2026):** F5.1 (`leakcheck`), F5.4 y F5.5 (`profile_extract`, solo APIs
+  oficiales), F5.12 (`pgp_keyserver`) y F5.15 (`ext_maigret`) hechos. F5.6 y F5.8 evaluadas y no
+  incluidas (ver `docs/MODULES.md`). Hechos sin verificar en vivo: respuestas simuladas.
 
 ---
 
@@ -711,34 +755,34 @@ fuentes legales y documentadas.
 
 | ID | P | Estado | Módulo | Fuente | Notas |
 |---|---|---|---|---|---|
-| F6.1 | S | ⬜ Pendiente | `opensanctions` | Listas de sanciones y personas políticamente expuestas [R10] | Gratis para uso no comercial con key |
-| F6.2 | S | ⬜ Pendiente | `gleif` | Identificadores LEI y relaciones matriz–filial | API pública gratuita |
-| F6.3 | C | ⬜ Pendiente | `librebor` | Actos del BORME en España: constituciones, cargos, ceses [R11] | API de pago; módulo opcional |
-| F6.4 | C | ⬜ Pendiente | `opencorporates` | Registros mercantiles de más de 140 jurisdicciones [R12] | API de pago; acceso gratuito para periodismo e investigación previa solicitud |
+| F6.1 | S | ✅ Hecho | `opensanctions` | Listas de sanciones y personas políticamente expuestas [R10] | Gratis para uso no comercial con key |
+| F6.2 | S | ✅ Hecho | `gleif` | Identificadores LEI y relaciones matriz–filial | API pública gratuita |
+| F6.3 | C | ⬜ Pendiente | `librebor` | Actos del BORME en España: constituciones, cargos, ceses [R11] **Estado**: Evaluada y no incluida: API de pago sin acceso para verificarla; ver [fuentes evaluadas](docs/MODULES.md#fuentes-evaluadas-y-no-incluidas). | API de pago; módulo opcional |
+| F6.4 | C | ⬜ Pendiente | `opencorporates` | Registros mercantiles de más de 140 jurisdicciones [R12] **Estado**: Evaluada y no incluida: acceso de pago o por solicitud, sin acceso para verificarla; ver [fuentes evaluadas](docs/MODULES.md#fuentes-evaluadas-y-no-incluidas). | API de pago; acceso gratuito para periodismo e investigación previa solicitud |
 
 **Teléfono, criptomonedas y ficheros**
 
 | ID | P | Estado | Módulo | Fuente | Notas |
 |---|---|---|---|---|---|
-| F6.5 | M | ⬜ Pendiente | `phone_parse` | Librería `phonenumbers`, sin red | País, región, tipo de línea, operador de origen y formatos E.164 |
-| F6.6 | M | ⬜ Pendiente | `crypto_detect` | Validación local de formato (BTC, ETH, LTC, XMR…) | Sin red |
-| F6.7 | S | ⬜ Pendiente | `btc_explorer` | mempool.space: saldo, número de transacciones, primera y última actividad | Gratis |
-| F6.8 | C | ⬜ Pendiente | `eth_explorer` | Etherscan: saldo, transacciones, etiquetas públicas | Key gratuita |
-| F6.9 | M | ⬜ Pendiente | `file_meta` | EXIF, XMP, IPTC y metadatos de documentos (PDF, Office) **en local** | Nunca se suben ficheros a terceros |
-| F6.10 | S | ⬜ Pendiente | `file_hash` | MD5, SHA-1, SHA-256 y pivote a reputación (VirusTotal, abuse.ch) | Solo el hash sale del equipo |
-| F6.11 | S | ⬜ Pendiente | `geo_point` | Coordenadas GPS como entidad `location`, con enlace a mapas | Sin red |
+| F6.5 | M | ✅ Hecho | `phone_parse` | Librería `phonenumbers`, sin red | País, región, tipo de línea, operador de origen y formatos E.164 |
+| F6.6 | M | ✅ Hecho | `crypto_detect` | Validación local de formato (BTC, ETH, LTC, XMR…) | Sin red |
+| F6.7 | S | ✅ Hecho | `btc_explorer` | mempool.space: saldo, número de transacciones, primera y última actividad | Gratis |
+| F6.8 | C | 🟡 Parcial | `eth_explorer` | Etherscan: saldo, transacciones, etiquetas públicas **Estado**: Sin etiquetas: `getaddresstag` solo está en el plan Pro Plus. | Key gratuita |
+| F6.9 | M | ✅ Hecho | `file_meta` | EXIF, XMP, IPTC y metadatos de documentos (PDF, Office) **en local** | Nunca se suben ficheros a terceros |
+| F6.10 | S | ✅ Hecho | `file_hash` | MD5, SHA-1, SHA-256 y pivote a reputación (VirusTotal, abuse.ch) | Solo el hash sale del equipo |
+| F6.11 | S | ✅ Hecho | `geo_point` | Coordenadas GPS como entidad `location`, con enlace a mapas | Sin red |
 
 **Evidencia, fugas y búsqueda**
 
 | ID | P | Estado | Módulo | Función | Notas |
 |---|---|---|---|---|---|
-| F6.12 | S | ⬜ Pendiente | `capture` | Captura de una URL: HTML, cabeceras, WARC, pantallazo con navegador *headless* y SHA-256; opción de Save Page Now de Wayback. Sigue los principios de preservación [R3] | **Activo**; extra opcional `osineitor[capture]` |
-| F6.15 | S | ⬜ Pendiente | `github_code` | Menciones del dominio en código público de GitHub para detectar fugas (credenciales, endpoints internos). **Solo se guarda repositorio, ruta, tipo de regla y huella; nunca el valor del secreto.** Incluye guía de divulgación responsable | Key de GitHub |
-| F6.13 | C | ⬜ Pendiente | `search_dorks` | Plantillas (`site:`, `filetype:`, `intext:`) lanzadas por una **API oficial de búsqueda** (candidata: Brave Search); sin scraping de buscadores [R19]. Evaluación con puerta de decisión *(spike)* | Cuota gratuita limitada |
-| F6.14 | C | ⬜ Pendiente | `doc_harvest` | Descarga documentos públicos del dominio (de dorks o Wayback) y extrae sus metadatos con `file_meta` (autor, software, rutas internas) | **Activo** |
-| F6.16 | C | ⬜ Pendiente | `cloud_storage_refs` | Detecta referencias a buckets (S3, GCS, Azure) en URLs ya recogidas y comprueba el acceso público de **ese** bucket; **no se adivinan nombres** | Activo |
-| F6.17 | C | ⬜ Pendiente | `image_links` | Genera enlaces de búsqueda inversa de imágenes (Yandex, TinEye, Google) para una URL; no sube ficheros | Sin red |
-| F6.18 | C | ⬜ Pendiente | `ext_exiftool` | Adaptador (F3.4) de ExifTool para formatos que `file_meta` no cubra | Binario del usuario |
+| F6.12 | S | ✅ Hecho | `capture` | Captura de una URL: HTML, cabeceras, WARC, pantallazo con navegador *headless* y SHA-256; opción de Save Page Now de Wayback. Sigue los principios de preservación [R3] | **Activo**; extra opcional `osineitor[capture]` |
+| F6.15 | S | ✅ Hecho | `github_code` | Menciones del dominio en código público de GitHub para detectar fugas (credenciales, endpoints internos). **Solo se guarda repositorio, ruta, tipo de regla y huella; nunca el valor del secreto.** Incluye guía de divulgación responsable | Key de GitHub |
+| F6.13 | C | ✅ Hecho | `search_dorks` | Plantillas (`site:`, `filetype:`, `intext:`) lanzadas por una **API oficial de búsqueda** (candidata: Brave Search); sin scraping de buscadores [R19]. Evaluación con puerta de decisión *(spike)* | Cuota gratuita limitada |
+| F6.14 | C | ✅ Hecho | `doc_harvest` | Descarga documentos públicos del dominio (de dorks o Wayback) y extrae sus metadatos con `file_meta` (autor, software, rutas internas) | **Activo** |
+| F6.16 | C | ✅ Hecho | `cloud_storage_refs` | Detecta referencias a buckets (S3, GCS, Azure) en URLs ya recogidas y comprueba el acceso público de **ese** bucket; **no se adivinan nombres** | Activo |
+| F6.17 | C | ✅ Hecho | `image_links` | Genera enlaces de búsqueda inversa de imágenes (Yandex, TinEye, Google) para una URL; no sube ficheros | Sin red |
+| F6.18 | C | ✅ Hecho | `ext_exiftool` | Adaptador (F3.4) de ExifTool para formatos que `file_meta` no cubra | Binario del usuario |
 
 **Criterios de aceptación**
 - `osineitor scan` detecta automáticamente teléfonos, direcciones cripto y rutas de fichero.
@@ -750,6 +794,21 @@ fuentes legales y documentadas.
 - Los módulos de organizaciones documentan la licencia de sus datos y su uso permitido.
 - La decisión sobre `search_dorks` (implementar con qué API, o descartar) queda documentada.
 
+**Estado (08-11-2026):** 15 de 18 hechos y 1 parcial, en la rama `feat/roadmap-f4-s` (sin
+publicar); los 3 *M* están hechos. Plan y decisiones en [`docs/plans/fase-06.md`](docs/plans/fase-06.md).
+- **Probados en vivo:** F6.12 (pantallazo real y WARC validado con `warcio`), F6.14, F6.16 y F6.18.
+- **Hechos sin verificar en vivo (D1), con tests que simulan la fuente:** F6.1, F6.2,
+  F6.5, F6.6, F6.7, F6.8, F6.9, F6.10, F6.11, F6.13, F6.15, F6.17 y Save Page Now (F6.12). De `gleif` solo
+  se comprobó contra la API real la estructura de `/lei-records`.
+- **Criterios cumplidos:** `scan` detecta teléfonos, direcciones cripto, coordenadas y rutas de fichero;
+  un test intercepta la red y comprueba que los módulos de ficheros no la usan; otro lee los bytes de la
+  base y comprueba que `github_code` no guarda el secreto, ni siquiera con `--evidence`; `verify` detecta
+  una captura alterada o borrada; los módulos de organizaciones documentan licencia y uso permitido; la
+  decisión sobre `search_dorks` (Brave Search) consta en el plan de la fase.
+- **F6.8 (parcial):** faltan las etiquetas públicas, solo disponibles en el plan Pro Plus.
+- **F6.6:** Ethereum y Monero solo se validan por forma (EIP-55 pide Keccak-256).
+- **No incluidos, con su motivo en `docs/MODULES.md`:** F6.3 y F6.4 (APIs de pago).
+
 ---
 
 ### Fase 7 · Hallazgos, análisis y casos (v0.8.0)
@@ -758,18 +817,18 @@ fuentes legales y documentadas.
 
 | ID | P | Estado | Entregable | Detalle |
 |---|---|---|---|---|
-| F7.8 | M | ⬜ Pendiente | Motor de hallazgos | Modelo `Finding` (regla, severidad, entidades afectadas, evidencia, recomendación) y reglas declarativas en YAML. Reglas iniciales (≥ 12): DMARC ausente o `p=none`; SPF con `+all` o `?all`; sin MTA-STS; certificado caducado o a ≤ 30 días; dominio que expira en ≤ 60 días; CVE en KEV; EPSS alto; CNAME colgante; URLs sensibles archivadas (`.env`, `.sql`); IP en lista negra; cabeceras de seguridad ausentes; servicios de administración expuestos |
-| F7.1 | M | ⬜ Pendiente | Grafo interactivo en el informe HTML | Nodos por entidad y aristas por relación de pivoteo, con filtros por tipo y fuente (librería JS local, sin CDN en el informe) |
-| F7.3 | M | ⬜ Pendiente | Comparación de scans | `osineitor diff A B`: entidades y hallazgos nuevos, desaparecidos y modificados |
-| F7.11 | M | ⬜ Pendiente | Exportación CSV | Entidades, relaciones y hallazgos en CSV |
-| F7.2 | S | ⬜ Pendiente | Casos | `osineitor case new/add/show`: agrupa varios scans de una misma investigación con notas y etiquetas |
-| F7.4 | S | ⬜ Pendiente | Línea temporal | Ordena las fechas conocidas (registro de dominio, certificados, capturas de Wayback, filtraciones, primera actividad cripto) |
-| F7.5 | S | ⬜ Pendiente | Búsqueda global | `osineitor search <valor>`: en qué scans y casos aparece un dato |
-| F7.6 | S | ⬜ Pendiente | Correlación entre scans | Avisa cuando una entidad nueva ya apareció en otro caso (p. ej. misma IP o mismo email) |
-| F7.7 | S | ⬜ Pendiente | Informe ejecutivo | Plantilla de informe con resumen, hallazgos clave, nivel de confianza y anexos |
-| F7.9 | S | ⬜ Pendiente | Puntuación de riesgo por activo | Combina severidad de hallazgos, exposición y confianza |
-| F7.10 | S | ⬜ Pendiente | Resolución de entidades | Agrupa cuentas que comparten username, email o avatar con una puntuación. **Siempre se presenta como hipótesis con su evidencia**, nunca como identidad confirmada |
-| F7.12 | S | ⬜ Pendiente | Informe de superficie de ataque | Inventario de dominios, IPs, servicios, tecnologías y certificados con los hallazgos priorizados |
+| F7.8 | M | ✅ Hecho | Motor de hallazgos | Modelo `Finding` (regla, severidad, entidades afectadas, evidencia, recomendación) y reglas declarativas en YAML. Reglas iniciales (≥ 12): DMARC ausente o `p=none`; SPF con `+all` o `?all`; sin MTA-STS; certificado caducado o a ≤ 30 días; dominio que expira en ≤ 60 días; CVE en KEV; EPSS alto; CNAME colgante; URLs sensibles archivadas (`.env`, `.sql`); IP en lista negra; cabeceras de seguridad ausentes; servicios de administración expuestos |
+| F7.1 | M | ✅ Hecho | Grafo interactivo en el informe HTML | Nodos por entidad y aristas por relación de pivoteo, con filtros por tipo y fuente (librería JS local, sin CDN en el informe) |
+| F7.3 | M | ✅ Hecho | Comparación de scans | `osineitor diff A B`: entidades y hallazgos nuevos, desaparecidos y modificados |
+| F7.11 | M | ✅ Hecho | Exportación CSV | Entidades, relaciones y hallazgos en CSV |
+| F7.2 | S | ✅ Hecho | Casos | `osineitor case new/add/show`: agrupa varios scans de una misma investigación con notas y etiquetas **Hecho**: `osineitor case new/add/note/show/list`. |
+| F7.4 | S | ✅ Hecho | Línea temporal | Ordena las fechas conocidas (registro de dominio, certificados, capturas de Wayback, filtraciones, primera actividad cripto) **Hecho**: `osineitor timeline N`. |
+| F7.5 | S | ✅ Hecho | Búsqueda global | `osineitor search <valor>`: en qué scans y casos aparece un dato **Hecho**: `osineitor search VALOR`. |
+| F7.6 | S | ✅ Hecho | Correlación entre scans | Avisa cuando una entidad nueva ya apareció en otro caso (p. ej. misma IP o mismo email) **Hecho**: `case add` y `case show` avisan de datos identificadores ya vistos en otro caso. |
+| F7.7 | S | ✅ Hecho | Informe ejecutivo | Plantilla de informe con resumen, hallazgos clave, nivel de confianza y anexos **Hecho**: formato de exportación `executive`. |
+| F7.9 | S | ✅ Hecho | Puntuación de riesgo por activo | Combina severidad de hallazgos, exposición y confianza **Hecho**: `osineitor risk N`; es una heurística de priorización sin contrastar con scans reales. |
+| F7.10 | S | ✅ Hecho | Resolución de entidades | Agrupa cuentas que comparten username, email o avatar con una puntuación. **Siempre se presenta como hipótesis con su evidencia**, nunca como identidad confirmada **Hecho**: `osineitor resolve N`: hipótesis con señales y puntuación, calculadas al consultar. |
+| F7.12 | S | ✅ Hecho | Informe de superficie de ataque | Inventario de dominios, IPs, servicios, tecnologías y certificados con los hallazgos priorizados **Hecho**: formato de exportación `attack-surface`. |
 
 **Criterios de aceptación**
 - Al menos 12 reglas con tests positivos y negativos; cada hallazgo enlaza las entidades y
@@ -788,16 +847,18 @@ ampliarlo sin modificar el código.
 | ID | P | Estado | Entregable | Detalle |
 |---|---|---|---|---|
 | F8.4 | M | ✅ Hecho | Streaming NDJSON | `--ndjson` emite entidades en tiempo real para encadenar con otras herramientas. **Adelantado y hecho en v0.2.0** como parte del contrato CLI↔GUI (Hito G) |
-| F8.5 | M | ⬜ Pendiente | API de librería estable | `from osineitor import Scanner` con interfaz síncrona y asíncrona documentada |
-| F8.6 | M | ⬜ Pendiente | Plugins externos | Descubrimiento de módulos por *entry points* (`osineitor.modules`), de modo que un paquete de PyPI pueda añadir fuentes |
-| F8.1 | S | ⬜ Pendiente | Exportación STIX 2.1 | Observables de infraestructura (dominios, IPs, URLs, emails, vulnerabilidades) con la librería `stix2` |
-| F8.3 | S | ⬜ Pendiente | Formatos de grafo | GraphML/GEXF (Gephi) y script Cypher (Neo4j) |
-| F8.7 | S | ⬜ Pendiente | Importación | Cargar listas de objetivos (`--targets-file`) y resultados de otras herramientas (Subfinder, Amass, Maigret JSON) como semillas |
-| F8.2 | C | ⬜ Pendiente | Exportación a MISP | Evento MISP con atributos y objetos (`pymisp`) |
+| F8.5 | M | ✅ Hecho | API de librería estable | `from osineitor import Scanner` con interfaz síncrona y asíncrona documentada |
+| F8.6 | M | ✅ Hecho | Plugins externos | Descubrimiento de módulos por *entry points* (`osineitor.modules`), de modo que un paquete de PyPI pueda añadir fuentes |
+| F8.1 | S | ✅ Hecho | Exportación STIX 2.1 | Observables de infraestructura (dominios, IPs, URLs, emails, vulnerabilidades) con la librería `stix2` **Hecho**: `export -f stix` (extra `osineitor[stix]`). |
+| F8.3 | S | ✅ Hecho | Formatos de grafo | GraphML/GEXF (Gephi) y script Cypher (Neo4j) |
+| F8.7 | S | 🟡 Parcial | Importación | Cargar listas de objetivos (`--targets-file`) y resultados de otras herramientas (Subfinder, Amass, Maigret JSON) como semillas. **Hecho:** `osineitor import nmap` (XML `-oX`) como scan guardado. **Estado**: `--targets-file`, `import nmap`, `import subfinder` e `import maigret` hechos; Amass no se importa porque su JSON no tiene un formato estable verificado. |
+| F8.2 | C | ✅ Hecho | Exportación a MISP | Evento MISP con atributos y objetos (`pymisp`) **Hecho**: `export -f misp` (extra `osineitor[misp]`); no se ha probado contra un servidor MISP. |
 
-**Estado (29-10-2026):** solo F8.4 está hecho (adelantado en v0.2.0). `Engine` existe pero no es
-una API pública (F8.5) y el descubrimiento de módulos usa `pkgutil`/manifiesto, sin *entry points*
-(F8.6).
+**Estado:** F8.1, F8.2, F8.3, F8.4, F8.5 y F8.6 hechos y F8.7 parcial (`--targets-file`, `import nmap`,
+`import subfinder` e `import maigret`; sin Amass); los *M* de la fase están completos. Ver
+[`docs/plans/fase-08.md`](docs/plans/fase-08.md). El
+criterio del plugin de ejemplo «publicado en un repositorio aparte» no se ha hecho: los tests
+instalan un paquete real en un directorio temporal.
 
 **Criterios de aceptación**
 - El STIX generado valida con el validador oficial de OASIS.
@@ -813,13 +874,17 @@ de la superficie de ataque externa.
 
 | ID | P | Estado | Entregable | Detalle |
 |---|---|---|---|---|
-| F9.1 | M | ⬜ Pendiente | `osineitor watch` | Define objetivos vigilados con frecuencia y módulos; se ejecuta desde cron, systemd o GitHub Actions |
-| F9.2 | M | ⬜ Pendiente | Reglas de alerta | Reutilizan el motor de hallazgos (F7.8): nuevo subdominio, nuevo puerto expuesto, nueva CVE, certificado próximo a caducar, dominio próximo a expirar, aparición en una filtración, IP en lista negra |
-| F9.3 | M | ⬜ Pendiente | Notificaciones | Webhook genérico (compatible con Slack, Discord y Teams), email SMTP y salida para sistemas de monitorización |
-| F9.4 | S | ⬜ Pendiente | Supresión de ruido | Umbrales, ventanas de silencio y confirmación en dos ejecuciones antes de alertar |
-| F9.5 | S | ⬜ Pendiente | Retención | Política de conservación configurable (`osineitor purge --older-than 90d`) |
-| F9.6 | S | ⬜ Pendiente | Vigilancia de dominios parecidos | Alerta cuando aparece un dominio nuevo detectado por `lookalike_domains` (F4.20) |
-| F9.7 | S | ⬜ Pendiente | Vigilancia de nuevas filtraciones | Alerta cuando un email o dominio vigilado aparece en una filtración o en infostealers que no figuraba antes |
+| F9.1 | M | ✅ Hecho | `osineitor watch` | Define objetivos vigilados con frecuencia y módulos; se ejecuta desde cron, systemd o GitHub Actions |
+| F9.2 | M | ✅ Hecho | Reglas de alerta | Reutilizan el motor de hallazgos (F7.8): nuevo subdominio, nuevo puerto expuesto, nueva CVE, certificado próximo a caducar, dominio próximo a expirar, aparición en una filtración, IP en lista negra |
+| F9.3 | M | ✅ Hecho | Notificaciones | Webhook genérico (compatible con Slack, Discord y Teams), email SMTP y salida para sistemas de monitorización |
+| F9.4 | S | ✅ Hecho | Supresión de ruido | Umbrales, ventanas de silencio y confirmación en dos ejecuciones antes de alertar **Hecho**: `confirm: N` por objetivo y `quiet` por notificador. |
+| F9.5 | S | ✅ Hecho | Retención | Política de conservación configurable (`osineitor purge --older-than 90d`) |
+| F9.6 | S | ✅ Hecho | Vigilancia de dominios parecidos | Alerta cuando aparece un dominio nuevo detectado por `lookalike_domains` (F4.20) **Hecho**: regla de alerta para dominios parecidos nuevos de `lookalike_domains`. |
+| F9.7 | S | ✅ Hecho | Vigilancia de nuevas filtraciones | Alerta cuando un email o dominio vigilado aparece en una filtración o en infostealers que no figuraba antes **Hecho**: la regla `new-breach` alerta de las filtraciones nuevas de un email vigilado (`leakcheck`, `hibp`); los infostealers no están cubiertos. |
+
+**Estado:** F9.1 a F9.7 hechos; los *M* de la fase están completos. F9.7 cubre filtraciones, no infostealers. Ver [`docs/plans/fase-09.md`](docs/plans/fase-09.md). La documentación de despliegue
+([`docs/VIGILANCIA.md`](docs/VIGILANCIA.md)) no se ha ejecutado en cron, systemd ni GitHub Actions
+reales.
 
 **Criterios de aceptación**
 - Un cambio simulado en las fixtures genera exactamente una alerta, y no se repite en la
@@ -834,13 +899,18 @@ de la superficie de ataque externa.
 
 | ID | P | Estado | Entregable | Detalle |
 |---|---|---|---|---|
-| F10.2 | M | ⬜ Pendiente | Citas obligatorias y verificadas | Cada afirmación del resumen referencia identificadores de entidad; un validador rechaza las frases sin cita o con citas inexistentes |
-| F10.3 | M | ⬜ Pendiente | Modelos locales y remotos | Soporte para modelos locales (Ollama) por privacidad, y APIs remotas como opción explícita; nunca se envían datos sin consentimiento en la configuración |
-| F10.6 | M | ⬜ Pendiente | Evaluación | Conjunto de pruebas propio para medir la proporción de afirmaciones sin respaldo, publicada en la documentación |
-| F10.1 | S | ⬜ Pendiente | `osineitor summarize <scan>` | Resumen en lenguaje natural generado **solo** a partir de las entidades guardadas |
-| F10.4 | S | ⬜ Pendiente | Servidor MCP | Expone búsqueda, consulta de scans y lanzamiento de módulos pasivos a agentes de IA; los módulos activos quedan excluidos por defecto |
-| F10.7 | S | ⬜ Pendiente | Resúmenes basados en hallazgos | El resumen parte de los hallazgos (F7.8) y sus evidencias, no de las entidades en bruto |
-| F10.5 | C | ⬜ Pendiente | Sugerencia de pivotes | Propone siguientes pasos; nunca los ejecuta sin confirmación del usuario |
+| F10.2 | M | ✅ Hecho | Citas obligatorias y verificadas | Cada afirmación del resumen referencia identificadores de entidad; un validador rechaza las frases sin cita o con citas inexistentes |
+| F10.3 | M | ✅ Hecho | Modelos locales y remotos | Soporte para modelos locales (Ollama) por privacidad, y APIs remotas como opción explícita; nunca se envían datos sin consentimiento en la configuración |
+| F10.6 | M | ✅ Hecho | Evaluación | Conjunto de pruebas propio para medir la proporción de afirmaciones sin respaldo, publicada en la documentación |
+| F10.1 | S | ✅ Hecho | `osineitor summarize <scan>` | Resumen en lenguaje natural generado **solo** a partir de las entidades guardadas |
+| F10.4 | S | ✅ Hecho | Servidor MCP | Expone búsqueda, consulta de scans y lanzamiento de módulos pasivos a agentes de IA; los módulos activos quedan excluidos por defecto **Hecho**: `osineitor mcp` (ver `docs/MCP.md`). |
+| F10.7 | S | ✅ Hecho | Resúmenes basados en hallazgos | El resumen parte de los hallazgos (F7.8) y sus evidencias, no de las entidades en bruto |
+| F10.5 | C | ✅ Hecho | Sugerencia de pivotes | Propone siguientes pasos; nunca los ejecuta sin confirmación del usuario **Hecho**: `osineitor suggest N`; solo propone. |
+
+**Estado:** F10.1 a F10.7 hechos; los *M* de la fase están completos. Ver [`docs/plans/fase-10.md`](docs/plans/fase-10.md). Nada se ha
+probado contra un modelo real y la tasa de un modelo concreto no está medida: lo publicado en
+[`docs/IA.md`](docs/IA.md) es la del validador sobre un corpus propio. No se añadió el extra
+`osineitor[ai]` porque no hay dependencias que instalar.
 
 **Criterios de aceptación**
 - El 100 % de las afirmaciones del resumen tiene una cita válida, comprobado automáticamente.
@@ -856,12 +926,18 @@ de la superficie de ataque externa.
 
 | ID | P | Estado | Entregable | Detalle |
 |---|---|---|---|---|
-| F11.2 | M | ⬜ Pendiente | Publicación en PyPI | Con *trusted publishing* y firma de artefactos (Sigstore) |
-| F11.4 | M | ⬜ Pendiente | Sitio de documentación | MkDocs con guía de usuario, referencia de módulos generada desde el código y tutoriales |
-| F11.6 | M | ⬜ Pendiente | Compromiso de estabilidad | SemVer estricto sobre CLI, formato de exportación y API de librería; política de obsolescencia de dos versiones menores |
+| F11.2 | M | 🟡 Parcial | Publicación en PyPI | Con *trusted publishing* y firma de artefactos (Sigstore) |
+| F11.4 | M | ✅ Hecho | Sitio de documentación | MkDocs con guía de usuario, referencia de módulos generada desde el código y tutoriales |
+| F11.6 | M | ✅ Hecho | Compromiso de estabilidad | SemVer estricto sobre CLI, formato de exportación y API de librería; política de obsolescencia de dos versiones menores |
 | F11.1 | — | ➖ Obsoleto | ~~Interfaz web local~~ | **Obsoleto:** sustituido por la aplicación de escritorio nativa del [Hito G](#hito-g--aplicación-de-escritorio-para-windows). Si más adelante hiciera falta una vista de grafo o de casos, se añade a esa aplicación |
-| F11.3 | S | ⬜ Pendiente | Imagen Docker | Imagen oficial mínima y sin privilegios |
-| F11.5 | C | ⬜ Pendiente | Internacionalización | Interfaz y documentación en español e inglés |
+| F11.3 | S | ✅ Hecho | Imagen Docker | Imagen oficial mínima y sin privilegios |
+| F11.5 | C | ⬜ Pendiente | Internacionalización | Interfaz y documentación en español e inglés **Estado**: Evaluada y no incluida: traducir la interfaz y toda la documentación excede este cierre; ver [fuentes evaluadas](docs/MODULES.md#fuentes-evaluadas-y-no-incluidas). |
+
+**Estado:** F11.3, F11.4 y F11.6 hechos; F11.2 parcial: el paquete se construye y se instala en un
+entorno limpio, y el flujo de publicación está escrito, pero no se ha ejecutado ni hay publicación
+en PyPI (necesita la cuenta del mantenedor, ver [`docs/PUBLICACION.md`](docs/PUBLICACION.md)). La
+imagen Docker no se ha construido en local. F11.5 (internacionalización) está evaluada y no incluida, ver
+[`docs/plans/fase-11.md`](docs/plans/fase-11.md). F11.1 sigue obsoleto.
 
 **Criterios de aceptación**
 - Instalación con `pip install osineitor` y `docker run` documentadas y probadas en CI.
@@ -884,12 +960,14 @@ Se aplican en todas las fases, no se planifican aparte.
 ### Seguridad
 
 - API keys en el llavero del sistema (`keyring`) como alternativa al fichero TOML (fase 1).
+  *(Pendiente: no está implementado.)*
 - Cifrado opcional de la base de datos (SQLCipher) para investigaciones con datos personales
-  (fase 2).
+  (fase 2). *(Pendiente: no está implementado.)*
 - Informes HTML sin recursos externos y con escape de todo el contenido de terceros.
 - Toda entrada del usuario o de una fuente externa se valida y codifica antes de usarse en una
   URL o en un comando (F1.11, F1.13).
-- Análisis de dependencias (Dependabot) y de secretos en CI.
+- Análisis de dependencias (Dependabot) y de secretos en CI. *(Pendiente: no hay
+  `.github/dependabot.yml`.)*
 
 ### Legal y ética
 
@@ -910,8 +988,8 @@ registro de licencias se mantiene con `update-data` (F3.5).
 | Firmas de Sherlock | MIT | Incluido, con atribución |
 | WhatsMyName | CC BY-SA 4.0 [R7] | Fichero de datos separado del código, con atribución |
 | Firmas de `webappanalyzer` | GPL-3.0 [R20] | **No se incluye**; descarga bajo demanda o firmas propias |
-| GeoLite2 | EULA de MaxMind | No se redistribuye; cada usuario lo descarga *(spike)* |
-| Catálogo CISA KEV, datos EPSS | Por verificar en el *spike* de F4.14 | Descarga bajo demanda |
+| GeoLite2 | EULA de MaxMind y CC BY-SA 4.0 | No se incluye ni se descarga; la coloca el usuario (F4.23) |
+| Catálogo CISA KEV, datos EPSS | KEV es CC0; EPSS es de uso libre (resuelto en F4.14) | Consulta bajo demanda, sin redistribuir |
 
 ### Dependencias previstas
 
@@ -922,11 +1000,16 @@ opcionales para no engordar la instalación base.
 |---|---|
 | 1 | `platformdirs`, `idna`; `keyring` opcional |
 | 3 | `pyyaml` |
-| 4 | `mmh3`; `maxminddb` opcional |
+| 4 | `mmh3`; `maxminddb` |
 | 6 | `phonenumbers`, lector de metadatos de imagen; `playwright` y `warcio` en el extra `capture` |
 | 8 | `stix2`; `pymisp` opcional |
 | 10 | Extra `ai` |
 | 11 | `fastapi`, `uvicorn` en un extra |
+
+Estado a 08-11-2026: de esta tabla solo están en `pyproject.toml` `platformdirs`, `idna`,
+`pyyaml`, `phonenumbers`, `maxminddb` y los extras `stix`, `misp` y `capture` (`stix2`, `pymisp`, `playwright`). No
+se adoptaron `keyring`, `mmh3` (hay una implementación propia en `favicon_pivot`), `warcio`
+(el WARC se escribe con la biblioteca estándar), `fastapi` ni `uvicorn`, ni existe un extra `ai`.
 
 ### Rendimiento
 
@@ -998,6 +1081,16 @@ justificación.
 | 30-10-2026 | Fase 2 terminada (F2.1–F2.7), pendiente de release 0.3.0; recuento de tests y fechas de estado al día |
 | 31-10-2026 | Fase 3 terminada (F3.1–F3.7), pendiente de release 0.4.0; D13 resuelto |
 | 31-10-2026 | Release 0.4.0 (incluye las fases 2 y 3); versión actual 0.4.0 |
+| 31-10-2026 | Release 0.5.0 (los cinco *M* de la fase 4: F4.4, F4.11, F4.12, F4.13 y F4.14); versión actual 0.5.0 |
+| 05-11-2026 | Implementadas, sin publicar, las fases 4 (*S*) a 11 en lo que no depende de cuentas o red real (planes en `docs/plans/`); 85 entregables hechos, 7 parciales y 41 pendientes, 44 de 50 *M*; la versión actual sigue siendo 0.5.0 |
+| 05-11-2026 | Fase 0: F0.5 hecho; F0.1, F0.2 y F0.3 pasan a parciales (10 módulos sin API key probados en vivo, con fixtures reales); 86 hechos, 9 parciales y 38 pendientes, 45 de 50 *M* |
+| 05-11-2026 | Hito G: G2 hecho (ventana principal con menús, barra de herramientas, tema y geometría); 87 hechos, 8 parciales y 38 pendientes, 46 de 50 *M* |
+| 05-11-2026 | Hito G: G3 hecho (scan en vivo: diálogo «Nuevo scan» pasivo, pestañas con entidades y actividad por módulo, progreso y cancelación); 88 hechos, 7 parciales y 38 pendientes, 47 de 50 *M* |
+| 05-11-2026 | Hito G: G4 hecho (panel Historial, detalle de entidad y exportar a JSON/Markdown/HTML); 89 hechos, 6 parciales y 38 pendientes, 48 de 50 *M* |
+| 07-11-2026 | Cierre del roadmap: F1.6, F1.15, F4.21, F4.22, F5.1, F5.4, F5.5, F5.10, F5.11, F5.12, F5.15, F7.2, F7.4, F7.5, F7.6, F7.7, F7.9, F7.10, F7.12, F8.1, F8.2, F9.4, F9.6, F9.7, F10.4 y F10.5 hechos; F8.7 sigue parcial (sin Amass); F4.23, F5.6, F5.8, F6.1, F6.3, F6.4, F6.8, F6.12 a F6.16, F6.18 y F11.5 evaluados y no incluidos (`docs/MODULES.md`); recuento de las fases 0 a 11: 111 hechos, 8 parciales y 14 pendientes, 46 de 50 *M* |
+| 07-11-2026 | F4.17 hecho: `cloud_attribution` etiqueta IP con los rangos de AWS, GCP, Azure y Cloudflare (`update-data`, licencia `public-feed`); la URL de Azure se comprueba al arrancar la CLI, una vez al día (`OSINEITOR_NO_AUTO_UPDATE` la desactiva); recuento de las fases 0 a 11: 112 hechos, 7 parciales y 14 pendientes, 46 de 50 *M* |
+| 08-11-2026 | Fase 6 casi completa: F6.1, F6.10, F6.12 a F6.16 y F6.18 hechos y F6.8 parcial (sin etiquetas, solo en Pro Plus); F6.12, F6.14, F6.16 y F6.18 probados en vivo, el resto con la documentación oficial (D1); F6.3 y F6.4 siguen fuera por ser de pago; recuento de las fases 0 a 11: 120 hechos, 7 parciales y 6 pendientes, 46 de 50 *M* |
+| 08-11-2026 | F4.23 hecho: `geoip_offline` lee una base GeoLite2-City que coloca el usuario; probado en vivo con la base real; recuento de las fases 0 a 11: 121 hechos, 7 parciales y 5 pendientes, 46 de 50 *M* |
 
 ### Correspondencia con la numeración anterior
 

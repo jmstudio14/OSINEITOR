@@ -1,0 +1,35 @@
+{
+  "module": "gravatar",
+  "target": "octocat@github.com",
+  "recorded": "2026-11-05",
+  "entities": 2,
+  "sites": null,
+  "http": [
+    {
+      "method": "GET",
+      "url": "https://gravatar.com/ad3fa33274f30e5a164305122c77741694a1758d582929c70b3d181fcd4c886b.json",
+      "status": 200,
+      "headers": {
+        "server": "nginx",
+        "date": "Thu, 05 Nov 2026 17:16:13 GMT",
+        "content-type": "application/json",
+        "connection": "keep-alive",
+        "vary": "Accept-Encoding",
+        "content-language": "en",
+        "p3p": "CP=\"CAO PSA\"",
+        "x-frame-options": "SAMEORIGIN",
+        "link": "<https://gravatar.com/ad3fa33274f30e5a164305122c77741694a1758d582929c70b3d181fcd4c886b.json>; rel=\"canonical\"",
+        "expires": "Thu, 05 Nov 2026 17:31:13 GMT",
+        "last-modified": "Thu, 01 Jan 1970 00:00:00 GMT",
+        "cache-control": "max-age=900",
+        "access-control-allow-origin": "*",
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "GET, OPTIONS",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "strict-transport-security": "max-age=31536000; includeSubdomains; preload"
+      },
+      "body": "{\"entry\":[{\"hash\":\"ad3fa33274f30e5a164305122c77741694a1758d582929c70b3d181fcd4c886b\",\"requestHash\":\"ad3fa33274f30e5a164305122c77741694a1758d582929c70b3d181fcd4c886b\",\"profileUrl\":\"https:\\/\\/gravatar.com\\/theoctocat\",\"preferredUsername\":\"theoctocat\",\"thumbnailUrl\":\"https:\\/\\/2.gravatar.com\\/avatar\\/ad3fa33274f30e5a164305122c77741694a1758d582929c70b3d181fcd4c886b\",\"photos\":[{\"value\":\"https:\\/\\/1.gravatar.com\\/avatar\\/7194e8d48fa1d2b689f99443b767316c\",\"type\":\"thumbnail\"}],\"displayName\":\"theoctocat\"}]}"
+    }
+  ],
+  "dns": []
+}
