@@ -6,6 +6,7 @@ import json
 
 import pytest
 import respx
+from click import unstyle
 from typer.testing import CliRunner
 
 from osineitor import registry
@@ -105,4 +106,4 @@ def test_a_person_scan_requires_purpose_when_configured(monkeypatch):
     monkeypatch.setenv("OSINEITOR_REQUIRE_PURPOSE", "1")
     result = runner.invoke(app, ["person", "Ana García", "--no-save"])
     assert result.exit_code == 2
-    assert "--purpose" in result.output
+    assert "--purpose" in unstyle(result.output)

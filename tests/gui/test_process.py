@@ -242,3 +242,11 @@ def test_email_scan_with_purpose_succeeds(monkeypatch):
     assert proc.wait(30) == EXIT_OK
     kinds = [type(e).__name__ for e in rec.events]
     assert "ScanStart" in kinds and kinds[-1] == "ScanEnd"
+
+
+def test_the_child_cannot_be_forced_to_write_ansi_styles(monkeypatch):
+    for name in ("FORCE_COLOR", "PY_COLORS", "GITHUB_ACTIONS"):
+        monkeypatch.setenv(name, "1")
+    env = child_env()
+    assert not {"FORCE_COLOR", "PY_COLORS", "GITHUB_ACTIONS"} & set(env)
+    assert env["NO_COLOR"] == "1"

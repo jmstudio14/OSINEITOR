@@ -25,6 +25,9 @@ KILL_AFTER_TERMINATE = 5.0
 def child_env(extra: Mapping[str, str] | None = None) -> dict[str, str]:
     """Entorno del hijo: UTF-8 en todas partes (si no, Windows usa cp1252) y sin colores."""
     env = dict(os.environ)
+    # Typer y Rich fuerzan estilos ANSI con estas, incluso con NO_COLOR: mancharían los errores.
+    for name in ("FORCE_COLOR", "PY_COLORS", "GITHUB_ACTIONS"):
+        env.pop(name, None)
     env.update({"PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8", "NO_COLOR": "1"})
     if extra:
         env.update(extra)
