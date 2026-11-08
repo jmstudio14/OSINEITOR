@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from click import unstyle
 from typer.testing import CliRunner
 
 from osineitor import cli
@@ -11,6 +10,7 @@ from osineitor.cli import app
 from osineitor.models import Entity, ScanResult
 from osineitor.storage import Storage
 from osineitor.targets import MAX_TARGETS, TargetsError, read_targets
+from tests.ansi import plain
 
 runner = CliRunner()
 
@@ -82,7 +82,7 @@ def test_batch_needs_exactly_one_source_of_targets(tmp_path, fake_scan):
 def test_batch_rejects_json_because_it_would_not_be_one_document(tmp_path, fake_scan):
     path = listing(tmp_path, "example.com\n")
     res = runner.invoke(app, ["scan", "--targets-file", str(path), "--json", "--no-save"])
-    assert res.exit_code == 2 and "--ndjson" in unstyle(res.output) and fake_scan == []
+    assert res.exit_code == 2 and "--ndjson" in plain(res.output) and fake_scan == []
 
 
 def test_one_bad_target_does_not_stop_the_rest_but_sets_the_exit_code(tmp_path, fake_scan):

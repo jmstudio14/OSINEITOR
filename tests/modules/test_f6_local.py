@@ -10,7 +10,6 @@ import zipfile
 import httpx
 import pytest
 import respx
-from click import unstyle
 from typer.testing import CliRunner
 
 from osineitor.cli import app
@@ -24,6 +23,7 @@ from osineitor.modules.files.meta import FileMeta
 from osineitor.modules.geo.point import GeoPoint
 from osineitor.modules.phone.parse import PhoneParse
 from osineitor.normalize import canonical
+from tests.ansi import plain
 
 BTC_BECH32 = "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"
 BTC_LEGACY = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
@@ -295,7 +295,7 @@ def test_scan_detects_a_phone_and_requires_purpose_when_configured(monkeypatch):
     monkeypatch.setenv("OSINEITOR_REQUIRE_PURPOSE", "1")
     result = runner.invoke(app, ["scan", "+34612345678", "--no-save"])
     assert result.exit_code == 2
-    assert "--purpose" in unstyle(result.output)
+    assert "--purpose" in plain(result.output)
 
 
 def test_scan_of_a_phone_runs_phone_parse(monkeypatch):

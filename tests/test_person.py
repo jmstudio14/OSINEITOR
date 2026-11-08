@@ -6,7 +6,6 @@ import json
 
 import pytest
 import respx
-from click import unstyle
 from typer.testing import CliRunner
 
 from osineitor import registry
@@ -19,6 +18,7 @@ from osineitor.modules.username.person import (
     combine,
     name_parts,
 )
+from tests.ansi import plain
 
 runner = CliRunner()
 PERSON = Entity(type=EntityType.PERSON, value="María José García López")
@@ -106,4 +106,4 @@ def test_a_person_scan_requires_purpose_when_configured(monkeypatch):
     monkeypatch.setenv("OSINEITOR_REQUIRE_PURPOSE", "1")
     result = runner.invoke(app, ["person", "Ana García", "--no-save"])
     assert result.exit_code == 2
-    assert "--purpose" in unstyle(result.output)
+    assert "--purpose" in plain(result.output)
