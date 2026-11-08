@@ -11,7 +11,13 @@ pytest.importorskip("PySide6")
 pytest.importorskip("pytestqt")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from osineitor_gui.events import EXIT_CANCELLED, EXIT_OK, ModuleEnd, ScanEnd  # noqa: E402
+from osineitor_gui.events import (  # noqa: E402
+    EXIT_CANCELLED,
+    EXIT_MODULE_ERRORS,
+    EXIT_OK,
+    ModuleEnd,
+    ScanEnd,
+)
 from osineitor_gui.scan_request import ScanRequest  # noqa: E402
 from osineitor_gui.ui.runner import ScanRunner  # noqa: E402
 from osineitor_gui.ui.scan_view import ScanView  # noqa: E402
@@ -86,6 +92,14 @@ def test_the_title_and_status_follow_the_scan(qtbot, monkeypatch):
     assert view.title() == "example.com" and not view.is_running
     run_to_end(qtbot, view)
     assert view.title() == "example.com" and view.status_text() == "completo"
+
+
+def test_a_scan_with_failed_modules_says_so_in_its_status(qtbot, monkeypatch):
+    view = make_view(qtbot, monkeypatch, "fast,bad", no_save=True)
+    run_to_end(qtbot, view)
+    assert view.session.exit_code == EXIT_MODULE_ERRORS
+    assert view.status_text() == "completo, con errores en módulos"
+    assert view.title() == "example.com" and view.banner.isHidden()
 
 
 def test_cancelling_marks_the_scan_as_cancelled_and_keeps_what_was_found(qtbot, monkeypatch):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
+from PySide6.QtCore import QCoreApplication, QObject, QRunnable, Qt, QThreadPool, Signal
 from shiboken6 import isValid
 
 
@@ -16,7 +16,14 @@ class _Relay(QObject):
 
     def __init__(self) -> None:
         super().__init__()
+        self.closing = False
         self.done.connect(self._deliver, Qt.ConnectionType.QueuedConnection)
+        # Al cerrar la aplicación este objeto se destruye aunque un hilo siga en una llamada a la
+        # CLI: ese hilo no debe emitir sobre él.
+        QCoreApplication.instance().aboutToQuit.connect(self._on_quit)
+
+    def _on_quit(self) -> None:
+        self.closing = True
 
     @staticmethod
     def _deliver(callback: Callable[[Any], None], value: Any, parent: QObject | None) -> None:
@@ -35,9 +42,13 @@ class _Task(QRunnable):
         try:
             value = fn()
         except Exception as exc:  # se entrega a `on_error`; la UI decide cómo mostrarlo
-            self._relay.done.emit(on_error, exc, parent)
+            self._emit(on_error, exc, parent)
         else:
-            self._relay.done.emit(on_result, value, parent)
+            self._emit(on_result, value, parent)
+
+    def _emit(self, callback, value, parent) -> None:
+        if not self._relay.closing:  # la aplicación se cierra: nadie espera el dato
+            self._relay.done.emit(callback, value, parent)
 
 
 _relay: _Relay | None = None

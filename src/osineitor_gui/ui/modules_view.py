@@ -7,21 +7,19 @@ from typing import Any
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QObject, Qt
 from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QCheckBox,
     QDialog,
+    QHBoxLayout,
     QHeaderView,
-    QLabel,
     QProgressBar,
-    QPushButton,
-    QTableView,
     QVBoxLayout,
     QWidget,
 )
 
 from osineitor_gui.api import CliApi
-from osineitor_gui.ui import risk_dialog
-from osineitor_gui.ui.models import STATUS_COLORS
+from osineitor_gui.ui import risk_dialog, theme
+from osineitor_gui.ui.tables import SORT_ROLE, install_badges, make_table, set_widths
+from osineitor_gui.ui.widgets import button, label, safe_tooltip
 from osineitor_gui.ui.worker import run_in_thread
 
 _ROOT = QModelIndex()
@@ -33,12 +31,13 @@ VERDICT_LABELS = {
     "skipped": "omitido",
     "unchecked": "sin comprobar",
 }
-# Mismos colores que la actividad de un scan: lo que falla se ve a simple vista.
-VERDICT_COLORS = {
-    "fail": STATUS_COLORS["error"],
-    "empty": STATUS_COLORS["quota"],
-    "skipped": STATUS_COLORS["skipped"],
-    "unchecked": STATUS_COLORS["skipped"],
+# Mismos tonos que la actividad de un scan: lo que falla se ve a simple vista.
+VERDICT_TONES = {
+    "ok": "safe",
+    "fail": "critical",
+    "empty": "high",
+    "skipped": "neutral",
+    "unchecked": "neutral",
 }
 
 
@@ -72,11 +71,17 @@ class HealthModel(QAbstractTableModel):
         verdict = str(row.get("verdict", ""))
         column = index.column()
         if role == Qt.ItemDataRole.ForegroundRole:
-            color = VERDICT_COLORS.get(verdict)
-            return QBrush(color) if color and column == 1 else None
-        if role != Qt.ItemDataRole.DisplayRole:
-            return None
+            tone = VERDICT_TONES.get(verdict)
+            return QBrush(theme.tone_color(tone)) if tone and column == 1 else None
+        if role == Qt.ItemDataRole.FontRole and column == 0:
+            return theme.mono_font()
+        if role == Qt.ItemDataRole.ToolTipRole and column == 2:
+            return safe_tooltip(row.get("detail") or "")
         duration, requests = row.get("duration_ms"), row.get("requests")
+        if role == SORT_ROLE and column == 3:
+            return duration or 0
+        if role not in (Qt.ItemDataRole.DisplayRole, SORT_ROLE):
+            return None
         return (
             row.get("module", ""),
             self.tr(VERDICT_LABELS[verdict]) if verdict in VERDICT_LABELS else verdict,
@@ -94,26 +99,32 @@ class HealthDialog(QDialog):
         self._api = api
         self._running = False
         self.setWindowTitle(self.tr("Salud de los módulos"))
-        self.resize(720, 420)
+        self.resize(820, 520)
         self.model = HealthModel(self)
-        self.table = QTableView()
-        self.table.setModel(self.model)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.verticalHeader().hide()
+        self.table, self.proxy = make_table(self.model)
+        self.table.setAccessibleName(self.tr("Veredicto por módulo"))
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        self.run_button = QPushButton(self.tr("Comprobar"))
+        install_badges(self.table, 1)
+        set_widths(self.table, {0: 170, 1: 130, 3: 90, 4: 80})
+        self.run_button = button(self.tr("Comprobar"), "primary")
         self.run_button.clicked.connect(self.check)
         self.active_box = QCheckBox(self.tr("Incluir módulos activos (contactan con el objetivo)"))
         self.active_box.toggled.connect(self._on_active)
         self.busy = QProgressBar()
         self.busy.setRange(0, 0)  # indeterminado: `doctor` no informa del avance
         self.busy.hide()
-        self.status = QLabel(self.tr("Pulsa «Comprobar» para consultar cada fuente."))
-        self.status.setWordWrap(True)
+        # Puede mostrar el stderr de la CLI: siempre texto plano.
+        self.status = label(
+            self.tr("Pulsa «Comprobar» para consultar cada fuente."), "muted", wrap=True
+        )
+        controls = QHBoxLayout()
+        controls.addWidget(self.run_button)
+        controls.addWidget(self.active_box)
+        controls.addStretch(1)
         layout = QVBoxLayout(self)
-        layout.addWidget(self.run_button)
-        layout.addWidget(self.active_box)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(10)
+        layout.addLayout(controls)
         layout.addWidget(self.table, 1)
         layout.addWidget(self.busy)
         layout.addWidget(self.status)

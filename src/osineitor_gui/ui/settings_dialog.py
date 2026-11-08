@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QObject, Qt, Signal
+from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -12,9 +13,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
-    QLabel,
     QLineEdit,
-    QPushButton,
     QTableView,
     QTabWidget,
     QVBoxLayout,
@@ -24,6 +23,9 @@ from PySide6.QtWidgets import (
 from osineitor_gui.api import CliApi, CliError
 from osineitor_gui.keys import KeyRow, group_keys
 from osineitor_gui.settings import THEMES, GuiSettings
+from osineitor_gui.ui import theme
+from osineitor_gui.ui.tables import BadgeDelegate, style_table
+from osineitor_gui.ui.widgets import button, label
 from osineitor_gui.ui.worker import run_in_thread
 
 _ROOT = QModelIndex()
@@ -64,9 +66,15 @@ class KeysModel(QAbstractTableModel):
         return None
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole):
-        if not index.isValid() or role != Qt.ItemDataRole.DisplayRole:
+        if not index.isValid():
             return None
         row = self._rows[index.row()]
+        if role == Qt.ItemDataRole.ForegroundRole and index.column() == 2:
+            return QBrush(theme.tone_color("safe" if row.configured else "warning"))
+        if role == Qt.ItemDataRole.FontRole and index.column() == 0:
+            return theme.mono_font()
+        if role != Qt.ItemDataRole.DisplayRole:
+            return None
         state = self.tr("configurada") if row.configured else self.tr("falta")
         return (row.name, ", ".join(row.modules), state)[index.column()]
 
@@ -80,7 +88,7 @@ class SettingsDialog(QDialog):
         self._busy = False
         self._loaded = False  # `modules()` respondió: hay filas sobre las que actuar
         self.setWindowTitle(self.tr("Ajustes"))
-        self.resize(560, 420)
+        self.resize(680, 480)
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_keys_tab(), self.tr("API keys"))
         self.tabs.addTab(self._build_general_tab(settings), self.tr("General"))
@@ -94,23 +102,23 @@ class SettingsDialog(QDialog):
         self.model = KeysModel(self)
         self.keys_table = QTableView()
         self.keys_table.setModel(self.model)
-        self.keys_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        style_table(self.keys_table)
         self.keys_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.keys_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.keys_table.verticalHeader().hide()
+        self.keys_table.setAccessibleName(self.tr("API keys de los módulos"))
+        self.keys_table.setItemDelegateForColumn(2, BadgeDelegate(self.keys_table))
         self.keys_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.keys_table.selectionModel().selectionChanged.connect(lambda *_: self._update_buttons())
 
         self.key_input = QLineEdit()
         self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.key_input.setPlaceholderText(self.tr("Pega la key y pulsa Guardar"))
+        self.key_input.setAccessibleName(self.tr("Valor de la API key"))
         self.key_input.returnPressed.connect(self.save)
-        self.save_button = QPushButton(self.tr("Guardar"))
+        self.save_button = button(self.tr("Guardar"), "primary")
         self.save_button.clicked.connect(self.save)
-        self.delete_button = QPushButton(self.tr("Borrar"))
+        self.delete_button = button(self.tr("Borrar"))
         self.delete_button.clicked.connect(self.delete)
-        self.message = QLabel()
-        self.message.setWordWrap(True)
+        self.message = label("", "muted", wrap=True)  # puede mostrar el stderr de la CLI
 
         row = QHBoxLayout()
         row.addWidget(self.key_input, 1)
@@ -118,6 +126,8 @@ class SettingsDialog(QDialog):
         row.addWidget(self.delete_button)
         page = QWidget()
         layout = QVBoxLayout(page)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
         layout.addWidget(self.keys_table, 1)
         layout.addLayout(row)
         layout.addWidget(self.message)
@@ -208,8 +218,9 @@ class SettingsDialog(QDialog):
             "dark": self.tr("Oscuro"),
         }
         self.theme_box = QComboBox()
-        for theme in THEMES:
-            self.theme_box.addItem(names[theme], theme)
+        self.theme_box.setAccessibleName(self.tr("Tema"))
+        for name in THEMES:
+            self.theme_box.addItem(names[name], name)
         self.theme_box.setCurrentIndex(self.theme_box.findData(settings.theme))
         self.theme_box.activated.connect(
             lambda _index: self.theme_changed.emit(self.theme_box.currentData())

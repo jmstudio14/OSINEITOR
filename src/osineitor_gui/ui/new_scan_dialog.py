@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
-    QLabel,
+    QHBoxLayout,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from osineitor_gui.scan_request import KINDS, InvalidRequest, ScanRequest, detect_kind
 from osineitor_gui.ui import risk_dialog
+from osineitor_gui.ui.widgets import label, safe_tooltip
 
 DEFAULT = -1  # valor especial de los cuadros numéricos: «por defecto» = no pasar la opción
 
@@ -45,7 +46,7 @@ class NewScanDialog(QDialog):
         self.target = QLineEdit()
         self.target.setPlaceholderText(self.tr("example.com, 8.8.8.8, alguien@example.com…"))
         self.target.textChanged.connect(self._update_detected)
-        self.detected = QLabel()
+        self.detected = label("", "muted")
 
         kind_names = {
             "auto": self.tr("Automático"),
@@ -70,31 +71,28 @@ class NewScanDialog(QDialog):
 
         self.purpose = QLineEdit()
         self.purpose.setPlaceholderText(self.tr("Para qué haces este scan (opcional)"))
-        purpose_hint = QLabel(
-            self.tr("Los scans de email y username lo exigen si tu configuración lo pide.")
+        purpose_hint = label(
+            self.tr("Los scans de email y username lo exigen si tu configuración lo pide."),
+            "kpiHint",
+            wrap=True,
         )
-        purpose_hint.setWordWrap(True)
 
         self.module_list = QListWidget()
-        self.module_list.setMaximumHeight(140)
-        self.modules_note = QLabel()
-        self.modules_note.setWordWrap(True)
+        self.module_list.setAccessibleName(self.tr("Módulos que se ejecutarán"))
+        self.modules_note = label("", "muted", wrap=True)
         self._fill_modules()
 
         self.active_box = QCheckBox(self.tr("Incluir módulos activos (contactan con el objetivo)"))
         self.active_box.toggled.connect(self._on_active)
         self.private_box = QCheckBox(self.tr("Permitir redes privadas"))
         self.private_box.toggled.connect(self._on_private)
-        self.risk_note = QLabel()
-        self.risk_note.setWordWrap(True)
+        self.risk_note = label("", "kpiHint", wrap=True)
 
         self.no_save = QCheckBox(self.tr("No guardar el scan en el historial"))
         self.no_cache = QCheckBox(self.tr("No usar la caché"))
         self.refresh = QCheckBox(self.tr("Refrescar la caché"))
 
-        self.error = QLabel()
-        self.error.setStyleSheet("color: #d93025;")
-        self.error.setWordWrap(True)
+        self.error = label("", "error", wrap=True)
         self.error.hide()
 
         form = QFormLayout()
@@ -110,18 +108,35 @@ class NewScanDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        launch = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        launch.setText(self.tr("Lanzar scan"))
+        launch.setProperty("kind", "primary")
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout = QVBoxLayout(self)
-        layout.addLayout(form)
-        layout.addWidget(QLabel(self.tr("Módulos (sin marcar, los de siempre)")))
-        layout.addWidget(self.module_list)
-        layout.addWidget(self.modules_note)
+
+        left = QVBoxLayout()
+        left.addWidget(label(self.tr("Objetivo y límites"), "section"))
+        left.addLayout(form)
+        left.addStretch(1)
+        right = QVBoxLayout()
+        right.addWidget(label(self.tr("Módulos (sin marcar, los de siempre)"), "section"))
+        right.addWidget(self.module_list, 1)
+        right.addWidget(self.modules_note)
+        right.addWidget(label(self.tr("Opciones"), "section"))
         for box in (self.active_box, self.private_box, self.no_save, self.no_cache, self.refresh):
-            layout.addWidget(box)
-        layout.addWidget(self.risk_note)
+            right.addWidget(box)
+        right.addWidget(self.risk_note)
+        columns = QHBoxLayout()
+        columns.setSpacing(20)
+        columns.addLayout(left, 1)
+        columns.addLayout(right, 1)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 14)
+        layout.setSpacing(10)
+        layout.addLayout(columns, 1)
         layout.addWidget(self.error)
         layout.addWidget(buttons)
+        self.resize(860, 520)
         self._update_risk_state()
 
     # --- módulos ----------------------------------------------------------------------------
@@ -146,7 +161,7 @@ class NewScanDialog(QDialog):
             if key and not module.get("key_configured"):
                 # Sin su API key el módulo no puede hacer nada: visible, pero no seleccionable.
                 entry.setFlags(Qt.ItemFlag.NoItemFlags)
-                entry.setToolTip(f"{self.tr('Necesita la API key')} «{key}»")
+                entry.setToolTip(safe_tooltip(f"{self.tr('Necesita la API key')} «{key}»"))
                 entry.setData(Qt.ItemDataRole.UserRole + 2, True)
             self.module_list.addItem(entry)
 

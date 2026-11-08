@@ -31,7 +31,7 @@ def test_corrupt_or_hand_edited_files_do_not_break_startup(tmp_path):
         json.dumps({"theme": "neon", "legal_accepted": "sí", "last_kind": 3}), encoding="utf-8"
     )
     loaded = GuiSettings.load(path)
-    assert (loaded.theme, loaded.legal_accepted, loaded.last_kind) == ("system", 0, "auto")
+    assert (loaded.theme, loaded.legal_accepted, loaded.last_kind) == ("dark", 0, "auto")
 
 
 def test_a_new_legal_version_asks_again():

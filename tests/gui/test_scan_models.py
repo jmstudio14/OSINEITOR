@@ -12,7 +12,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import Qt  # noqa: E402
 
-from osineitor_gui.events import EntityFound, ModuleEnd, ModuleStart, ScanStart  # noqa: E402
+from osineitor_gui.events import (  # noqa: E402
+    EntityFound,
+    ModuleEnd,
+    ModuleStart,
+    ScanEnd,
+    ScanStart,
+)
 from osineitor_gui.session import ScanSession  # noqa: E402
 from osineitor_gui.ui.models import EntityTableModel, ModuleActivityModel  # noqa: E402
 
@@ -118,6 +124,20 @@ def test_modules_show_their_status_and_numbers():
     assert cell(model, 1, 1) == "error" and cell(model, 1, 6) == "se rompió"
 
 
+def test_a_module_that_never_ran_is_unused_once_the_scan_has_finished():
+    session = ScanSession()
+    model = ModuleActivityModel(session)
+    start(session, ["dns", "never"])
+    session.feed(ModuleStart("dns", "example.com"))
+    session.feed(ModuleEnd("dns", "ok", "example.com"))
+    model.refresh()
+    assert cell(model, 1, 1) == "pendiente"  # con el scan en marcha aún puede tocarle
+    session.feed(ScanEnd("complete", 1, 0))
+    model.refresh()
+    assert cell(model, 1, 1) == "sin ejecutar" and model.status_at(1) == "unused"
+    assert cell(model, 0, 1) == "ok"
+
+
 def test_error_and_quota_stand_out_by_color():
     session = ScanSession()
     model = ModuleActivityModel(session)
@@ -128,8 +148,7 @@ def test_error_and_quota_stand_out_by_color():
     model.refresh()
     role = Qt.ItemDataRole.ForegroundRole
     ok, error, quota = (cell(model, r, 1, role) for r in range(3))
-    assert ok is None
-    assert error is not None and quota is not None and error.color() != quota.color()
+    assert len({ok.color().name(), error.color().name(), quota.color().name()}) == 3
     assert cell(model, 1, 0, role) is None  # solo se colorea la columna de estado
 
 

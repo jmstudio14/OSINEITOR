@@ -10,7 +10,7 @@ from osineitor_gui.cli_locator import CliNotFound, locate_cli
 from osineitor_gui.settings import GuiSettings
 from osineitor_gui.ui.legal_dialog import LegalDialog
 from osineitor_gui.ui.main_window import MainWindow
-from osineitor_gui.ui.theme import apply_theme
+from osineitor_gui.ui.theme import apply_theme, install
 
 APP_ID = "OSINEITOR.Desktop"
 
@@ -45,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     _set_windows_app_id()
     qapp = QApplication.instance() or QApplication(argv if argv is not None else sys.argv)
     qapp.setApplicationName("OSINEITOR")
+    install(qapp)
     settings = GuiSettings.load()
     apply_theme(settings.theme)
     if not ensure_legal(settings):

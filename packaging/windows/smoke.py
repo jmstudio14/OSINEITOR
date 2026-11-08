@@ -85,6 +85,7 @@ def check_gui(
             **os.environ,
             "QT_QPA_PLATFORM": "offscreen",
             "OSINEITOR_GUI_CONFIG_DIR": tmp,
+            "OSINEITOR_DATA_DIR": tmp,  # el panel lee el historial: nunca el del usuario
         }
         proc = popen([str(folder / GUI)], env=env)
         time.sleep(wait)
@@ -99,11 +100,24 @@ def check_gui(
     return []
 
 
+def check_assets(folder: Path) -> list[str]:
+    """Una fuente o un icono ausentes no impiden arrancar: hay que mirarlo aquí."""
+    assets = next(folder.rglob("osineitor_gui/ui/assets"), None)
+    if assets is None:
+        return ["el paquete no incluye osineitor_gui/ui/assets"]
+    expected = {"theme.qss": 1, "fonts/*.ttf": 5, "icons/*.svg": 20, "qss/*.svg": 8}
+    return [
+        f"faltan assets de la GUI: {pattern}"
+        for pattern, count in expected.items()
+        if len(list(assets.glob(pattern))) < count
+    ]
+
+
 def main(argv: list[str]) -> int:
     folder = Path(argv[0])
     problems = check_cli(folder)
     if not problems:
-        problems = check_gui(folder)
+        problems = check_assets(folder) or check_gui(folder)
     for problem in problems:
         print(f"FALLO: {problem}", file=sys.stderr)
     if not problems:

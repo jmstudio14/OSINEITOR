@@ -182,7 +182,7 @@ def test_locator_prefers_packaged_exe_then_module_then_path(tmp_path):
     if os.name != "nt":
         sibling.rename(tmp_path / "osineitor")
     assert locate_cli(frozen=True, executable=str(exe))[0].startswith(str(tmp_path))
-    assert locate_cli(frozen=False, executable="/py")[:2] == ["/py", "-m"]
+    assert locate_cli(frozen=False, executable="/py")[:3] == ["/py", "-P", "-m"]
     # Empaquetado pero sin el ejecutable de la CLI junto al de la aplicación: cae al PATH.
     assert locate_cli(
         frozen=True,
@@ -191,6 +191,26 @@ def test_locator_prefers_packaged_exe_then_module_then_path(tmp_path):
     ) == ["/bin/osineitor"]
     with pytest.raises(CliNotFound, match="No se encuentra"):
         locate_cli(frozen=True, executable=str(tmp_path / "otra" / "x.exe"), which=lambda n: None)
+
+
+def test_path_lookup_ignores_the_current_directory(tmp_path, monkeypatch):
+    """En Windows `shutil.which` mira antes la carpeta actual; aquí solo cuenta el PATH."""
+    import os
+
+    from osineitor_gui.cli_locator import which_on_path
+
+    planted, installed = tmp_path / "trampa", tmp_path / "bin"
+    planted.mkdir()
+    installed.mkdir()
+    name = "herramienta.exe" if os.name == "nt" else "herramienta"
+    for folder in (planted, installed):
+        (folder / name).write_text("x")
+        (folder / name).chmod(0o755)
+    monkeypatch.chdir(planted)
+    monkeypatch.setenv("PATH", os.pathsep.join(["", ".", str(installed)]))
+    assert which_on_path(name) == str(installed / name)
+    monkeypatch.setenv("PATH", os.pathsep.join(["", "."]))
+    assert which_on_path(name) is None
 
 
 def test_missing_cli_command_fails_loudly():

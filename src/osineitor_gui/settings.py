@@ -29,7 +29,7 @@ def settings_path() -> Path:
 
 @dataclass
 class GuiSettings:
-    theme: str = "system"
+    theme: str = "dark"
     legal_accepted: int = 0  # versión del aviso legal aceptada (0 = ninguna)
     last_kind: str = "auto"
     last_export_dir: str = ""
@@ -63,7 +63,7 @@ class GuiSettings:
                 else getattr(defaults, f.name)
             )
         if values["theme"] not in THEMES:
-            values["theme"] = "system"
+            values["theme"] = defaults.theme
         return cls(**values)
 
     def save(self, path: Path | None = None) -> Path:

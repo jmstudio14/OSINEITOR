@@ -8,12 +8,15 @@ from typing import Any
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
-    QLabel,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
+
+from osineitor_gui.ui import theme
+from osineitor_gui.ui.tables import style_table
+from osineitor_gui.ui.widgets import label, safe_tooltip
 
 
 def _text(value: Any) -> str:
@@ -27,13 +30,15 @@ def _text(value: Any) -> str:
 class EntityDetail(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.placeholder = QLabel(self.tr("Selecciona una entidad"))
+        self.placeholder = label(self.tr("Selecciona una entidad"), "muted")
         self.table = QTableWidget(0, 2)
         self.table.setHorizontalHeaderLabels([self.tr("Campo"), self.tr("Valor")])
-        self.table.verticalHeader().hide()
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        style_table(self.table)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setAccessibleName(self.tr("Detalle de la entidad"))
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.placeholder)
         layout.addWidget(self.table)
         self.show_entity(None)
@@ -52,4 +57,7 @@ class EntityDetail(QWidget):
         self.table.setRowCount(len(rows))
         for row, (key, value) in enumerate(rows):
             self.table.setItem(row, 0, QTableWidgetItem(key))
-            self.table.setItem(row, 1, QTableWidgetItem(value))
+            cell = QTableWidgetItem(value)
+            cell.setFont(theme.mono_font())
+            cell.setToolTip(safe_tooltip(value))
+            self.table.setItem(row, 1, cell)

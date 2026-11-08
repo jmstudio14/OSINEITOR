@@ -389,14 +389,14 @@ def saved_window(qtbot, monkeypatch):
     return make_window(qtbot, cli=FAKE_CLI)
 
 
-def test_the_history_dock_loads_on_start_and_can_be_hidden(qtbot, stub_history):
+def test_the_history_page_loads_on_start_and_is_reached_from_the_view_menu(qtbot, stub_history):
     window = make_window(qtbot)
     window.show()
     qtbot.waitUntil(lambda: bool(stub_history), timeout=5000)  # carga inicial
-    assert window.history_dock.isVisible()
-    toggle = window.history_dock.toggleViewAction()
-    toggle.trigger()
-    assert not window.history_dock.isVisible()
+    assert window.stack.currentWidget() is window.dashboard
+    window.nav_actions["history"].trigger()
+    assert window.stack.currentWidget() is window.history and window.history.isVisible()
+    assert window.sidebar.selected() == "history" and window.topbar.title.text() == "Historial"
 
 
 def test_no_cli_disables_history_and_open_saved(qtbot, stub_history):
@@ -409,17 +409,16 @@ def test_no_cli_disables_history_and_open_saved(qtbot, stub_history):
 def test_open_saved_shows_and_reloads_the_history(qtbot, stub_history):
     window = make_window(qtbot)
     window.show()
-    window.history_dock.hide()
     stub_history.clear()
     window.action_open_saved.trigger()
-    assert window.history_dock.isVisible() and stub_history == [1]
+    assert window.history.isVisible() and stub_history == [1]
 
 
 def test_double_click_in_the_history_opens_the_saved_scan_once(qtbot, monkeypatch, real_history):
     window = saved_window(qtbot, monkeypatch)
     with qtbot.waitSignal(window.history.loaded, timeout=30_000):
         pass
-    window.history.table.doubleClicked.emit(window.history.model.index(0, 0))
+    window.history.table.doubleClicked.emit(window.history.proxy.index(0, 0))
     qtbot.waitUntil(lambda: window.tabs.count() == 1, timeout=30_000)
     view = window.tabs.widget(0)
     assert view.scan_id == 1 and window.tabs.tabText(0) == "example.com #1"
@@ -440,6 +439,18 @@ def test_opening_a_missing_scan_shows_the_error(qtbot, monkeypatch):
     window.open_saved(99)
     qtbot.waitUntil(lambda: bool(shown), timeout=30_000)
     assert "No se pudo abrir el scan" in shown[0][1] and window.tabs.count() == 0
+
+
+def test_error_text_from_the_cli_is_shown_as_plain_text(qtbot, monkeypatch):
+    """El stderr de la CLI puede traer etiquetas: Qt no debe interpretarlas como HTML."""
+    shown = []
+    monkeypatch.setattr(QMessageBox, "critical", lambda *a: shown.append(a))
+    window = make_window(qtbot, cli=FAKE_CLI)
+    window._show_error("Error", RuntimeError('<a href="https://evil.test">pulsa</a>\nlínea 2'))
+    assert shown[0][2] == (
+        "<qt>&lt;a href=&quot;https://evil.test&quot;&gt;pulsa&lt;/a&gt;<br>línea 2</qt>"
+    )
+    assert window.history.status.textFormat() == Qt.TextFormat.PlainText
 
 
 @pytest.mark.parametrize(

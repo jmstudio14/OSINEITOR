@@ -15,7 +15,7 @@ class LegalDialog(QDialog):
     def __init__(self, parent: QWidget | None = None, *, require_acceptance: bool = False) -> None:
         super().__init__(parent)
         self.setWindowTitle(legal.LEGAL_TITLE)
-        self.resize(520, 300)
+        self.resize(620, 400)
         self.text = QPlainTextEdit(legal.LEGAL_TEXT)
         self.text.setReadOnly(True)
         if require_acceptance:

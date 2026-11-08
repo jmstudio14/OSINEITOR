@@ -65,7 +65,7 @@ def test_it_lists_saved_scans_and_double_click_requests_one(qtbot, monkeypatch):
     assert panel.model.rowCount() == 1 and panel.model.scan_id(0) == scan_id
     assert panel.model.data(panel.model.index(0, 1)) == "example.com"
     with qtbot.waitSignal(panel.scan_requested, timeout=1000) as blocker:
-        panel.table.doubleClicked.emit(panel.model.index(0, 0))
+        panel.table.doubleClicked.emit(panel.proxy.index(0, 0))
     assert blocker.args == [scan_id]
 
 
