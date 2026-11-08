@@ -62,7 +62,7 @@ ventana principal (G2), el scan en vivo (G3), el historial con detalle y exporta
 panel de salud (G5), los ajustes con API keys (G6) y el aviso legal con las confirmaciones de
 `--active` (G7). El instalador (G8, `packaging/windows/`) está escrito; falta ejecutarlo en la CI y
 las pruebas manuales en Windows (G9). Siguen pendientes la instancia única y exponer `--scope` y
-`--evidence`. Instala PySide6 con `pip install -e '.[gui]'` (no viene en `.[dev]`).
+`--evidence`. Instala PySide6 con `pip install -e '.[gui]'` y, para los tests de Qt, `'.[dev,gui-test]'`.
 
 Aspecto: colores y tipografía viven en `ui/theme.py` y `ui/assets/theme.qss`. Nada de
 `setStyleSheet` en los widgets ni colores sueltos: propiedades `role`/`kind`/`tone`

@@ -47,7 +47,6 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
     "pytest-cov>=5",
-    "pytest-qt>=4",
     "respx>=0.21",
     "ruff>=0.5",
     "pymisp>=2.5",
@@ -59,6 +58,8 @@ stix = ["stix2>=3"]
 misp = ["pymisp>=2.5"]
 
 gui = ["PySide6-Essentials>=6.8"]
+# Tests de las vistas. Fuera de `dev`: sin PySide6, pytest-qt aborta toda la ejecución de pytest.
+gui-test = ["PySide6-Essentials>=6.8", "pytest-qt>=4"]
 
 # Pantallazo del módulo `capture`; además hace falta `playwright install chromium`.
 capture = ["playwright>=1.40"]
