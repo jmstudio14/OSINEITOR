@@ -52,7 +52,7 @@ Versión **0.5.0**, en desarrollo. Lo que hay y lo que no:
 | Fuentes nuevas, hallazgos con reglas, `diff`, informes CSV y de grafo, librería y plugins, vigilancia (`watch`), resúmenes con IA opcionales, paquete y documentación (fases 4 a 11 del [roadmap](ROADMAP.md)) | Hecho en el repositorio, **sin publicar** ([CHANGELOG](CHANGELOG.md)) |
 | Tests y CI en Windows, Linux y macOS (Python 3.11 y 3.13) | En verde (unos 1600 tests, sin red) |
 | Funcionamiento contra las fuentes reales | **Parcial**: los 10 módulos originales sin API key se probaron en vivo desde Windows y tienen fixtures reales ([detalle](docs/PRUEBAS_WINDOWS.md)); `capture`, `doc_harvest`, `cloud_storage_refs`, `ext_exiftool` y `geoip_offline` también se probaron en vivo; los módulos con key y el resto de fuentes de las fases 4 a 11, solo con respuestas simuladas. `osineitor doctor` lo comprueba desde tu red |
-| Aplicación de escritorio para Windows | En curso: [capa interna, ventana principal, scan en vivo, historial, exportación, salud, ajustes y avisos legales listos](docs/GUI.md) (`osineitor-gui`); faltan las pruebas manuales en Windows |
+| Aplicación de escritorio para Windows | En curso: [panel, scan en vivo, historial, búsqueda, casos, vigilancia, salud, ajustes y avisos legales listos](docs/GUI.md) (`osineitor-gui`); faltan las pruebas manuales en Windows |
 | Paquete en PyPI | Preparado ([flujo de publicación](docs/PUBLICACION.md)), **sin publicar** |
 | Instalador de Windows | No disponible todavía |
 
@@ -337,8 +337,8 @@ distinguen un fallo de un resultado incompleto (`0` ok, `3` algún módulo fall�
 El plan completo, con criterios de aceptación y lo que queda fuera de alcance, está en el
 **[roadmap](ROADMAP.md)**. Lo más próximo:
 
-1. **Aplicación de escritorio para Windows** (en curso): el instalador está escrito; faltan
-   ejecutarlo en la CI y las pruebas manuales.
+1. **Aplicación de escritorio para Windows** (en curso): el instalador se ha probado en local;
+   faltan ejecutarlo en la CI y las pruebas manuales.
 2. **Publicar la 1.0:** paquete en PyPI e imagen Docker; el flujo está escrito y falta ejecutarlo
    ([publicación](docs/PUBLICACION.md)).
 3. Las fuentes evaluadas y no incluidas por depender de cuentas, claves o red real que no se han

@@ -463,7 +463,7 @@ tras confirmarlos) que se ven y se cancelan en vivo, abre scans guardados y los 
 (G3 a G7 aún sin ver en Windows). Debajo hay una **capa sin Qt** (`src/osineitor_gui/`: lanzador
 con cancelación, estado del scan, `CliApi`, textos legales y reglas de confirmación de
 `ScanRequest`, con tests y una regla que impide importar el motor o Qt fuera de `ui/`). El
-instalador (G8, PR-F) está escrito y el paquete se construye y pasa la prueba de humo en local;
+instalador (G8, PR-F) se ha compilado, instalado y desinstalado en local, con prueba de humo;
 falta ejecutarlo en la CI y las pruebas manuales en Windows (G9). `PySide6` es solo un extra opcional. Diseño y traspaso en [`docs/GUI.md`](docs/GUI.md).
 
 **Fuera de este hito:** grafo, hallazgos, procedencia en la interfaz, internacionalización y

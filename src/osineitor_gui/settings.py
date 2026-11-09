@@ -34,6 +34,7 @@ class GuiSettings:
     last_kind: str = "auto"
     last_export_dir: str = ""
     window_geometry: str = ""  # base64 de QMainWindow.saveGeometry()
+    sidebar: str = ""  # "collapsed" o "expanded" si el usuario eligió; "" sigue la anchura
 
     @property
     def needs_legal(self) -> bool:

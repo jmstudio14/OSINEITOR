@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from osineitor.models import detect_type
 
@@ -47,6 +48,9 @@ class ScanRequest:
     # Para qué se hace el scan. Opcional aquí: la CLI lo exige (código 2) si `require_purpose`
     # está activo, y esa configuración no la conoce la GUI.
     purpose: str | None = None
+    # Fichero YAML con el alcance y guardar la respuesta original de cada fuente.
+    scope: str | None = None
+    evidence: bool = False
 
     def validate(self) -> None:
         if not self.target.strip():
@@ -71,6 +75,8 @@ class ScanRequest:
                 raise InvalidRequest(f"el propósito admite hasta {MAX_PURPOSE} caracteres")
             if any(ch in purpose for ch in "\r\n\x00"):
                 raise InvalidRequest("el propósito no puede tener saltos de línea")
+        if self.scope is not None and not Path(self.scope).is_file():
+            raise InvalidRequest("no se encuentra el fichero de alcance")
         if self.no_cache and self.refresh:
             raise InvalidRequest("«sin caché» y «refrescar» son contradictorios")
         if self.active and not self.confirm_active:
@@ -107,6 +113,10 @@ class ScanRequest:
             args.append("--refresh")
         if self.no_save:
             args.append("--no-save")
+        if self.scope is not None:
+            args += ["--scope", self.scope]
+        if self.evidence:
+            args.append("--evidence")
         if self.purpose and self.purpose.strip():
             args += ["--purpose", self.purpose.strip()]
         # `--` antes del objetivo: uno que empiece por «-» no se interpreta como opción.

@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from osineitor_gui.cli_locator import locate_cli
-from osineitor_gui.events import EXIT_MODULE_ERRORS, EXIT_OK
+from osineitor_gui.events import EXIT_MODULE_ERRORS, EXIT_OK, EXIT_TAMPERED
 from osineitor_gui.process import child_env, popen_flags
 
 
@@ -36,6 +36,7 @@ class CliApi:
         stdin_text: str | None = None,
         ok_codes: Sequence[int] = (EXIT_OK,),
         timeout: float | None = None,
+        parse: bool = True,
     ) -> Any:
         """Ejecuta una orden `--json` y devuelve el JSON. Código no admitido → `CliError`."""
         try:
@@ -54,6 +55,8 @@ class CliApi:
             raise CliError(
                 stderr or f"la CLI terminó con código {done.returncode}", done.returncode, stderr
             )
+        if not parse:  # órdenes sin `--json`: solo importa que hayan funcionado
+            return None
         try:
             return json.loads(done.stdout.decode("utf-8", errors="replace"))
         except ValueError as exc:
@@ -74,6 +77,34 @@ class CliApi:
     def search(self, value: str) -> list[dict[str, Any]]:
         """Busca como subcadena en los scans guardados. Tras `--`: un dato nunca es una opción."""
         return self.run(["search", "--contains", "--json", "--", value])
+
+    def risk(self, scan_id: int) -> dict[str, Any]:
+        return self.run(["risk", str(scan_id), "--json"])
+
+    def timeline(self, scan_id: int) -> dict[str, Any]:
+        return self.run(["timeline", str(scan_id), "--json"])
+
+    def verify(self, scan_id: int) -> dict[str, Any]:
+        """Comprueba las evidencias. Que no coincidan (código 5) es un resultado, no un error."""
+        return self.run(["verify", str(scan_id), "--json"], ok_codes=(EXIT_OK, EXIT_TAMPERED))
+
+    def case_list(self) -> list[dict[str, Any]]:
+        return self.run(["case", "list", "--json"])
+
+    def case_show(self, name: str) -> dict[str, Any]:
+        return self.run(["case", "show", "--json", "--", name])
+
+    def case_new(self, name: str) -> None:
+        self.run(["case", "new", "--", name], parse=False)
+
+    def case_add(self, name: str, scan_id: int) -> None:
+        self.run(["case", "add", "--", name, str(scan_id)], parse=False)
+
+    def case_note(self, name: str, text: str) -> None:
+        self.run(["case", "note", "--", name, text], parse=False)
+
+    def watch_list(self) -> list[dict[str, Any]]:
+        return self.run(["watch", "list", "--json"])
 
     def doctor(
         self, modules: Sequence[str] = (), *, active: bool = False, timeout: float = 300.0

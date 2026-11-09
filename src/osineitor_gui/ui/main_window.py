@@ -37,16 +37,18 @@ from osineitor_gui.api import CliApi
 from osineitor_gui.scan_request import ScanRequest
 from osineitor_gui.settings import THEMES, GuiSettings
 from osineitor_gui.ui import icons
+from osineitor_gui.ui.cases_panel import CasesPanel
 from osineitor_gui.ui.dashboard_view import DashboardView
 from osineitor_gui.ui.history_panel import HistoryPanel
 from osineitor_gui.ui.legal_dialog import LegalDialog
-from osineitor_gui.ui.modules_view import HealthDialog
+from osineitor_gui.ui.modules_view import HealthPanel
 from osineitor_gui.ui.new_scan_dialog import NewScanDialog
 from osineitor_gui.ui.scan_view import ScanView
 from osineitor_gui.ui.search_panel import SearchPanel
-from osineitor_gui.ui.settings_dialog import SettingsDialog
+from osineitor_gui.ui.settings_panel import SettingsPanel
 from osineitor_gui.ui.sidebar import Sidebar, TopBar
 from osineitor_gui.ui.theme import apply_theme
+from osineitor_gui.ui.watch_panel import WatchPanel
 from osineitor_gui.ui.widgets import EmptyState, Toast, button
 from osineitor_gui.ui.worker import run_in_thread
 
@@ -66,8 +68,6 @@ class MainWindow(QMainWindow):
         self.cli = list(cli) if cli else None
         self.api = CliApi(self.cli)
         self._saved_ids: set[int] = set()  # scans en vivo ya anotados en el historial
-        self._health: HealthDialog | None = None
-        self._settings_dialog: SettingsDialog | None = None
         self.catalog: list[dict[str, Any]] | None = None  # `modules --json`, para «Nuevo scan»
         self.setWindowTitle("OSINEITOR")
         self._narrow: bool | None = None
@@ -86,10 +86,19 @@ class MainWindow(QMainWindow):
         self.history.setEnabled(self.cli is not None)
         self.history.scan_requested.connect(self.open_saved)
         self.history.export_requested.connect(self._export_scan)
+        self.history.verify_requested.connect(self._verify_scan)
         self.history.loaded.connect(self._on_history_loaded)
         self.search_panel = SearchPanel(self.api)
         self.search_panel.setEnabled(self.cli is not None)
         self.search_panel.scan_requested.connect(self.open_saved)
+        self.cases = CasesPanel(self.api)
+        self.cases.setEnabled(self.cli is not None)
+        self.cases.scan_requested.connect(self.open_saved)
+        self.watch = WatchPanel(self.api)
+        self.watch.setEnabled(self.cli is not None)
+        self.health = HealthPanel(self.api)
+        self.settings_panel = SettingsPanel(self.api, self.settings)
+        self.settings_panel.theme_changed.connect(self.set_theme)
         self.dashboard = DashboardView(self.api, self.action_new)
         self.dashboard.scan_requested.connect(self.open_saved)
         self.scans_empty = EmptyState(
@@ -108,12 +117,20 @@ class MainWindow(QMainWindow):
             "scans": self.tabs,
             "history": self.history,
             "search": self.search_panel,
+            "cases": self.cases,
+            "watch": self.watch,
+            "health": self.health,
+            "settings": self.settings_panel,
         }
         self._titles = {
             "dashboard": self.tr("Panel"),
             "scans": self.tr("Scans"),
             "history": self.tr("Historial"),
             "search": self.tr("Búsqueda"),
+            "cases": self.tr("Casos"),
+            "watch": self.tr("Vigilancia"),
+            "health": self.tr("Salud de los módulos"),
+            "settings": self.tr("Ajustes"),
         }
         for page in self._pages.values():
             self.stack.addWidget(page)
@@ -247,6 +264,8 @@ class MainWindow(QMainWindow):
             "scans": self.tr("S&cans"),
             "history": self.tr("&Historial"),
             "search": self.tr("&Búsqueda"),
+            "cases": self.tr("Cas&os"),
+            "watch": self.tr("&Vigilancia"),
         }
         for number, (page, text) in enumerate(names.items(), start=1):
             action = QAction(text, self)
@@ -257,19 +276,24 @@ class MainWindow(QMainWindow):
         self.action_toggle_sidebar.setShortcut(QKeySequence("Ctrl+B"))
 
     def _build_sidebar(self) -> None:
-        self.sidebar = Sidebar()
+        self.sidebar = Sidebar(self.settings.sidebar)
+        self.sidebar.choice_changed.connect(self._save_sidebar)
         self.action_toggle_sidebar.triggered.connect(self.sidebar.toggle)
         pages = (
             ("dashboard", "layout-dashboard", self.tr("Panel")),
             ("scans", "radar", self.tr("Scans")),
             ("history", "history", self.tr("Historial")),
             ("search", "search", self.tr("Búsqueda")),
+            ("cases", "folder-open", self.tr("Casos")),
+            ("watch", "eye", self.tr("Vigilancia")),
         )
         for number, (page, icon, text) in enumerate(pages, start=1):
             self.sidebar.add_page(page, icon, text, f"Ctrl+{number}")
         self.sidebar.page_selected.connect(self.show_page)
-        self.sidebar.add_action(self.action_health, "activity", self.tr("Salud"))
-        self.sidebar.add_action(self.action_settings, "settings", self.tr("Ajustes"))
+        self.sidebar.add_page("health", "activity", self.tr("Salud")).setEnabled(
+            self.action_health.isEnabled()
+        )
+        self.sidebar.add_page("settings", "settings", self.tr("Ajustes"), "Ctrl+,")
         self.sidebar.add_action(self.action_legal, "scale", self.tr("Uso responsable"), footer=True)
         self.sidebar.add_action(self.action_about, "info", self.tr("Acerca de"), footer=True)
 
@@ -282,10 +306,52 @@ class MainWindow(QMainWindow):
         self.topbar.title.setText(self._titles[name])
         if name == "history":
             self.history.table.setFocus()
+        elif name == "cases" and self.cli:
+            self.cases.reload()
+        elif name == "watch" and self.cli:
+            self.watch.reload()
+        elif name == "settings":
+            self.settings_panel.reload()
 
     def run_search(self, query: str) -> None:
         self.show_page("search")
         self.search_panel.run(query)
+
+    def _save_sidebar(self, choice: str) -> None:
+        self.settings.sidebar = choice
+        self.settings.save()
+
+    def _verify_scan(self, scan_id: int) -> None:
+        run_in_thread(
+            lambda: self.api.verify(scan_id),
+            lambda result: self._verified(scan_id, result),
+            lambda exc: self._show_error(self.tr("No se pudieron verificar las evidencias"), exc),
+            self,
+        )
+
+    def _verified(self, scan_id: int, result: dict[str, Any]) -> None:
+        checked = result.get("checked", 0)
+        if not result.get("ok"):
+            count = len(result.get("mismatches") or [])
+            self._notify(
+                f"{self.tr('Scan')} #{scan_id}: {count} {self.tr('evidencias alteradas')}",
+                "critical",
+            )
+        elif not checked:  # la CLI da `ok` también sin nada que comprobar: no es «correcto»
+            self._notify(
+                f"{self.tr('Scan')} #{scan_id}: {self.tr('no guardó evidencias')}", "warning"
+            )
+        else:
+            self._notify(
+                f"{self.tr('Scan')} #{scan_id}: {checked} {self.tr('evidencias correctas')}"
+            )
+
+    def activate(self) -> None:
+        """Otra instancia pidió abrirse: se muestra esta."""
+        self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized)
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
     def _on_history_loaded(self) -> None:
         self.dashboard.set_history(self.history.model.rows(), self.history.error)
@@ -365,7 +431,7 @@ class MainWindow(QMainWindow):
 
     def open_scan(self, request: ScanRequest) -> ScanView:
         """Lanza un scan en una pestaña nueva."""
-        view = ScanView(request, self.cli, self)
+        view = ScanView(request, self.cli, self, self.api)
         self._add_tab(view)
         view.start()
         return view
@@ -392,7 +458,7 @@ class MainWindow(QMainWindow):
     def _saved_loaded(self, result: dict[str, Any]) -> None:
         if any(view.scan_id == result.get("scan_id") for view in self._views()):
             return  # se abrió mientras tanto (doble clic repetido)
-        self._add_tab(ScanView.from_result(result, self))
+        self._add_tab(ScanView.from_result(result, self, self.api))
 
     def _show_history(self) -> None:
         self.show_page("history")
@@ -502,18 +568,10 @@ class MainWindow(QMainWindow):
         self.settings.save()
 
     def _show_settings(self) -> None:
-        if self._settings_dialog is None:
-            self._settings_dialog = SettingsDialog(self.api, self.settings, self)
-            self._settings_dialog.theme_changed.connect(self.set_theme)
-        self._settings_dialog.reload()
-        self._settings_dialog.show()
-        self._settings_dialog.raise_()
+        self.show_page("settings")
 
     def _show_health(self) -> None:
-        if self._health is None:
-            self._health = HealthDialog(self.api, self)
-        self._health.show()
-        self._health.raise_()
+        self.show_page("health")
 
     def _show_legal(self) -> None:
         LegalDialog(self).open()

@@ -159,26 +159,38 @@ menús, las reglas de arquitectura y todas las funciones.
   solo color. El ámbar y el naranja de la paleta quedan cerca (ΔE 9,6); por eso cada segmento
   lleva leyenda, tooltip y separación, y hay lista con los valores.
 - **Layout:** `ui/sidebar.py` (`Sidebar`, `TopBar`). `MainWindow.stack` tiene Panel, pestañas,
-  historial, búsqueda y el vacío de Scans; Salud y Ajustes siguen como diálogos. Por debajo de
-  1100 px la barra lateral se contrae y la superior solo muestra iconos; los KPI se recolocan
-  (6, 3 o 2 por fila) y bajo 760 px el detalle de un scan pasa debajo. `_update_state` no toca la
-  página: un scan en marcha refresca cada 100 ms y sacaría al usuario de la que esté viendo.
-- **Panel:** `osineitor_gui/dashboard.py` (sin Qt) calcula de `history --json` y `show --json`;
-  `ui/dashboard_view.py` y `ui/charts.py` (QPainter: PySide6-Essentials no trae QtCharts). No hay
-  puntuación inventada: el estado general es el peor hallazgo real. `history` no trae estado ni
-  hallazgos, así que hace falta un `show` por cada uno de los últimos 10 scans: van en cadena
-  desde la UI (uno a uno), con caché por id, token de generación y parada al cerrar, y solo con
-  el panel a la vista. Unos 10 s la primera vez, a ~1 s por proceso de la CLI.
-- **Búsqueda:** `CliApi.search` pasa la consulta tras `--`; un dato nunca es una opción.
+  historial, búsqueda, casos, vigilancia, salud, ajustes y el vacío de Scans. Por debajo de 1100 px
+  la barra lateral se contrae (salvo que el usuario haya elegido: `settings.sidebar`) y la superior
+  solo muestra iconos; los KPI se recolocan (6, 3 o 2 por fila) y bajo 760 px el detalle de un scan
+  pasa debajo. `_update_state` no toca la página: un scan en marcha refresca cada 100 ms y sacaría al
+  usuario de la que esté viendo.
+- **Panel:** `osineitor_gui/dashboard.py` (sin Qt) y `ui/dashboard_view.py` con `ui/charts.py`
+  (QPainter: PySide6-Essentials no trae QtCharts). No hay puntuación inventada: el estado general es
+  el peor hallazgo real. Las cifras salen de `history --json` (`status`, `severity`, `by_type`,
+  `modules`); `show` solo se pide para los títulos, y solo de scans con hallazgos, en cadena desde la
+  UI, con caché por id, token de generación, parada al cerrar y únicamente con el panel a la vista.
+  Medido con 10 scans: los indicadores tardaban 7,9 s y ahora 1,4 s.
+- **Pestañas de un scan guardado:** `ui/scan_insights.py` (`risk` y `timeline`), con carga perezosa.
+- **Casos y Vigilancia:** `ui/cases_panel.py` y `ui/watch_panel.py`. Vigilancia solo consulta: `watch
+  run` envía avisos reales, puede usar módulos activos y no se puede cancelar, así que se queda en la
+  CLI. Sin `watch.yml` se ve un estado vacío, no un error.
+- **Instancia única:** `ui/single_instance.py`, con candado y servidor derivados de `settings_dir()`:
+  los tests y `smoke.py` no chocan con la aplicación abierta. Si el candado falla por otro motivo, la
+  aplicación abre igual.
+- **Hilos:** `ui/worker.py`. Los hilos del pool solo dejan el resultado en una `SimpleQueue` y un
+  `QTimer` la vacía en el hilo de la UI. Un hilo no puede saber si un `QObject` sigue vivo: emitir una
+  señal desde él daba `Signal source has been deleted` al cerrar.
+- **Búsqueda:** `CliApi.search` pasa la consulta tras `--`; un dato nunca es una opción. Igual
+  `case_new`, `case_add` y `case_note`.
 - **Tablas:** `ui/tables.py`. Proxy para ordenar (`SORT_ROLE` da el valor crudo) y sin orden
-  inicial; `source_row` traduce el índice. Sin paginación: `QTableView` virtualiza y la CLI no
-  tiene `offset` (el historial trae hasta 500).
+  inicial; `source_row` traduce el índice; `RowsModel` evita un modelo por tabla; `_RowHover` resalta
+  la fila. Sin paginación: `QTableView` virtualiza y la CLI no tiene `offset` (el historial trae
+  hasta 500).
 - **Datos de terceros:** `widgets.label` y `widgets.safe_tooltip`, nunca texto enriquecido.
+- **Traducciones:** `theme.install` carga `qtbase_es` para los botones estándar.
 
 **Fuera por no existir la función:** notificaciones, perfil de usuario, incidentes y red. **No
-aplica:** móvil y tablet (aplicación de Windows). **Sin comprobar:** lector de pantalla real
-(NVDA o Narrador) y teclado físico; los gráficos de columnas solo exponen sus datos como
-descripción accesible y no reciben foco. Sin firmar el instalador y sin compilar el `.iss`.
+aplica:** móvil y tablet (aplicación de Windows).
 
 ## Traspaso a PR-E2 (VS Code + Claude Code, en Windows)
 
@@ -215,7 +227,7 @@ más el lanzador `osineitor-gui = osineitor_gui.app:main` en `pyproject.toml` (`
 
 *Desviación del diseño:* la actividad por módulo va dentro de cada pestaña (un `QSplitter` bajo la tabla de entidades) y no en un dock global, porque cada pestaña es un scan distinto. La vista se repinta como mucho cada 100 ms, no por evento.
 
-**Hecho (G4):** `ui/worker.py` (`run_in_thread`: las llamadas síncronas de `CliApi` van al pool de hilos y el resultado vuelve al hilo de la interfaz por un único relé en cola), `ui/history_panel.py` y `ui/entity_detail.py`. El dock Historial lista `CliApi.history()` (se carga al arrancar y cuando termina un scan en vivo que se guardó; botón Actualizar); el doble clic abre el scan con `CliApi.show()` y `ScanView.from_result()` en una pestaña con el mismo aspecto que uno en vivo, o activa la que ya lo muestra. Archivo ▸ Abrir scan guardado… muestra el dock y lo recarga. Archivo ▸ Exportar scan… (activo solo con un scan guardado y terminado) pregunta el fichero y el formato (JSON, Markdown, HTML) y llama a `CliApi.export()`. Un fallo de la CLI se muestra en un diálogo.
+**Hecho (G4):** `ui/worker.py` (`run_in_thread`: las llamadas síncronas de `CliApi` van al pool de hilos y el resultado vuelve al hilo de la interfaz por una cola), `ui/history_panel.py` y `ui/entity_detail.py`. El dock Historial lista `CliApi.history()` (se carga al arrancar y cuando termina un scan en vivo que se guardó; botón Actualizar); el doble clic abre el scan con `CliApi.show()` y `ScanView.from_result()` en una pestaña con el mismo aspecto que uno en vivo, o activa la que ya lo muestra. Archivo ▸ Abrir scan guardado… muestra el dock y lo recarga. Archivo ▸ Exportar scan… (activo solo con un scan guardado y terminado) pregunta el fichero y el formato (JSON, Markdown, HTML) y llama a `CliApi.export()`. Un fallo de la CLI se muestra en un diálogo.
 
 *Desviación del diseño:* el panel de detalle va a la derecha de la tabla de entidades (un `QSplitter` horizontal) y no debajo, para no apretar tres paneles en vertical. Muestra fuente, origen y los campos de `data`; la confianza y las observaciones quedan fuera.
 
@@ -231,7 +243,7 @@ más el lanzador `osineitor-gui = osineitor_gui.app:main` en `pyproject.toml` (`
 
 **Ajustes de la GUI:** `settings.json` (tema, aviso legal aceptado y otras preferencias) vive en `%APPDATA%\osineitor-gui`; la variable `OSINEITOR_GUI_CONFIG_DIR` cambia esa carpeta (los tests y `smoke.py` la usan).
 
-**Pendiente:** la instancia única y exponer `--scope` y `--evidence`.
+**Hecho:** la instancia única y `--scope` y `--evidence` en «Nuevo scan».
 
 **Criterios de aceptación**
 
@@ -244,7 +256,7 @@ más el lanzador `osineitor-gui = osineitor_gui.app:main` en `pyproject.toml` (`
 6. Tema claro y oscuro legibles; la ventana recuerda su tamaño; escala bien a 150 % de DPI.
 7. Los tests de la capa no visual siguen en verde y Qt no se importa fuera de `ui/` y `app.py`.
 
-**Pruebas:** añade `pytest-qt` a las dependencias de desarrollo y prueba las vistas con
+**Pruebas:** `pip install -e ".[dev,gui-test]"` y prueba las vistas con
 `QT_QPA_PLATFORM=offscreen`. Cada modelo y vista se prueba con una `ScanSession` alimentada a mano;
 no hace falta lanzar la CLI.
 
@@ -259,14 +271,18 @@ no hace falta lanzar la CLI.
 - [ ] Intentar `--active`: pide confirmación y, si se rechaza, no se lanza.
 - [ ] Modo oscuro y DPI al 150 %.
 - [ ] Cerrar la ventana con un scan en marcha: la CLI no queda huérfana (`tasklist`).
+- [ ] Teclado físico: recorrer todas las páginas con Tab; Enter no confirma los avisos de riesgo.
+- [ ] Lector de pantalla (NVDA o Narrador): navegación, tablas, gráficos con flechas y avisos.
+- [ ] DPI real al 150 % en un monitor físico, y abrir dos veces: se activa la misma ventana.
+- [ ] Instalar con el asistente (no en silencio), SmartScreen y antivirus; desinstalar.
 
 ## Qué no está verificado
 
-- **Instalador (G8):** el paquete de PyInstaller se construyó y pasó `smoke.py` en local (Python 3.14; la CI usa 3.13). No se ha compilado el `.iss`, ni instalado o desinstalado, ni se ha ejecutado el job `windows` ni creado una Release. Tampoco SmartScreen ni los antivirus, que pueden marcar un `.exe` de PyInstaller sin firmar. El instalador no tiene icono propio.
-- **Solo la ventana principal (G2) se ha visto**, en capturas con la plataforma nativa de Windows en tema claro y oscuro; el scan en vivo (G3), el historial, el detalle y la exportación (G4) están probados con la CLI real y módulos falsos sin pantalla, pero no se han visto ni se ha hecho un scan a un dominio real desde la ventana, ni abierto en un navegador un informe HTML exportado; el panel de salud (G5), el diálogo de ajustes (G6) y los avisos y confirmaciones (G7) están probados sin pantalla (las confirmaciones, con la respuesta del usuario simulada), con módulos falsos y con una CLI real, pero tampoco se han visto, ni se ha comprobado con un teclado real que Enter no confirme; la lista manual de abajo no se ha ejecutado. La capa no visual se prueba contra la CLI real en la CI de Windows y Linux. Los tests de Qt (`tests/gui/test_main_window.py`) corren sin pantalla y no entran en la CI mientras no instale el extra `gui`. La plataforma `offscreen` ignora el esquema de color, así que el cambio real de tema solo se ha comprobado en Windows y a mano.
+- **Instalador (G8):** compilado con Inno Setup 6.7.3, instalado y desinstalado en silencio en local, con `smoke.py` sobre lo instalado. Falta el job `windows` de la CI (`release.yml` aún no está en `main`), la Release, el asistente interactivo, SmartScreen y los antivirus. Sin firmar y sin icono propio.
+- **Comprobado en la ventana real de Windows:** scan pasivo a `example.com`, cancelación, exportar a HTML, informe abierto en un navegador en ambos temas y capturas de las páginas en claro y oscuro, parte de ellas al 150 % (`QT_SCALE_FACTOR`). UI Automation: 0 controles interactivos sin nombre en 9 páginas. Tabulador y atajos, con pulsaciones simuladas. Los tests de Qt corren en la CI (trabajo `gui`).
+- **Sin comprobar:** teclado físico, un lector de pantalla escuchado de verdad, monitor real al 150 % y la lista manual (G9). La plataforma `offscreen` ignora el esquema de color.
 - La latencia de lanzar un proceso de la CLI por cada orden en Windows (con antivirus) no está
   medida. Si el historial o la lista de módulos tardan, cachear en la GUI.
 - `CREATE_NO_WINDOW` evita la ventana de consola, pero que no parpadee solo se comprueba a ojo.
-- La GUI aún no pasa `--scope` ni `--evidence`, y `CliApi` no expone `osineitor verify`.
-- Fuera de alcance por ahora: grafo, hallazgos, procedencia en la interfaz, internacionalización y
+- Fuera de alcance por ahora: grafo, procedencia en la interfaz, internacionalización y
   actualizaciones automáticas.

@@ -27,9 +27,9 @@ from osineitor_gui.ui import main_window  # noqa: E402
 from osineitor_gui.ui.history_panel import HistoryPanel  # noqa: E402
 from osineitor_gui.ui.legal_dialog import LegalDialog  # noqa: E402
 from osineitor_gui.ui.main_window import MainWindow  # noqa: E402
-from osineitor_gui.ui.modules_view import HealthDialog  # noqa: E402
+from osineitor_gui.ui.modules_view import HealthPanel  # noqa: E402
 from osineitor_gui.ui.new_scan_dialog import NewScanDialog  # noqa: E402
-from osineitor_gui.ui.settings_dialog import SettingsDialog  # noqa: E402
+from osineitor_gui.ui.settings_panel import SettingsPanel  # noqa: E402
 from tests.gui.fakecli import CLI as FAKE_CLI  # noqa: E402
 from tests.gui.fakecli import save_scan, use_modules  # noqa: E402
 
@@ -168,30 +168,28 @@ def test_catalog_failure_leaves_none_and_new_scan_still_opens(qtbot, monkeypatch
     assert dialog is not None and dialog.module_list.isHidden()
 
 
-def test_health_action_opens_one_dialog_and_reuses_it(qtbot):
+def test_health_action_opens_its_page(qtbot):
     window = make_window(qtbot)
     assert window.action_health.isEnabled()
     window.action_health.trigger()
-    dialog = window.findChild(HealthDialog)
-    assert dialog is not None and dialog.isVisible()
-    window.action_health.trigger()
-    assert window.findChildren(HealthDialog) == [dialog]
+    assert window.stack.currentWidget() is window.health
+    assert window.sidebar.selected() == "health"
+    assert window.findChildren(HealthPanel) == [window.health]
 
 
 def test_health_action_needs_the_cli(qtbot):
     assert not make_window(qtbot, cli=None, cli_error="falta").action_health.isEnabled()
 
 
-def test_settings_action_opens_one_dialog_and_reuses_it(qtbot, monkeypatch):
+def test_settings_action_opens_its_page_and_reloads_each_time(qtbot, monkeypatch):
     reloads = []
-    monkeypatch.setattr(SettingsDialog, "reload", lambda self: reloads.append(1))
+    monkeypatch.setattr(SettingsPanel, "reload", lambda self: reloads.append(1))
     window = make_window(qtbot)
     assert window.action_settings.isEnabled()
     window.action_settings.trigger()
-    dialog = window.findChild(SettingsDialog)
-    assert dialog is not None and dialog.isVisible()
+    assert window.stack.currentWidget() is window.settings_panel
     window.action_settings.trigger()
-    assert window.findChildren(SettingsDialog) == [dialog]
+    assert window.findChildren(SettingsPanel) == [window.settings_panel]
     assert len(reloads) == 2  # cada vez que se abre se vuelve a pedir el estado de las keys
 
 
@@ -203,19 +201,18 @@ def test_settings_without_the_cli_shows_the_error_in_the_dialog(qtbot, monkeypat
     window = make_window(qtbot, cli=None, cli_error="falta")
     assert window.action_settings.isEnabled()
     window.action_settings.trigger()
-    dialog = window.findChild(SettingsDialog)
+    dialog = window.settings_panel
     qtbot.waitUntil(lambda: "no hay CLI" in dialog.message.text(), timeout=30_000)
     assert not dialog.save_button.isEnabled()
 
 
 def test_theme_chosen_in_settings_is_applied_saved_and_checked(qtbot, monkeypatch):
-    monkeypatch.setattr(SettingsDialog, "reload", lambda self: None)
+    monkeypatch.setattr(SettingsPanel, "reload", lambda self: None)
     requested = []
     monkeypatch.setattr(QStyleHints, "setColorScheme", lambda self, s: requested.append(s))
     window = make_window(qtbot)
     window.action_settings.trigger()
-    dialog = window.findChild(SettingsDialog)
-    dialog.theme_changed.emit("dark")
+    window.settings_panel.theme_changed.emit("dark")
     assert requested == [Qt.ColorScheme.Dark]
     assert window.settings.theme == "dark"
     assert json.loads(settings_path().read_text(encoding="utf-8"))["theme"] == "dark"

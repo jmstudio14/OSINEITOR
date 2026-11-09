@@ -17,20 +17,23 @@ from osineitor.report.graph import CSS as GRAPH_CSS
 from osineitor.report.graph import render_graph
 
 CSS = """
-:root { --bg:#fff; --fg:#1d1f23; --muted:#5f6670; --line:#e3e6ea; --head:#f4f6f8; --acc:#0b6bcb; }
+:root { --bg:#f1f5f9; --panel:#fff; --fg:#0f172a; --muted:#475569; --line:#e2e8f0;
+        --head:#f8fafc; --acc:#0369a1; --err:#b91c1c; }
 @media (prefers-color-scheme: dark) {
-  :root { --bg:#14161a; --fg:#e6e8eb; --muted:#9aa1ab; --line:#2a2e35; --head:#1c1f24;
-          --acc:#5aa9ff; }
+  :root { --bg:#0b1120; --panel:#151f32; --fg:#f1f5f9; --muted:#94a3b8; --line:#263449;
+          --head:#1c2940; --acc:#38bdf8; --err:#fca5a5; }
 }
-body { background:var(--bg); color:var(--fg); margin:0 auto; max-width:1100px; padding:24px 16px;
-       font:14px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
-h1 { font-size:20px; } h2 { font-size:16px; margin-top:32px; }
-table { border-collapse:collapse; width:100%; } th, td { border:1px solid var(--line);
+body { background:var(--bg); color:var(--fg); margin:0 auto; max-width:1180px; padding:24px 16px;
+       font:14px/1.5 Inter, Segoe UI, system-ui, -apple-system, sans-serif; }
+h1 { font-size:20px; font-weight:600; } h2 { font-size:15px; font-weight:600; margin-top:28px; }
+table { border-collapse:collapse; width:100%; background:var(--panel); }
+th, td { border:1px solid var(--line);
   padding:6px 8px; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
-th { background:var(--head); } .muted { color:var(--muted); } a { color:var(--acc); }
+th { background:var(--head); color:var(--muted); font-size:12px; font-weight:600; }
+.muted { color:var(--muted); } a { color:var(--acc); }
 dl { margin:0; display:grid; grid-template-columns:max-content 1fr; gap:2px 10px; }
 dt { color:var(--muted); } dd { margin:0; }
-.error { color:#d14343; }
+.error { color:var(--err); }
 """
 
 

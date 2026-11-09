@@ -110,6 +110,7 @@ class HistoryFilter(QSortFilterProxyModel):
 class HistoryPanel(QWidget):
     scan_requested = Signal(int)  # id del scan que se quiere abrir
     export_requested = Signal(int)  # id del scan que se quiere exportar
+    verify_requested = Signal(int)  # id del scan cuyas evidencias se quieren comprobar
     loaded = Signal()  # terminó una recarga (bien o mal)
 
     def __init__(self, api: CliApi, parent: QWidget | None = None) -> None:
@@ -213,6 +214,11 @@ class HistoryPanel(QWidget):
             value_column=1,
             extra=(
                 (self.tr("Abrir"), "external-link", self._open),
+                (
+                    self.tr("Verificar evidencias"),
+                    "shield-check",
+                    lambda index: self.verify_requested.emit(self._scan_at(index)),
+                ),
                 (
                     self.tr("Exportar…"),
                     "download",

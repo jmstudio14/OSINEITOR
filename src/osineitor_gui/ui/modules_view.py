@@ -8,7 +8,6 @@ from PySide6.QtCore import QAbstractTableModel, QModelIndex, QObject, Qt
 from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import (
     QCheckBox,
-    QDialog,
     QHBoxLayout,
     QHeaderView,
     QProgressBar,
@@ -91,15 +90,13 @@ class HealthModel(QAbstractTableModel):
         )[column]
 
 
-class HealthDialog(QDialog):
+class HealthPanel(QWidget):
     """Lanza `doctor` bajo demanda (puede tardar minutos) y muestra el veredicto por módulo."""
 
     def __init__(self, api: CliApi, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._api = api
         self._running = False
-        self.setWindowTitle(self.tr("Salud de los módulos"))
-        self.resize(820, 520)
         self.model = HealthModel(self)
         self.table, self.proxy = make_table(self.model)
         self.table.setAccessibleName(self.tr("Veredicto por módulo"))

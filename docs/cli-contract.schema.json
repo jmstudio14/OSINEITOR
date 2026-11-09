@@ -688,7 +688,11 @@
           "target_type",
           "target",
           "entities",
-          "started_at"
+          "started_at",
+          "status",
+          "severity",
+          "by_type",
+          "modules"
         ],
         "properties": {
           "id": {
@@ -705,6 +709,34 @@
           },
           "started_at": {
             "type": "string"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "truncated",
+              "cancelled"
+            ]
+          },
+          "severity": {
+            "description": "Hallazgos por severidad.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "by_type": {
+            "description": "Entidades por tipo.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "modules": {
+            "description": "Ejecuciones de módulo por estado.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
           }
         },
         "additionalProperties": true

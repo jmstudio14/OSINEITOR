@@ -44,9 +44,13 @@ En local (PowerShell, con `pip install -e ".[gui,build]"`):
 python packaging\windows\smoke.py dist\OSINEITOR
 ```
 
-`ISCC` solo hace falta para el instalador (Inno Setup 6). No hay firma de código: el instalador
-y los `.exe` salen sin firmar y Windows muestra SmartScreen; firmarlos (p. ej. SignPath
-Foundation, sujeta a sus requisitos) es una tarea del autor. El instalador usa el icono por
+`ISCC` solo hace falta para el instalador (Inno Setup 6). Desde Git Bash, los argumentos `/D` se
+reescriben como rutas: lánzalo desde PowerShell. No hay firma de código: el instalador y los `.exe`
+salen sin firmar y Windows muestra SmartScreen. Firmarlos es una tarea del autor y exige un
+certificado en HSM o firma en la nube (p. ej. Azure Trusted Signing o SignPath Foundation): desde
+junio de 2023 los certificados nuevos no se exportan a PFX. Habría que firmar los `.exe` antes de
+crear el ZIP y de `ISCC`, y después el instalador; `unins000.exe` queda aparte, y
+`tests/test_packaging.py` hoy prohíbe secretos en el job `windows`. El instalador usa el icono por
 defecto: no hay `.ico` en el repositorio.
 
 ## Firma
@@ -62,7 +66,8 @@ aparece como «Provenance». Para comprobarlas desde fuera se puede usar la herr
   los ficheros de datos (presets, reglas, firmas) y que el wheel instalado en un entorno limpio
   ejecuta `osineitor version`, lista todos los módulos y carga los presets.
 - **Instalador de Windows, probado en local:** PyInstaller 6.22 (Python 3.14) construyó `dist/OSINEITOR` (134,8 MB; el ZIP, 66 MB) y `smoke.py` salió con 0: versión, 55 módulos (los que había entonces), presets, un scan sin red y la GUI viva a los 3 s.
-- **Instalador de Windows, no probado:** compilar el `.iss`, instalar y desinstalar, el job `windows` en la CI (allí es Python 3.13), la creación de la Release, SmartScreen y los antivirus.
+- **Instalador de Windows, probado en local:** compilar el `.iss` con Inno Setup 6.7.3 (79,5 MB), instalar y desinstalar en silencio y `smoke.py` sobre lo instalado.
+- **Instalador de Windows, no probado:** el asistente interactivo, el job `windows` en la CI (allí es Python 3.13), la creación de la Release, SmartScreen y los antivirus.
 - **No probado:** el flujo `release.yml` completo, la publicación en PyPI y la comprobación de las
   atestaciones. Necesitan la cuenta de PyPI y los pasos de «Una sola vez». Hasta publicar una versión
   de prueba no hay evidencia de que funcionen; GitHub Actions rechaza el YAML si tiene un error de

@@ -16,7 +16,7 @@ from PySide6.QtGui import QAction, QTextDocument  # noqa: E402
 from PySide6.QtWidgets import QLabel, QMessageBox  # noqa: E402
 
 from osineitor_gui.api import CliApi  # noqa: E402
-from osineitor_gui.dashboard import summarize_scan  # noqa: E402
+from osineitor_gui.dashboard import summarize_row  # noqa: E402
 from osineitor_gui.scan_request import ScanRequest  # noqa: E402
 from osineitor_gui.settings import GuiSettings  # noqa: E402
 from osineitor_gui.ui.charts import BarList, BarRow, Column, ColumnChart  # noqa: E402
@@ -36,13 +36,17 @@ TIMEOUT = 30_000
 EVIL = '<a href="https://evil.test">pulsa</a><img src="https://evil.test/x.png">'
 
 
-def history_row(scan_id: int) -> dict:
+def history_row(scan_id: int, severity: str | None = "high") -> dict:
     return {
         "id": scan_id,
         "target": f"t{scan_id}.test",
         "target_type": "domain",
         "entities": 2,
         "started_at": "2026-11-08T10:00:00+00:00",
+        "status": "complete",
+        "severity": {severity: 1} if severity else {},
+        "by_type": {"finding": 1, "ip": 1} if severity else {"ip": 2},
+        "modules": {"ok": 1, "error": 1},
     }
 
 
@@ -106,6 +110,17 @@ def test_a_history_error_is_shown_as_plain_text_in_the_empty_state(qtbot):
     view.set_history([], EVIL)
     assert view.empty.text.text() == EVIL
     assert view.empty.text.textFormat() == Qt.TextFormat.PlainText
+
+
+def test_figures_appear_at_once_and_show_is_only_for_scans_with_findings(qtbot):
+    api = FakeApi()
+    view = make_dashboard(qtbot, api)
+    view.show()
+    with qtbot.waitSignal(view.loaded, timeout=TIMEOUT):
+        view.set_history([history_row(3, None), history_row(2), history_row(1, None)])
+        assert view.kpi_urgent.value.text() == "1"  # antes de que responda ningún `show`
+    assert api.shown == [2]
+    assert analyzed(view) == [3, 2, 1]
 
 
 def test_scans_are_fetched_one_by_one_and_painted_as_they_arrive(qtbot):
@@ -176,7 +191,7 @@ def test_a_failed_scan_is_reported_as_plain_text_and_the_rest_still_load(qtbot):
     view.show()
     with qtbot.waitSignal(view.loaded, timeout=TIMEOUT):
         view.set_history([history_row(3), history_row(2), history_row(1)])
-    assert analyzed(view) == [3, 1]
+    assert {row["scan_id"] for row in view.overview.findings} == {3, 1}
     assert "<b>falló</b> 2" in view.failures.text()
     assert view.failures.textFormat() == Qt.TextFormat.PlainText
 
@@ -190,7 +205,7 @@ def test_the_alert_appears_only_with_critical_findings_and_opens_the_scan(qtbot)
     view = make_dashboard(qtbot, Critical())
     view.show()
     with qtbot.waitSignal(view.loaded, timeout=TIMEOUT):
-        view.set_history([history_row(1)])
+        view.set_history([history_row(1, "critical")])
     assert view.alert_box.isVisible() and view.alert_text.text().startswith("1 hallazgo de")
     with qtbot.waitSignal(view.scan_requested, timeout=1000) as blocker:
         view.alert_open.click()
@@ -377,10 +392,13 @@ def test_third_party_text_never_reaches_a_rich_text_label_or_tooltip(qtbot):
     assert document.toPlainText() == EVIL  # se lee, pero no hay nada activo
 
 
-def test_saved_scan_summary_handles_what_show_returns(monkeypatch):
+def test_saved_scan_summary_handles_what_history_returns(monkeypatch):
     scan_id = save_scan(monkeypatch)
-    summary = summarize_scan(CliApi(FAKE_CLI).show(scan_id))
-    assert summary.target == "example.com" and summary.entities >= 1
+    [row] = CliApi(FAKE_CLI).history()
+    summary = summarize_row(row)
+    assert summary.scan_id == scan_id and summary.target == "example.com"
+    assert summary.status == "complete" and summary.by_type == {"ip": 1}
+    assert summary.modules == {"ok": 1}
 
 
 # --- búsqueda global ---------------------------------------------------------------------------
@@ -469,9 +487,9 @@ def test_the_scans_page_without_tabs_shows_the_empty_state(window):
 
 def test_sidebar_actions_follow_the_enabled_state_of_their_action(window):
     buttons = {text: b for b, _icon, text in window.sidebar._buttons}
-    assert buttons["Salud"].isEnabled()
-    window.action_health.setEnabled(False)
-    assert not buttons["Salud"].isEnabled()
+    assert buttons["Uso responsable"].isEnabled()
+    window.action_legal.setEnabled(False)
+    assert not buttons["Uso responsable"].isEnabled()
 
 
 def test_a_running_scan_does_not_pull_the_user_out_of_another_page(qtbot, window, monkeypatch):
@@ -494,11 +512,9 @@ def test_the_sidebar_collapses_on_narrow_windows_and_on_request(qtbot, window):
     window.resize(900, 700)
     qtbot.waitUntil(lambda: window.sidebar.width() == COLLAPSED_WIDTH, timeout=2000)
     assert window.sidebar.toggle_button.toolTip() == "Expandir menú"
+    assert window.topbar.toolbar.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
     window.action_toggle_sidebar.trigger()
     assert window.sidebar.width() == EXPANDED_WIDTH  # lo que elige el usuario manda
-    window.resize(1300, 700)
-    qtbot.waitUntil(lambda: not window.sidebar.collapsed, timeout=2000)
-    assert window.topbar.toolbar.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
 
 
 def test_collapsed_buttons_keep_a_tooltip_and_an_accessible_name(window):

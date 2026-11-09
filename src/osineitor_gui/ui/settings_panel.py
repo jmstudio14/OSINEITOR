@@ -9,7 +9,6 @@ from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
-    QDialog,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -79,7 +78,7 @@ class KeysModel(QAbstractTableModel):
         return (row.name, ", ".join(row.modules), state)[index.column()]
 
 
-class SettingsDialog(QDialog):
+class SettingsPanel(QWidget):
     theme_changed = Signal(str)  # la ventana principal aplica y guarda el tema
 
     def __init__(self, api: CliApi, settings: GuiSettings, parent: QWidget | None = None) -> None:
@@ -87,12 +86,11 @@ class SettingsDialog(QDialog):
         self._api = api
         self._busy = False
         self._loaded = False  # `modules()` respondió: hay filas sobre las que actuar
-        self.setWindowTitle(self.tr("Ajustes"))
-        self.resize(680, 480)
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_keys_tab(), self.tr("API keys"))
         self.tabs.addTab(self._build_general_tab(settings), self.tr("General"))
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 10, 16, 12)
         layout.addWidget(self.tabs)
         self._update_buttons()
 
