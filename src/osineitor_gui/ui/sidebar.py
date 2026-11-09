@@ -27,12 +27,13 @@ class Sidebar(QFrame):
     """Las páginas se excluyen entre sí; Salud, Ajustes y Ayuda solo lanzan su acción."""
 
     page_selected = Signal(str)
+    choice_changed = Signal(str)  # el usuario contrajo o expandió el menú
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, choice: str = "", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setProperty("role", "sidebar")
         self.collapsed = False
-        self._user_choice: bool | None = None  # lo que eligió el usuario: manda sobre la anchura
+        self.choice = choice  # lo que eligió el usuario: manda sobre la anchura
         self._buttons: list[tuple[QToolButton, str, str]] = []  # (botón, icono, texto)
         self._pages: dict[str, QToolButton] = {}
 
@@ -108,16 +109,16 @@ class Sidebar(QFrame):
         return next((name for name, b in self._pages.items() if b.isChecked()), None)
 
     def _toggle(self) -> None:
-        self._user_choice = not self.collapsed
-        self.set_collapsed(self._user_choice)
+        self.set_collapsed(not self.collapsed)
+        self.choice = "collapsed" if self.collapsed else "expanded"
+        self.choice_changed.emit(self.choice)
 
     def toggle(self) -> None:
         self._toggle()
 
     def fit_width(self, narrow: bool) -> None:
-        """La ventana cruzó el umbral de anchura: una elección previa deja de valer."""
-        self._user_choice = None
-        self.set_collapsed(narrow)
+        """La ventana cruzó el umbral de anchura; lo que eligió el usuario manda."""
+        self.set_collapsed(self.choice == "collapsed" if self.choice else narrow)
 
     def set_collapsed(self, collapsed: bool) -> None:
         self.collapsed = collapsed

@@ -7,6 +7,7 @@ import sqlite3
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from osineitor.config import data_dir, private_file
 from osineitor.models import Entity, Evidence, ModuleRun, ScanEvent, ScanResult
@@ -129,6 +130,12 @@ MIGRATIONS = [
         text TEXT NOT NULL
     );
     CREATE INDEX idx_entities_value ON entities(lower(value));
+    """,
+    # 11: índices para resumir los scans sin recorrer las tablas enteras (`history --json`).
+    """
+    CREATE INDEX idx_entities_scan_type ON entities(scan_id, type);
+    CREATE INDEX idx_events_scan ON events(scan_id);
+    CREATE INDEX idx_module_runs_scan ON module_runs(scan_id);
     """,
 ]
 
@@ -361,6 +368,51 @@ class Storage:
             " LEFT JOIN entities e ON e.scan_id = s.id GROUP BY s.id ORDER BY s.id DESC LIMIT ?",
             (limit,),
         ).fetchall()
+
+    def scan_digests(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Los últimos scans con su estado y recuentos, sin cargar cada uno entero."""
+        recent = "(SELECT id FROM scans ORDER BY id DESC LIMIT ?)"
+        digests = {
+            scan_id: {
+                "id": scan_id,
+                "target_type": target_type,
+                "target": target,
+                "entities": entities,
+                "started_at": started_at,
+                "status": "complete",
+                "severity": {},
+                "by_type": {},
+                "modules": {},
+            }
+            for scan_id, target_type, target, entities, started_at in self.list_scans(limit)
+        }
+        # Mismo orden de prioridad que `ScanResult.status`: cancelado manda sobre agotado.
+        for scan_id, kind in self._conn.execute(
+            f"SELECT scan_id, kind FROM events WHERE scan_id IN {recent}"
+            " AND kind IN ('cancelled', 'budget') ORDER BY kind = 'cancelled'",
+            (limit,),
+        ):
+            digests[scan_id]["status"] = "cancelled" if kind == "cancelled" else "truncated"
+        for field, query in (
+            (
+                "by_type",
+                f"SELECT scan_id, type, COUNT(*) FROM entities WHERE scan_id IN {recent}"
+                " GROUP BY scan_id, type",
+            ),
+            (
+                "severity",
+                "SELECT scan_id, json_extract(data, '$.severity'), COUNT(*) FROM entities"
+                f" WHERE scan_id IN {recent} AND type = 'finding' GROUP BY 1, 2",
+            ),
+            (
+                "modules",
+                f"SELECT scan_id, status, COUNT(*) FROM module_runs WHERE scan_id IN {recent}"
+                " GROUP BY scan_id, status",
+            ),
+        ):
+            for scan_id, key, count in self._conn.execute(query, (limit,)):
+                digests[scan_id][field][key or "info"] = count
+        return list(digests.values())
 
     def watch_last(self, target: str) -> tuple[str, int | None, str] | None:
         """Última ejecución vigilada de `target`: (fecha ISO, id del scan, estado) o `None`."""

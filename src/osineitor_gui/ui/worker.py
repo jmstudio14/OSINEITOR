@@ -1,57 +1,52 @@
-"""Ejecuta una llamada bloqueante (p. ej. de `CliApi`) en un hilo y entrega el resultado a la UI."""
+"""Ejecuta una llamada bloqueante (p. ej. de `CliApi`) en un hilo y entrega el resultado a la UI.
+
+Los hilos solo dejan el resultado en una cola de Python: un hilo no puede saber si un `QObject`
+sigue vivo (al cerrar, Qt puede destruirlo en cualquier momento), así que nunca toca ninguno.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from queue import Empty, SimpleQueue
 from typing import Any
 
-from PySide6.QtCore import QCoreApplication, QObject, QRunnable, Qt, QThreadPool, Signal
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer
 from shiboken6 import isValid
 
+DRAIN_MS = 10
 
-class _Relay(QObject):
-    """Un único objeto, del hilo de la UI, que recibe en cola lo que producen los hilos."""
-
-    done = Signal(object, object, object)  # (callback, valor, parent)
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.closing = False
-        self.done.connect(self._deliver, Qt.ConnectionType.QueuedConnection)
-        # Al cerrar la aplicación este objeto se destruye aunque un hilo siga en una llamada a la
-        # CLI: ese hilo no debe emitir sobre él.
-        QCoreApplication.instance().aboutToQuit.connect(self._on_quit)
-
-    def _on_quit(self) -> None:
-        self.closing = True
-
-    @staticmethod
-    def _deliver(callback: Callable[[Any], None], value: Any, parent: QObject | None) -> None:
-        if parent is None or isValid(parent):  # si la ventana ya se cerró, nadie espera el dato
-            callback(value)
+_results: SimpleQueue = SimpleQueue()
+_pending = 0  # llamadas sin entregar; solo se toca desde el hilo de la UI
+_timer: QTimer | None = None
 
 
 class _Task(QRunnable):
-    def __init__(self, fn, on_result, on_error, parent, relay: _Relay) -> None:
+    def __init__(self, fn, on_result, on_error, parent) -> None:
         super().__init__()
         self._args = (fn, on_result, on_error, parent)
-        self._relay = relay
 
     def run(self) -> None:
         fn, on_result, on_error, parent = self._args
         try:
             value = fn()
         except Exception as exc:  # se entrega a `on_error`; la UI decide cómo mostrarlo
-            self._emit(on_error, exc, parent)
+            _results.put((on_error, exc, parent))
         else:
-            self._emit(on_result, value, parent)
-
-    def _emit(self, callback, value, parent) -> None:
-        if not self._relay.closing:  # la aplicación se cierra: nadie espera el dato
-            self._relay.done.emit(callback, value, parent)
+            _results.put((on_result, value, parent))
 
 
-_relay: _Relay | None = None
+def _drain() -> None:
+    global _pending
+    while True:
+        try:
+            callback, value, parent = _results.get_nowait()
+        except Empty:
+            break
+        _pending -= 1
+        if parent is None or isValid(parent):  # si la ventana ya se cerró, nadie espera el dato
+            callback(value)
+    if _pending == 0:
+        _timer.stop()
 
 
 def run_in_thread(
@@ -65,7 +60,11 @@ def run_in_thread(
     Si `parent` ya no existe cuando llega el resultado, se descarta. Debe llamarse desde el hilo
     de la UI.
     """
-    global _relay
-    if _relay is None:
-        _relay = _Relay()
-    QThreadPool.globalInstance().start(_Task(fn, on_result, on_error, parent, _relay))
+    global _pending, _timer
+    if _timer is None:
+        _timer = QTimer()
+        _timer.setInterval(DRAIN_MS)
+        _timer.timeout.connect(_drain)
+    _pending += 1
+    _timer.start()
+    QThreadPool.globalInstance().start(_Task(fn, on_result, on_error, parent))

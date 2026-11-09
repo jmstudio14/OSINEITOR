@@ -242,7 +242,7 @@ SQLite en `osineitor.db` dentro del directorio de datos (`%LOCALAPPDATA%\osineit
 **Migraciones.** El esquema se versiona con `PRAGMA user_version`: `storage.MIGRATIONS` es una
 lista donde la posición es la versión y cada migración se aplica en una transacción. Una base de
 la v0.1.0 (versión 0) se actualiza sola sin perder datos; una de una versión más nueva se rechaza.
-El esquema está hoy en la versión 10. Nunca se edita una migración ya publicada: los cambios van al final de la lista. Un tipo de
+El esquema está hoy en la versión 11 (índices para `history --json`). Nunca se edita una migración ya publicada: los cambios van al final de la lista. Un tipo de
 entidad nuevo no necesita migración: `entities.type` es texto sin restricción y el valor se
 normaliza al cargarlo. Una base con tipos nuevos no la lee un OSINEITOR anterior.
 

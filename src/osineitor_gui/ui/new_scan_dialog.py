@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLineEdit,
@@ -27,7 +28,7 @@ from PySide6.QtWidgets import (
 
 from osineitor_gui.scan_request import KINDS, InvalidRequest, ScanRequest, detect_kind
 from osineitor_gui.ui import risk_dialog
-from osineitor_gui.ui.widgets import label, safe_tooltip
+from osineitor_gui.ui.widgets import button, label, safe_tooltip
 
 DEFAULT = -1  # valor especial de los cuadros numéricos: «por defecto» = no pasar la opción
 
@@ -88,6 +89,13 @@ class NewScanDialog(QDialog):
         self.private_box.toggled.connect(self._on_private)
         self.risk_note = label("", "kpiHint", wrap=True)
 
+        self.evidence = QCheckBox(self.tr("Guardar evidencias (respuesta original de cada fuente)"))
+        self.scope = QLineEdit()
+        self.scope.setPlaceholderText(self.tr("Fichero YAML de alcance (opcional)"))
+        self.scope.setAccessibleName(self.tr("Fichero de alcance"))
+        self.scope_button = button(self.tr("Elegir…"))
+        self.scope_button.setAccessibleName(self.tr("Elegir fichero de alcance"))
+        self.scope_button.clicked.connect(self._choose_scope)
         self.no_save = QCheckBox(self.tr("No guardar el scan en el historial"))
         self.no_cache = QCheckBox(self.tr("No usar la caché"))
         self.refresh = QCheckBox(self.tr("Refrescar la caché"))
@@ -123,7 +131,18 @@ class NewScanDialog(QDialog):
         right.addWidget(self.module_list, 1)
         right.addWidget(self.modules_note)
         right.addWidget(label(self.tr("Opciones"), "section"))
-        for box in (self.active_box, self.private_box, self.no_save, self.no_cache, self.refresh):
+        scope_row = QHBoxLayout()
+        scope_row.addWidget(self.scope, 1)
+        scope_row.addWidget(self.scope_button)
+        right.addLayout(scope_row)
+        for box in (
+            self.active_box,
+            self.private_box,
+            self.evidence,
+            self.no_save,
+            self.no_cache,
+            self.refresh,
+        ):
             right.addWidget(box)
         right.addWidget(self.risk_note)
         columns = QHBoxLayout()
@@ -136,7 +155,7 @@ class NewScanDialog(QDialog):
         layout.addLayout(columns, 1)
         layout.addWidget(self.error)
         layout.addWidget(buttons)
-        self.resize(860, 520)
+        self.resize(860, 620)
         self._update_risk_state()
 
     # --- módulos ----------------------------------------------------------------------------
@@ -219,6 +238,13 @@ class NewScanDialog(QDialog):
         spin.setToolTip(self.tr("0 = sin límite"))
         return spin
 
+    def _choose_scope(self) -> None:
+        path, _chosen = QFileDialog.getOpenFileName(
+            self, self.tr("Fichero de alcance"), "", "YAML (*.yml *.yaml)"
+        )
+        if path:
+            self.scope.setText(path)
+
     def _update_detected(self, text: str) -> None:
         kind = detect_kind(text) if text.strip() else ""
         self.detected.setText(f"{self.tr('Tipo detectado')}: {kind}" if kind else "")
@@ -248,6 +274,8 @@ class NewScanDialog(QDialog):
             refresh=self.refresh.isChecked(),
             no_save=self.no_save.isChecked(),
             purpose=self.purpose.text() or None,
+            scope=self.scope.text().strip() or None,
+            evidence=self.evidence.isChecked(),
         )
         try:
             request.validate()

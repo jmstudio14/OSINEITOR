@@ -1,7 +1,7 @@
 """Datos del panel principal, calculados solo con lo que devuelve la CLI (sin Qt).
 
-`history --json` no trae el estado ni los hallazgos de un scan: esos datos salen de `show --json`
-de los últimos scans (`RECENT_SCANS`), así que las cifras que dependen de ellos lo dicen.
+`history --json` da los recuentos de cada scan; `show --json` solo hace falta para los títulos de
+los hallazgos. Las cifras por scan cubren los últimos (`RECENT_SCANS`), y lo dicen.
 """
 
 from __future__ import annotations
@@ -96,35 +96,28 @@ def _severity(entity: dict[str, Any]) -> str:
     return value if value in SEVERITIES else "info"
 
 
-def summarize_scan(result: dict[str, Any]) -> ScanSummary:
-    """Resume la salida de `show --json` de un scan."""
-    entities = result.get("entities") or []
-    by_type: dict[str, int] = {}
+def findings_of(result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Los hallazgos de la salida de `show --json`: lo único que `history --json` no resume."""
+    return [e for e in result.get("entities") or [] if e.get("type") == "finding"]
+
+
+def summarize_row(row: dict[str, Any], findings: list[dict[str, Any]] | None = None) -> ScanSummary:
+    """Resume una fila de `history --json`; `findings` se añaden cuando llegan de `show`."""
     by_severity: dict[str, int] = {}
-    findings = []
-    for entity in entities:
-        kind = str(entity.get("type", ""))
-        by_type[kind] = by_type.get(kind, 0) + 1
-        if kind == "finding":
-            severity = _severity(entity)
-            by_severity[severity] = by_severity.get(severity, 0) + 1
-            findings.append(entity)
-    modules: dict[str, int] = {}
-    for run in result.get("runs") or []:
-        status = str(run.get("status", ""))
-        modules[status] = modules.get(status, 0) + 1
-    target = result.get("target") or {}
+    for severity, count in (row.get("severity") or {}).items():
+        key = severity if severity in SEVERITIES else "info"
+        by_severity[key] = by_severity.get(key, 0) + int(count)
     return ScanSummary(
-        scan_id=result.get("scan_id") or 0,
-        target=str(target.get("value", "")),
-        target_type=str(target.get("type", "")),
-        started_at=str(result.get("started_at", "")),
-        status=str(result.get("status", "")),
-        entities=len(entities),
+        scan_id=row["id"],
+        target=str(row.get("target", "")),
+        target_type=str(row.get("target_type", "")),
+        started_at=str(row.get("started_at", "")),
+        status=str(row.get("status", "")),
+        entities=int(row.get("entities") or 0),
         by_severity=by_severity,
-        by_type=by_type,
-        modules=modules,
-        findings=findings,
+        by_type=dict(row.get("by_type") or {}),
+        modules=dict(row.get("modules") or {}),
+        findings=findings or [],
     )
 
 
@@ -158,11 +151,11 @@ def _top_findings(summaries: list[ScanSummary]) -> list[dict[str, Any]]:
 
 def aggregate(
     history: list[dict[str, Any]],
-    summaries: dict[int, ScanSummary],
+    findings: dict[int, list[dict[str, Any]]],
     now: datetime,
     catalog: list[dict[str, Any]] | None = None,
 ) -> Overview:
-    """Une `history --json` (del más reciente al más antiguo), los resúmenes y `modules --json`."""
+    """Une `history --json` (del más reciente al más antiguo), `show` y `modules --json`."""
     overview = Overview(scans_total=len(history))
     today = now.date()
     days = [today - timedelta(days=i) for i in range(DAILY_WINDOW - 1, -1, -1)]
@@ -182,7 +175,7 @@ def aggregate(
             per_day[day] += 1
     overview.daily = list(per_day.items())
 
-    recent = [summaries[row["id"]] for row in history[:RECENT_SCANS] if row["id"] in summaries]
+    recent = [summarize_row(row, findings.get(row["id"])) for row in history[:RECENT_SCANS]]
     overview.analyzed = recent
     for summary in recent:
         for severity, count in summary.by_severity.items():

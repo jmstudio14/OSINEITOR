@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
 from osineitor_gui.api import CliApi, CliError  # noqa: E402
 from osineitor_gui.ui import risk_dialog  # noqa: E402
-from osineitor_gui.ui.modules_view import HealthDialog, HealthModel  # noqa: E402
+from osineitor_gui.ui.modules_view import HealthModel, HealthPanel  # noqa: E402
 from tests.gui.fakecli import CLI, use_modules  # noqa: E402
 
 TIMEOUT = 30_000
@@ -55,13 +55,13 @@ def cell(model: HealthModel, row: int, column: int, role=Qt.ItemDataRole.Display
     return model.data(model.index(row, column), role)
 
 
-def make_dialog(qtbot, api) -> HealthDialog:
-    dialog = HealthDialog(api)
+def make_dialog(qtbot, api) -> HealthPanel:
+    dialog = HealthPanel(api)
     qtbot.addWidget(dialog)
     return dialog
 
 
-def run_check(qtbot, dialog: HealthDialog) -> None:
+def run_check(qtbot, dialog: HealthPanel) -> None:
     dialog.check()
     qtbot.waitUntil(lambda: dialog.run_button.isEnabled(), timeout=TIMEOUT)
 

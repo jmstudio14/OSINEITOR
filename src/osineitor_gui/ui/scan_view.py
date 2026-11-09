@@ -14,10 +14,12 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLineEdit,
     QSplitter,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from osineitor_gui.api import CliApi
 from osineitor_gui.events import EXIT_MODULE_ERRORS
 from osineitor_gui.scan_request import ScanRequest
 from osineitor_gui.session import (
@@ -32,6 +34,7 @@ from osineitor_gui.session import (
 from osineitor_gui.ui.entity_detail import EntityDetail
 from osineitor_gui.ui.models import EntityTableModel, ModuleActivityModel
 from osineitor_gui.ui.runner import ScanRunner
+from osineitor_gui.ui.scan_insights import RiskPanel, TimelinePanel
 from osineitor_gui.ui.tables import (
     install_badges,
     make_table,
@@ -61,6 +64,7 @@ class ScanView(QWidget):
         request: ScanRequest | None = None,
         cli: Sequence[str] | None = None,
         parent: QWidget | None = None,
+        api: CliApi | None = None,
     ) -> None:
         """Sin `request` es la vista de un scan guardado (ver `from_result`): no lanza nada."""
         super().__init__(parent)
@@ -141,8 +145,16 @@ class ScanView(QWidget):
         upper.setStretchFactor(0, 3)
         upper.setStretchFactor(1, 2)
         upper.setSizes([600, 340])
+        self.risk = RiskPanel(api)
+        self.timeline = TimelinePanel(api)
+        self.views = QTabWidget()
+        self.views.setDocumentMode(True)
+        self.views.addTab(upper, self.tr("Entidades"))
+        self.views.addTab(self.risk, self.tr("Riesgo"))
+        self.views.addTab(self.timeline, self.tr("Cronología"))
+        self.views.currentChanged.connect(self._load_insights)
         splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(upper)
+        splitter.addWidget(self.views)
         splitter.addWidget(modules_card)
         splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 1)
@@ -161,9 +173,11 @@ class ScanView(QWidget):
         self._rebuild_type_filter()
 
     @classmethod
-    def from_result(cls, result: dict[str, Any], parent: QWidget | None = None) -> ScanView:
+    def from_result(
+        cls, result: dict[str, Any], parent: QWidget | None = None, api: CliApi | None = None
+    ) -> ScanView:
         """Vista de un scan guardado (la salida de `CliApi.show`), con el aspecto de uno en vivo."""
-        view = cls(parent=parent)
+        view = cls(parent=parent, api=api)
         view.session.load_result(result)
         view.refresh()
         return view
@@ -186,6 +200,12 @@ class ScanView(QWidget):
         wanted = Qt.Orientation.Vertical if narrow else Qt.Orientation.Horizontal
         if self.upper.orientation() != wanted:
             self.upper.setOrientation(wanted)
+
+    def _load_insights(self, *_args) -> None:
+        panel = self.views.currentWidget()
+        # En marcha aún no hay scan guardado: `refresh` vuelve a pedirlo al terminar.
+        if isinstance(panel, RiskPanel | TimelinePanel) and self.session.finished:
+            panel.ensure_loaded(self.scan_id)
 
     def _entity_menu(self, position: QPoint) -> None:
         show_copy_menu(self.entities_table, position, value_column=1)
@@ -262,6 +282,7 @@ class ScanView(QWidget):
         self.modules_model.refresh()
         self._update_banner()
         self._update_heading()
+        self._load_insights()
         self.changed.emit()
 
     def _update_heading(self) -> None:

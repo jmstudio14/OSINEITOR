@@ -18,6 +18,7 @@ EXIT_INTERNAL = 1
 EXIT_USAGE = 2
 EXIT_MODULE_ERRORS = 3
 EXIT_TRUNCATED = 4
+EXIT_TAMPERED = 5  # `verify`: alguna evidencia no coincide con su huella
 EXIT_CANCELLED = 130
 
 

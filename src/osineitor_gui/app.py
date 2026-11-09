@@ -7,9 +7,10 @@ import sys
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from osineitor_gui.cli_locator import CliNotFound, locate_cli
-from osineitor_gui.settings import GuiSettings
+from osineitor_gui.settings import GuiSettings, settings_dir
 from osineitor_gui.ui.legal_dialog import LegalDialog
 from osineitor_gui.ui.main_window import MainWindow
+from osineitor_gui.ui.single_instance import SingleInstance
 from osineitor_gui.ui.theme import apply_theme, install
 
 APP_ID = "OSINEITOR.Desktop"
@@ -48,6 +49,16 @@ def main(argv: list[str] | None = None) -> int:
     install(qapp)
     settings = GuiSettings.load()
     apply_theme(settings.theme)
+    instance = SingleInstance(settings_dir(), qapp)
+    if not instance.acquire():
+        return 0
+    try:
+        return _run(settings, instance)
+    finally:
+        instance.release()
+
+
+def _run(settings: GuiSettings, instance: SingleInstance) -> int:
     if not ensure_legal(settings):
         return 0
 
@@ -60,5 +71,6 @@ def main(argv: list[str] | None = None) -> int:
         QMessageBox.critical(None, "OSINEITOR", cli_error)
 
     window = MainWindow(settings, cli, cli_error)
+    instance.activated.connect(window.activate)
     window.show()
     return QApplication.exec()

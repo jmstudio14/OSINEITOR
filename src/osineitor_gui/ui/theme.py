@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from string import Template
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QLibraryInfo, Qt, QTranslator
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication
 
@@ -203,6 +203,9 @@ def install(app: QApplication) -> None:
     """Prepara la aplicación: estilo base, fuentes y seguimiento del esquema del sistema."""
     app.setStyle("Fusion")  # el estilo nativo de Windows 11 ignora parte de la hoja de estilo
     load_fonts()
+    translator = QTranslator(app)  # botones estándar en español: «Cancelar», no «Cancel»
+    if translator.load("qtbase_es", QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)):
+        app.installTranslator(translator)
     font = QFont(UI_FAMILIES, UI_SIZE)
     app.setFont(font)
     QGuiApplication.styleHints().colorSchemeChanged.connect(lambda _scheme: refresh())

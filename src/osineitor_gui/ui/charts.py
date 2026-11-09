@@ -9,7 +9,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PySide6.QtCore import QEvent, QPoint, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QMouseEvent, QPainter
+from PySide6.QtGui import (
+    QAccessible,
+    QAccessibleEvent,
+    QColor,
+    QFocusEvent,
+    QFont,
+    QFontMetrics,
+    QKeyEvent,
+    QMouseEvent,
+    QPainter,
+)
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
 from osineitor_gui.ui import theme
@@ -94,6 +104,7 @@ class ColumnChart(_Chart):
         self.label_every = 1
         self._hover: int | None = None
         self.setMinimumHeight(170)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # flechas: valor a valor sin ratón
 
     def set_data(self, columns: list[Column], legend: list[tuple[str, str]] | None = None) -> None:
         self.columns = columns
@@ -102,6 +113,38 @@ class ColumnChart(_Chart):
         parts = [f"{c.label}: {c.total}" for c in columns if c.total]
         self.setAccessibleDescription("; ".join(parts) or self.tr("Sin datos"))
         self.update()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        steps = {Qt.Key.Key_Left: -1, Qt.Key.Key_Right: 1}
+        step = steps.get(event.key())
+        if step is None or not self.columns:
+            super().keyPressEvent(event)
+            return
+        current = self._hover if self._hover is not None else -step
+        self._select(max(min(current + step, len(self.columns) - 1), 0))
+
+    def focusInEvent(self, event: QFocusEvent) -> None:
+        super().focusInEvent(event)
+        if self.columns and self._hover is None:
+            self._select(len(self.columns) - 1)  # lo más reciente
+        self.update()
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:
+        super().focusOutEvent(event)
+        QToolTip.hideText()
+        self._hover_changed(None)
+
+    def _select(self, index: int) -> None:
+        self._hover_changed(index)
+        column = self.columns[index]
+        text = column.tooltip or f"{column.label}: {column.total}"
+        plot = self._plot()
+        point = QPoint(int(plot.left() + self._slot() * (index + 0.5)), int(plot.top()))
+        QToolTip.showText(self.mapToGlobal(point), safe_tooltip(text), self)
+        self.setAccessibleDescription(text)
+        QAccessible.updateAccessibility(
+            QAccessibleEvent(self, QAccessible.Event.DescriptionChanged)
+        )
 
     def _plot(self) -> QRectF:
         top = LEGEND_HEIGHT if self.legend else 4
@@ -120,6 +163,11 @@ class ColumnChart(_Chart):
             return
         tokens = theme.current()
         plot = self._plot()
+        if self.hasFocus():
+            painter.setPen(QColor(tokens.accent))
+            painter.drawRoundedRect(
+                QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), RADIUS, RADIUS
+            )
         painter.setFont(self._small_font())
         metrics = QFontMetrics(painter.font())
         self._paint_legend(painter, metrics)

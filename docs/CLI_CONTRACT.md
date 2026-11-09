@@ -112,7 +112,7 @@ Un único documento JSON por stdout.
 | `modules` | `modules_output` | Módulos: `name`, `description`, `consumes`, `produces`, `passive`, `analyzer`, `plugin`, `requires_key`, `key_configured`, `timeout` |
 | `presets` | `presets_output` | `presets[]` (`name`, `source`, `description`, `depth`, `modules`, `allow_active`, `max_*`) y `errors[]` (ficheros de preset no válidos; con alguno, código 2) |
 | `update-data` | `update_data_output` | Por dataset: `name`, `status` (`actualizado`, `sin cambios`, `rechazado`, `error`), `detail`, `license`, `version`, `sha256`. Código 3 si alguno falla o se rechaza |
-| `history` | `history_output` | Scans guardados |
+| `history` | `history_output` | Scans guardados: `id`, `target_type`, `target`, `entities`, `started_at`, `status` (`complete`, `truncated`, `cancelled`), `severity` (hallazgos por severidad), `by_type` (entidades por tipo) y `modules` (ejecuciones de módulo por estado) |
 | `diff` | `diff_output` | `from` y `to` (`scan_id`, `target`, `started_at`), `same_target`, `added`, `removed` y `changed` (cada elemento: `key`, `type`, `value`; los modificados añaden `changes[]` con `field`, `before` y `after`), `findings` (las mismas tres listas, solo de hallazgos) y `unchanged` |
 | `doctor` | `doctor_output` | `module`, `verdict` (`ok`, `empty`, `fail`, `skipped`, `unchecked`), `detail`, `duration_ms`, `requests` |
 | `config show` | `config_show_output` | Ruta y **nombres** de las keys configuradas (nunca valores, ni enmascarados) |

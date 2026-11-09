@@ -1,7 +1,7 @@
 """Panel principal: estado de la investigación con los datos reales de los scans guardados.
 
-Un solo `history` (el del panel Historial) y un `show` por cada uno de los últimos scans, en
-cadena desde la UI: se pinta conforme llegan y solo se piden mientras el panel está a la vista.
+Las cifras salen del `history` del panel Historial. Los títulos de los hallazgos piden un `show`
+por scan con hallazgos, en cadena desde la UI y solo mientras el panel está a la vista.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from osineitor_gui.dashboard import (
     Overview,
     ScanSummary,
     aggregate,
-    summarize_scan,
+    findings_of,
 )
 from osineitor_gui.ui import icons, theme
 from osineitor_gui.ui.charts import BarList, BarRow, Column, ColumnChart
@@ -55,6 +55,7 @@ STATE_TONES = {
     "failed": "critical",
 }
 OPEN_COLUMN = 70
+VALUE_COLUMN = 320
 BREAKPOINTS = ((1400, 6), (900, 3), (0, 2))  # anchura mínima del panel → KPI por fila
 
 
@@ -71,10 +72,6 @@ class KpiCard(QFrame):
         self.title = label(title, "kpiLabel", wrap=True)
         self.value = label("—", "kpiValue")
         self.hint = label("", "kpiHint", wrap=True)
-        self.skeleton = QFrame()
-        self.skeleton.setProperty("role", "skeleton")
-        self.skeleton.setFixedHeight(28)
-        self.skeleton.hide()
         heading = QHBoxLayout()
         heading.setSpacing(6)
         heading.addWidget(self.picture)
@@ -84,7 +81,6 @@ class KpiCard(QFrame):
         layout.setSpacing(4)
         layout.addLayout(heading)
         layout.addWidget(self.value)
-        layout.addWidget(self.skeleton)
         layout.addWidget(self.hint)
         layout.addStretch(1)
         self._paint_icon()
@@ -96,15 +92,9 @@ class KpiCard(QFrame):
         self.value.setText(value)
         self.hint.setText(hint)
         self.value.show()
-        self.skeleton.hide()
         self._tone = tone
         self._paint_icon()
         self.setAccessibleName(f"{self.title.text()}: {value}. {hint}")
-
-    def set_loading(self) -> None:
-        self.value.hide()
-        self.skeleton.show()
-        self.hint.setText(self.tr("Cargando…"))
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.ApplicationPaletteChange:
@@ -216,7 +206,7 @@ class DashboardView(QScrollArea):
         self._history: list[dict[str, Any]] = []
         self._history_known = False
         self._catalog: list[dict[str, Any]] | None = None
-        self._summaries: dict[int, ScanSummary] = {}  # un scan guardado no cambia: caché por id
+        self._findings: dict[int, list[dict[str, Any]]] = {}  # un scan guardado no cambia
         self._failed: set[int] = set()
         self._fetching = False
         self._columns = 0
@@ -302,10 +292,17 @@ class DashboardView(QScrollArea):
 
         self.findings_model = FindingsModel(self)
         self.findings_table = self._list_table(self.findings_model, 1, 0)
+        self.findings_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        self.findings_table.setColumnWidth(2, VALUE_COLUMN)
         self.findings_table.setAccessibleName(self.tr("Hallazgos más graves"))
         self.findings_empty = label(self.tr("Sin hallazgos en los scans analizados."), "muted")
         findings_card = Card(self.tr("Hallazgos más graves"), analyzed)
         findings_card.body.addWidget(self.findings_table)
+        self.findings_skeleton = QFrame()
+        self.findings_skeleton.setProperty("role", "skeleton")
+        self.findings_skeleton.setFixedHeight(ROW_HEIGHT * 3)
+        self.findings_skeleton.hide()
+        findings_card.body.addWidget(self.findings_skeleton)
         findings_card.body.addWidget(self.findings_empty)
 
         self.scans_model = RecentScansModel(self)
@@ -402,7 +399,9 @@ class DashboardView(QScrollArea):
         return [
             row["id"]
             for row in self._history[:RECENT_SCANS]
-            if row["id"] not in self._summaries and row["id"] not in self._failed
+            if row.get("severity")
+            and row["id"] not in self._findings
+            and row["id"] not in self._failed
         ]
 
     def _fetch_next(self, generation: int) -> None:
@@ -424,7 +423,7 @@ class DashboardView(QScrollArea):
         )
 
     def _on_scan(self, generation: int, scan_id: int, result: dict[str, Any]) -> None:
-        self._summaries[scan_id] = summarize_scan(result)  # vale aunque la cadena haya caducado
+        self._findings[scan_id] = findings_of(result)  # vale aunque la cadena haya caducado
         if generation != self._generation:
             return
         self._fetching = False
@@ -449,44 +448,40 @@ class DashboardView(QScrollArea):
 
     def render_data(self) -> None:
         now = datetime.now().astimezone()
-        overview = aggregate(self._history, self._summaries, now, self._catalog)
+        overview = aggregate(self._history, self._findings, now, self._catalog)
         self.overview = overview
         self.pages.setCurrentIndex(1 if self._history else 0)
         if not self._history:
             return
-        loading = bool(self._pending()) and not overview.analyzed
-        self._render_kpis(overview, loading)
+        self._render_kpis(overview)
         self._render_alert(overview)
-        self._render_charts(overview, loading)
+        self._render_charts(overview)
         self._fill_list_table(self.findings_table, self.findings_model, overview.findings)
         self.findings_table.setVisible(bool(overview.findings))
+        loading = bool(self._pending()) and not overview.findings
+        self.findings_skeleton.setVisible(loading)
         self.findings_empty.setVisible(not overview.findings and not loading)
         self._fill_list_table(self.scans_table, self.scans_model, overview.analyzed)
 
-    def _render_kpis(self, overview: Overview, loading: bool) -> None:
+    def _render_kpis(self, overview: Overview) -> None:
         count = len(overview.analyzed)
         analyzed = f"{count} {self.tr('scan analizado' if count == 1 else 'scans analizados')}"
-        if loading:
-            self.kpi_urgent.set_loading()
-            self.kpi_worst.set_loading()
-            self.kpi_failed.set_loading()
-        else:
-            urgent_tone = "critical" if overview.severity.get("critical") else "high"
-            self.kpi_urgent.set_value(
-                str(overview.urgent), analyzed, urgent_tone if overview.urgent else "safe"
-            )
-            worst = overview.worst
-            self.kpi_worst.set_value(
-                self.tr(SEVERITY_LABELS[worst]).capitalize() if worst else self.tr("Ninguno"),
-                analyzed,
-                theme.SEVERITY_TONES[worst] if worst else "safe",
-            )
-            last = overview.analyzed[0].target if overview.analyzed else ""
-            self.kpi_failed.set_value(
-                str(overview.modules_failed),
-                f"{self.tr('Último scan')}: {last}",
-                "critical" if overview.modules_failed else "safe",
-            )
+        urgent_tone = "critical" if overview.severity.get("critical") else "high"
+        self.kpi_urgent.set_value(
+            str(overview.urgent), analyzed, urgent_tone if overview.urgent else "safe"
+        )
+        worst = overview.worst
+        self.kpi_worst.set_value(
+            self.tr(SEVERITY_LABELS[worst]).capitalize() if worst else self.tr("Ninguno"),
+            analyzed,
+            theme.SEVERITY_TONES[worst] if worst else "safe",
+        )
+        last = overview.analyzed[0].target if overview.analyzed else ""
+        self.kpi_failed.set_value(
+            str(overview.modules_failed),
+            f"{self.tr('Último scan')}: {last}",
+            "critical" if overview.modules_failed else "safe",
+        )
         delta = overview.scans_delta
         signed = f"+{delta}" if delta > 0 else str(delta)
         self.kpi_scans.set_value(
@@ -526,7 +521,7 @@ class DashboardView(QScrollArea):
         if self.overview.findings:
             self.scan_requested.emit(self.overview.findings[0]["scan_id"])
 
-    def _render_charts(self, overview: Overview, loading: bool) -> None:
+    def _render_charts(self, overview: Overview) -> None:
         self.chart_daily.set_data(
             [
                 Column(
@@ -538,15 +533,6 @@ class DashboardView(QScrollArea):
                 for day, count in overview.daily
             ]
         )
-        if loading:
-            for chart in (
-                self.chart_findings,
-                self.list_severity,
-                self.list_types,
-                self.list_modules,
-            ):
-                chart.set_loading(True)
-            return
         self.chart_findings.set_data(
             [
                 Column(

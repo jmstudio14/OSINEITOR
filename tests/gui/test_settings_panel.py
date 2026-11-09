@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QLabel, QLineEdit, QMessageBox  # noqa: E402
 
 from osineitor_gui.api import CliApi, CliError  # noqa: E402
 from osineitor_gui.settings import GuiSettings  # noqa: E402
-from osineitor_gui.ui.settings_dialog import SettingsDialog  # noqa: E402
+from osineitor_gui.ui.settings_panel import SettingsPanel  # noqa: E402
 from tests.gui.fakecli import CLI, use_modules  # noqa: E402
 
 TIMEOUT = 30_000
@@ -61,27 +61,27 @@ class FakeApi:
         return self._change(("unset", name), lambda: self.keys.discard(name))
 
 
-def cell(dialog: SettingsDialog, row: int, column: int):
+def cell(dialog: SettingsPanel, row: int, column: int):
     return dialog.model.data(dialog.model.index(row, column))
 
 
-def make_dialog(qtbot, api, settings=None) -> SettingsDialog:
-    dialog = SettingsDialog(api, settings or GuiSettings())
+def make_dialog(qtbot, api, settings=None) -> SettingsPanel:
+    dialog = SettingsPanel(api, settings or GuiSettings())
     qtbot.addWidget(dialog)
     dialog.reload()
     qtbot.waitUntil(lambda: dialog.model.rowCount() > 0 or "No se pudo" in dialog.message.text())
     return dialog
 
 
-def wait_idle(qtbot, dialog: SettingsDialog) -> None:
+def wait_idle(qtbot, dialog: SettingsPanel) -> None:
     qtbot.waitUntil(lambda: not dialog._busy, timeout=TIMEOUT)
 
 
-def select(dialog: SettingsDialog, name: str) -> None:
+def select(dialog: SettingsPanel, name: str) -> None:
     dialog.keys_table.selectRow(dialog.model.row_of(name))
 
 
-def type_and_save(qtbot, dialog: SettingsDialog, text: str) -> None:
+def type_and_save(qtbot, dialog: SettingsPanel, text: str) -> None:
     dialog.key_input.setText(text)
     dialog.save()
     wait_idle(qtbot, dialog)

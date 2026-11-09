@@ -16,7 +16,8 @@ en `docs/plans/fase-NN.md`. Las secciones van de la fase más reciente a la más
 - **Sistema de diseño:** tokens de color (tema oscuro por defecto para instalaciones nuevas;
   claro y sistema siguen disponibles), hoja de estilo global, Inter y JetBrains Mono (OFL) e
   iconos Lucide (ISC) incluidos en el paquete.
-- **Navegación:** barra lateral contraíble (Panel, Scans, Historial, Búsqueda, Salud, Ajustes)
+- **Navegación:** barra lateral contraíble (Panel, Scans, Historial, Búsqueda, Casos, Vigilancia,
+  Salud, Ajustes)
   y barra superior con la sección, la búsqueda y el estado real de la CLI. El dock de historial
   pasa a ser una página.
 - **Panel principal nuevo**, solo con datos de la CLI: indicadores, scans por día, hallazgos por
@@ -27,6 +28,20 @@ en `docs/plans/fase-NN.md`. Las secciones van de la fase más reciente a la más
   con texto, columnas Severidad y Confianza en las entidades y menú contextual.
 - **Seguridad:** el banner de un scan y los errores de los diálogos dejan de interpretar HTML del
   stderr o de datos de terceros, y los tooltips con esos datos se muestran escapados.
+- **Páginas nuevas:** Casos y Vigilancia (solo consulta); Salud y Ajustes dejan de ser diálogos.
+  Pestañas Riesgo y Cronología en los scans guardados y «Verificar evidencias» en el historial.
+- **«Nuevo scan»** admite `--scope` y `--evidence`, y solo se abre una instancia de la aplicación.
+- **Accesibilidad:** gráficos de columnas con foco y flechas, resaltado de fila completa, botones
+  estándar en español y barra lateral recordada.
+- **`history --json`** añade `status`, `severity`, `by_type` y `modules` (aditivo). Migración 11:
+  índices para calcularlos. El panel muestra sus indicadores sin un `show` por scan.
+- **Informe HTML:** misma identidad visual, sin recursos externos.
+- **Arreglado:** `Signal source has been deleted` al cerrar con una llamada en curso. Los hilos ya
+  no tocan objetos de Qt.
+- **Arreglado:** con `GITHUB_ACTIONS`, `FORCE_COLOR` o `PY_COLORS` los errores de la CLI llegaban a
+  la GUI con estilos ANSI.
+- **Desarrollo:** `pytest-qt` pasa del extra `dev` a `gui-test`: sin PySide6 abortaba `pytest`. La
+  CI ejecuta los tests de Qt.
 
 ### GUI: arreglos tras las pruebas
 

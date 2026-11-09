@@ -1219,15 +1219,10 @@ def list_presets(json_out: AsJson = False) -> None:
 def history(limit: int = 20, db: DbPath = None, json_out: AsJson = False) -> None:
     """Muestra los últimos scans guardados."""
     with _open_storage(db) as storage:
+        if json_out:
+            _print_json(storage.scan_digests(limit))
+            return
         scans = storage.list_scans(limit)
-    if json_out:
-        _print_json(
-            [
-                {"id": i, "target_type": t, "target": v, "entities": n, "started_at": started}
-                for i, t, v, n, started in scans
-            ]
-        )
-        return
     table = Table("ID", "Tipo", "Objetivo", "Entidades", "Fecha")
     for scan_id, ttype, target, count, started in scans:
         table.add_row(str(scan_id), ttype, _safe(target), str(count), started[:19])
